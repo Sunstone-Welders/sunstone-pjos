@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdmin } from '@/lib/admin/verify-platform-admin';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { getCachedCatalog } from '@/lib/shopify';
+import { getCachedCatalog, fetchAllProducts } from '@/lib/shopify';
 
 export async function GET() {
   try {
@@ -118,24 +118,54 @@ export async function PUT(request: NextRequest) {
 export async function POST() {
   try {
     await verifyPlatformAdmin();
+    const db = await createServiceRoleClient();
 
-    // Trigger manual sync
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000';
+    // Fetch products directly (no self-referential HTTP call)
+    console.log('[Admin Spotlight] Starting manual sync...');
+    const products = await fetchAllProducts();
 
-    const syncRes = await fetch(`${baseUrl}/api/shopify/sync?force=true`);
-    const syncData = await syncRes.json();
+    const saleCount = products.filter((p) =>
+      p.variants.some((v) => v.compareAtPrice && parseFloat(v.compareAtPrice) > parseFloat(v.price))
+    ).length;
+
+    // Write to cache
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+    await db
+      .from('sunstone_catalog_cache')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000');
+
+    const { error: insertError } = await db.from('sunstone_catalog_cache').insert({
+      products,
+      discounts: [],
+      synced_at: now.toISOString(),
+      expires_at: expiresAt.toISOString(),
+    });
+
+    if (insertError) {
+      console.error('[Admin Spotlight] Cache write failed:', insertError.message);
+      return NextResponse.json({ error: 'Cache write failed', detail: insertError.message }, { status: 500 });
+    }
+
+    console.log(`[Admin Spotlight] Sync complete: ${products.length} products`);
 
     return NextResponse.json({
-      success: syncRes.ok,
-      sync: syncData,
+      success: true,
+      sync: {
+        status: 'synced',
+        productCount: products.length,
+        saleItemCount: saleCount,
+        syncedAt: now.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+      },
     });
   } catch (err: any) {
     if (err?.status === 401 || err?.status === 403) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     console.error('[Admin Spotlight] POST (sync) error:', err);
-    return NextResponse.json({ error: 'Sync failed' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Sync failed' }, { status: 500 });
   }
 }
