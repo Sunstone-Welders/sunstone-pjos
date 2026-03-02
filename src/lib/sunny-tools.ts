@@ -548,6 +548,20 @@ export const SUNNY_TOOL_DEFINITIONS = [
       required: [],
     },
   },
+  // 33. search_sunstone_catalog
+  {
+    name: 'search_sunstone_catalog',
+    description: 'Search the Sunstone product catalog (synced from Shopify). Use this BEFORE answering ANY product question — pricing, recommendations, availability, or specific product lookups. Returns matching products with name, price, type, URL, and variant details. Search by product name, category/type (e.g. "chain", "jump ring", "connector", "charm"), material/metal (e.g. "gold fill", "silver", "rose gold"), or any keyword.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search term — product name, metal type, category, or keyword (e.g. "Chloe", "gold fill chain", "connector", "jump ring")' },
+        product_type: { type: 'string', description: 'Filter by Shopify product type (optional)' },
+        limit: { type: 'number', description: 'Max results to return (default 10, max 25)' },
+      },
+      required: ['query'],
+    },
+  },
 ];
 
 // ============================================================================
@@ -588,6 +602,7 @@ export function getSunnyToolStatusLabel(name: string): string {
     process_refund: 'Processing refund...',
     add_expense: 'Adding expense...',
     get_expenses: 'Fetching expenses...',
+    search_sunstone_catalog: 'Searching Sunstone catalog...',
   };
   return labels[name] || 'Working...';
 }
@@ -2228,6 +2243,105 @@ export async function executeSunnyTool(
         }
 
         return { result: { expenses, total, by_category: byCategory, period: { start: startDate, end: endDate } } };
+      }
+
+      // ── 33. search_sunstone_catalog ──────────────────────────────────────
+      case 'search_sunstone_catalog': {
+        // Read cached catalog from Supabase
+        const { data: cache, error: cacheErr } = await serviceClient
+          .from('sunstone_catalog_cache')
+          .select('products, synced_at')
+          .limit(1)
+          .single();
+
+        if (cacheErr || !cache?.products) {
+          return { result: { error: 'Sunstone catalog not available. It may need to be synced — tell the artist to ask their admin to run a catalog sync.' }, isError: true };
+        }
+
+        const allProducts = cache.products as any[];
+        const searchQuery = (input.query || '').toLowerCase().trim();
+        const typeFilter = (input.product_type || '').toLowerCase().trim();
+        const maxResults = Math.min(input.limit || 10, 25);
+
+        // Split query into individual search terms for broader matching
+        const searchTerms = searchQuery.split(/\s+/).filter(Boolean);
+
+        // Score and filter products
+        const scored = allProducts.map((p: any) => {
+          let score = 0;
+          const title = (p.title || '').toLowerCase();
+          const desc = (p.description || '').toLowerCase();
+          const pType = (p.productType || '').toLowerCase();
+          const tags = (p.tags || []).map((t: string) => t.toLowerCase());
+          const allText = `${title} ${desc} ${pType} ${tags.join(' ')}`;
+
+          // Exact title match is highest priority
+          if (title === searchQuery) score += 100;
+          // Title contains full query
+          else if (title.includes(searchQuery)) score += 50;
+          // Each search term found in title
+          for (const term of searchTerms) {
+            if (title.includes(term)) score += 20;
+            if (pType.includes(term)) score += 15;
+            if (tags.some((t: string) => t.includes(term))) score += 10;
+            if (desc.includes(term)) score += 5;
+          }
+
+          // Product type filter
+          if (typeFilter && !pType.includes(typeFilter)) {
+            score = 0; // Hard filter
+          }
+
+          // Filter out drafts/archived unless specifically looking for them
+          if (p.status && p.status !== 'ACTIVE' && !searchQuery.includes('draft') && !searchQuery.includes('archived')) {
+            score = 0;
+          }
+
+          return { product: p, score };
+        })
+        .filter(s => s.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, maxResults);
+
+        const domain = process.env.SHOPIFY_STORE_DOMAIN || '';
+        const results = scored.map(({ product: p }) => {
+          const defaultVariant = p.variants?.[0];
+          const prices = (p.variants || []).map((v: any) => parseFloat(v.price || '0')).filter((n: number) => n > 0);
+          const minPrice = prices.length > 0 ? Math.min(...prices) : null;
+          const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
+
+          return {
+            title: p.title,
+            handle: p.handle,
+            productType: p.productType || '',
+            tags: p.tags || [],
+            price: minPrice === maxPrice
+              ? (minPrice ? `$${minPrice.toFixed(2)}` : 'Price not listed')
+              : `$${minPrice!.toFixed(2)} – $${maxPrice!.toFixed(2)}`,
+            description: p.description ? p.description.slice(0, 150) : '',
+            imageUrl: p.imageUrl || null,
+            url: p.url || `https://${domain}/products/${p.handle}`,
+            variantCount: (p.variants || []).length,
+            variants: (p.variants || []).slice(0, 5).map((v: any) => ({
+              title: v.title,
+              price: v.price,
+              sku: v.sku || null,
+              inStock: v.inventoryQuantity == null ? true : v.inventoryQuantity > 0,
+            })),
+          };
+        });
+
+        return {
+          result: {
+            products: results,
+            total_found: results.length,
+            catalog_total: allProducts.length,
+            synced_at: cache.synced_at,
+            note: results.length === 0
+              ? `No products found matching "${input.query}". The catalog has ${allProducts.length} total products.`
+              : undefined,
+          },
+        };
       }
 
       default:
