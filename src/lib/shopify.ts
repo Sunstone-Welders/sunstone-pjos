@@ -1,7 +1,8 @@
 // ============================================================================
-// Shopify Storefront API Client — src/lib/shopify.ts
+// Shopify Admin API Client — src/lib/shopify.ts
 // ============================================================================
-// Connects to the Sunstone Shopify store (Storefront API) via GraphQL.
+// Connects to the Sunstone Shopify store (Admin API) via GraphQL.
+// Auth: OAuth access token stored in Supabase `platform_settings` table.
 // Powers: dashboard product cards, Sunny product knowledge, admin spotlight.
 // ============================================================================
 
@@ -18,13 +19,15 @@ export interface SunstoneProduct {
   handle: string;
   productType: string;
   tags: string[];
+  status: string;
   imageUrl: string | null;
   imageAlt: string | null;
   variants: {
     title: string;
     price: string;
     compareAtPrice: string | null;
-    availableForSale: boolean;
+    sku: string | null;
+    inventoryQuantity: number | null;
   }[];
   url: string;
 }
@@ -36,23 +39,39 @@ export interface CachedCatalog {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// OAuth Token Retrieval
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function getShopifyAccessToken(): Promise<string> {
+  const db = await createServiceRoleClient();
+  const { data, error } = await db
+    .from('platform_settings')
+    .select('value')
+    .eq('key', 'shopify_access_token')
+    .single();
+
+  if (error || !data?.value) {
+    throw new Error('Shopify access token not found. Complete OAuth flow at /api/shopify/auth');
+  }
+  return data.value;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GraphQL Helper
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SHOPIFY_API_VERSION = '2024-01';
+const SHOPIFY_API_VERSION = '2026-01';
 
-async function shopifyStorefrontQuery(query: string, variables?: Record<string, any>) {
+export async function shopifyAdminQuery(query: string, variables?: Record<string, any>) {
   const domain = process.env.SHOPIFY_STORE_DOMAIN;
-  const token = process.env.SHOPIFY_STOREFRONT_TOKEN;
 
-  console.log('[Shopify] ENV check — SHOPIFY_STORE_DOMAIN:', domain ? `"${domain}"` : 'MISSING');
-  console.log('[Shopify] ENV check — SHOPIFY_STOREFRONT_TOKEN:', token ? `set (${token.length} chars, starts with "${token.slice(0, 6)}...")` : 'MISSING');
-
-  if (!domain || !token) {
-    throw new Error('Shopify environment variables not configured (SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN)');
+  if (!domain) {
+    throw new Error('SHOPIFY_STORE_DOMAIN environment variable not configured');
   }
 
-  const url = `https://${domain}/api/${SHOPIFY_API_VERSION}/graphql.json`;
+  const token = await getShopifyAccessToken();
+
+  const url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
   console.log('[Shopify] Request URL:', url);
   console.log('[Shopify] Query preview:', query.slice(0, 120).replace(/\s+/g, ' ').trim() + '...');
 
@@ -62,7 +81,7 @@ async function shopifyStorefrontQuery(query: string, variables?: Record<string, 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Shopify-Storefront-Access-Token': token,
+        'X-Shopify-Access-Token': token,
       },
       body: JSON.stringify({ query, variables }),
     });
@@ -72,7 +91,6 @@ async function shopifyStorefrontQuery(query: string, variables?: Record<string, 
   }
 
   console.log('[Shopify] Response status:', response.status, response.statusText);
-  console.log('[Shopify] Response headers — x-request-id:', response.headers.get('x-request-id') || 'none');
 
   if (!response.ok) {
     let errorBody = '';
@@ -97,10 +115,11 @@ async function shopifyStorefrontQuery(query: string, variables?: Record<string, 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fetch All Products
+// Fetch All Products (Admin API)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function fetchAllProducts(): Promise<SunstoneProduct[]> {
+  const domain = process.env.SHOPIFY_STORE_DOMAIN;
   const products: SunstoneProduct[] = [];
   let cursor: string | null = null;
   let hasNextPage = true;
@@ -121,6 +140,7 @@ export async function fetchAllProducts(): Promise<SunstoneProduct[]> {
             handle
             productType
             tags
+            status
             images(first: 3) {
               edges {
                 node {
@@ -134,15 +154,10 @@ export async function fetchAllProducts(): Promise<SunstoneProduct[]> {
                 node {
                   id
                   title
-                  price {
-                    amount
-                    currencyCode
-                  }
-                  compareAtPrice {
-                    amount
-                    currencyCode
-                  }
-                  availableForSale
+                  sku
+                  price
+                  compareAtPrice
+                  inventoryQuantity
                 }
               }
             }
@@ -152,7 +167,7 @@ export async function fetchAllProducts(): Promise<SunstoneProduct[]> {
     }`;
 
     console.log(`[Shopify] Fetching products page ${page}${cursor ? ` (cursor: ${cursor.slice(0, 20)}...)` : ''}`);
-    const data = await shopifyStorefrontQuery(query);
+    const data = await shopifyAdminQuery(query);
     const edges = data.products.edges;
     console.log(`[Shopify] Page ${page}: ${edges.length} products returned`);
 
@@ -167,15 +182,17 @@ export async function fetchAllProducts(): Promise<SunstoneProduct[]> {
         handle: node.handle,
         productType: node.productType || '',
         tags: node.tags || [],
+        status: node.status || 'ACTIVE',
         imageUrl: firstImage?.url || null,
         imageAlt: firstImage?.altText || null,
         variants: (node.variants?.edges || []).map((v: any) => ({
           title: v.node.title,
-          price: v.node.price?.amount || '0',
-          compareAtPrice: v.node.compareAtPrice?.amount || null,
-          availableForSale: v.node.availableForSale ?? true,
+          price: v.node.price || '0',
+          compareAtPrice: v.node.compareAtPrice || null,
+          sku: v.node.sku || null,
+          inventoryQuantity: v.node.inventoryQuantity ?? null,
         })),
-        url: `https://permanentjewelry.sunstonewelders.com/products/${node.handle}`,
+        url: `https://${domain}/products/${node.handle}`,
       });
     }
 
@@ -192,12 +209,14 @@ export async function fetchAllProducts(): Promise<SunstoneProduct[]> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fetch Products by Collection
+// Fetch Products by Collection (Admin API)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function fetchProductsByCollection(collectionHandle: string): Promise<SunstoneProduct[]> {
+  const domain = process.env.SHOPIFY_STORE_DOMAIN;
+
   const query = `{
-    collection(handle: "${collectionHandle}") {
+    collectionByHandle(handle: "${collectionHandle}") {
       products(first: 100) {
         edges {
           node {
@@ -207,6 +226,7 @@ export async function fetchProductsByCollection(collectionHandle: string): Promi
             handle
             productType
             tags
+            status
             images(first: 3) {
               edges {
                 node {
@@ -220,15 +240,10 @@ export async function fetchProductsByCollection(collectionHandle: string): Promi
                 node {
                   id
                   title
-                  price {
-                    amount
-                    currencyCode
-                  }
-                  compareAtPrice {
-                    amount
-                    currencyCode
-                  }
-                  availableForSale
+                  sku
+                  price
+                  compareAtPrice
+                  inventoryQuantity
                 }
               }
             }
@@ -238,8 +253,8 @@ export async function fetchProductsByCollection(collectionHandle: string): Promi
     }
   }`;
 
-  const data = await shopifyStorefrontQuery(query);
-  const edges = data.collection?.products?.edges || [];
+  const data = await shopifyAdminQuery(query);
+  const edges = data.collectionByHandle?.products?.edges || [];
 
   return edges.map((edge: any) => {
     const node = edge.node;
@@ -251,15 +266,17 @@ export async function fetchProductsByCollection(collectionHandle: string): Promi
       handle: node.handle,
       productType: node.productType || '',
       tags: node.tags || [],
+      status: node.status || 'ACTIVE',
       imageUrl: firstImage?.url || null,
       imageAlt: firstImage?.altText || null,
       variants: (node.variants?.edges || []).map((v: any) => ({
         title: v.node.title,
-        price: v.node.price?.amount || '0',
-        compareAtPrice: v.node.compareAtPrice?.amount || null,
-        availableForSale: v.node.availableForSale ?? true,
+        price: v.node.price || '0',
+        compareAtPrice: v.node.compareAtPrice || null,
+        sku: v.node.sku || null,
+        inventoryQuantity: v.node.inventoryQuantity ?? null,
       })),
-      url: `https://permanentjewelry.sunstonewelders.com/products/${node.handle}`,
+      url: `https://${domain}/products/${node.handle}`,
     };
   });
 }

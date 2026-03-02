@@ -1,16 +1,14 @@
 // src/app/api/mentor/products/route.ts
-// POST endpoint to search Sunstone's Shopify Storefront catalog
+// POST endpoint to search Sunstone's Shopify catalog via Admin API
 // Used by the Sunny chat to display product cards inline
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
+import { shopifyAdminQuery } from '@/lib/shopify';
 
-const SHOPIFY_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
-const STOREFRONT_TOKEN = process.env.SHOPIFY_STOREFRONT_TOKEN;
-
-const GRAPHQL_QUERY = `
-  query searchProducts($query: String!, $first: Int!) {
-    products(first: $first, query: $query) {
+const SEARCH_QUERY = `
+  query searchProducts($query: String!) {
+    products(first: 6, query: $query) {
       edges {
         node {
           id
@@ -19,10 +17,6 @@ const GRAPHQL_QUERY = `
           handle
           productType
           tags
-          priceRange {
-            minVariantPrice { amount currencyCode }
-            maxVariantPrice { amount currencyCode }
-          }
           images(first: 1) {
             edges {
               node { url altText }
@@ -33,8 +27,9 @@ const GRAPHQL_QUERY = `
               node {
                 id
                 title
-                price { amount currencyCode }
-                availableForSale
+                price
+                compareAtPrice
+                inventoryQuantity
               }
             }
           }
@@ -58,8 +53,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Query required' }, { status: 400 });
     }
 
-    // Check if Shopify is configured
-    if (!SHOPIFY_DOMAIN || !STOREFRONT_TOKEN) {
+    const domain = process.env.SHOPIFY_STORE_DOMAIN;
+
+    // Search via Admin API using shared client
+    let data;
+    try {
+      data = await shopifyAdminQuery(SEARCH_QUERY, { query: query.trim() });
+    } catch (err) {
+      console.error('[Mentor Products] Shopify API error:', err);
       return NextResponse.json({
         products: [],
         fallback: true,
@@ -67,40 +68,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Search Shopify Storefront API
-    const response = await fetch(`https://${SHOPIFY_DOMAIN}/api/2024-01/graphql.json`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Shopify-Storefront-Access-Token': STOREFRONT_TOKEN,
-      },
-      body: JSON.stringify({
-        query: GRAPHQL_QUERY,
-        variables: { query: query.trim(), first: 6 },
-      }),
-    });
-
-    if (!response.ok) {
-      console.error('[Mentor Products] Shopify API error:', response.status);
-      return NextResponse.json({
-        products: [],
-        fallback: true,
-        message: 'Visit sunstonesupply.com for our full catalog',
-      });
-    }
-
-    const data = await response.json();
-    const edges = data?.data?.products?.edges || [];
+    const edges = data?.products?.edges || [];
 
     const products = edges.map((edge: any) => {
       const node = edge.node;
       const image = node.images?.edges?.[0]?.node;
-      const minPrice = node.priceRange?.minVariantPrice;
-      const maxPrice = node.priceRange?.maxVariantPrice;
+      const variants = node.variants?.edges || [];
 
-      const priceDisplay = minPrice?.amount === maxPrice?.amount
-        ? `$${parseFloat(minPrice?.amount || '0').toFixed(2)}`
-        : `$${parseFloat(minPrice?.amount || '0').toFixed(2)} – $${parseFloat(maxPrice?.amount || '0').toFixed(2)}`;
+      // Get price range from variants (Admin API returns price as simple string)
+      const prices = variants.map((v: any) => parseFloat(v.node.price || '0'));
+      const minPrice = Math.min(...prices);
+      const maxPrice = Math.max(...prices);
+
+      const priceDisplay = minPrice === maxPrice
+        ? `$${minPrice.toFixed(2)}`
+        : `$${minPrice.toFixed(2)} – $${maxPrice.toFixed(2)}`;
 
       return {
         id: node.id,
@@ -110,8 +92,8 @@ export async function POST(request: NextRequest) {
         price: priceDisplay,
         imageUrl: image?.url || null,
         imageAlt: image?.altText || node.title,
-        url: `https://sunstonesupply.com/products/${node.handle}`,
-        available: node.variants?.edges?.some((v: any) => v.node.availableForSale) ?? true,
+        url: `https://${domain}/products/${node.handle}`,
+        available: variants.some((v: any) => (v.node.inventoryQuantity ?? 1) > 0),
       };
     });
 

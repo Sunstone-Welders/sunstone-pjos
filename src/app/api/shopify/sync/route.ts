@@ -4,34 +4,41 @@
 // GET: Syncs the Shopify catalog to the local cache table.
 // - Checks if cache is fresh (< 24h) and skips unless ?force=true
 // - Callable manually or on a schedule
+// - Uses OAuth access token from platform_settings (via shopify.ts)
 // - Returns detailed diagnostics for debugging
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { fetchAllProducts } from '@/lib/shopify';
+import { fetchAllProducts, getShopifyAccessToken } from '@/lib/shopify';
 import type { SunstoneProduct } from '@/lib/shopify';
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
-
-  // ── Step 1: Env var check ──────────────────────────────────────────────
   const domain = process.env.SHOPIFY_STORE_DOMAIN;
-  const token = process.env.SHOPIFY_STOREFRONT_TOKEN;
 
   console.log('[Shopify Sync] ── Starting sync ──');
   console.log('[Shopify Sync] SHOPIFY_STORE_DOMAIN:', domain ? `"${domain}"` : 'NOT SET');
-  console.log('[Shopify Sync] SHOPIFY_STOREFRONT_TOKEN:', token ? `set (${token.length} chars)` : 'NOT SET');
 
-  if (!domain || !token) {
+  if (!domain) {
     return NextResponse.json(
       {
-        error: 'Shopify environment variables not configured',
-        diagnostics: {
-          SHOPIFY_STORE_DOMAIN: domain ? 'set' : 'MISSING',
-          SHOPIFY_STOREFRONT_TOKEN: token ? 'set' : 'MISSING',
-        },
-        hint: 'Set SHOPIFY_STORE_DOMAIN (e.g., "your-store.myshopify.com") and SHOPIFY_STOREFRONT_TOKEN in your environment variables.',
+        error: 'SHOPIFY_STORE_DOMAIN not configured',
+        hint: 'Set SHOPIFY_STORE_DOMAIN in your environment variables.',
+      },
+      { status: 500 }
+    );
+  }
+
+  // Verify OAuth token is available
+  try {
+    await getShopifyAccessToken();
+    console.log('[Shopify Sync] OAuth access token: available');
+  } catch {
+    return NextResponse.json(
+      {
+        error: 'Shopify OAuth token not found',
+        hint: 'Complete the OAuth flow by visiting /api/shopify/auth as a platform admin.',
       },
       { status: 500 }
     );
@@ -65,14 +72,13 @@ export async function GET(request: NextRequest) {
 
     // ── Step 3: Fetch products from Shopify ────────────────────────────
     let products: SunstoneProduct[] = [];
-    let productError: string | null = null;
 
     try {
       console.log('[Shopify Sync] Fetching products...');
       products = await fetchAllProducts();
       console.log(`[Shopify Sync] Products fetched: ${products.length}`);
     } catch (err: any) {
-      productError = err.message || String(err);
+      const productError = err.message || String(err);
       console.error('[Shopify Sync] PRODUCT FETCH FAILED:', productError);
       return NextResponse.json(
         {
@@ -80,22 +86,21 @@ export async function GET(request: NextRequest) {
           detail: productError,
           diagnostics: {
             SHOPIFY_STORE_DOMAIN: domain,
-            SHOPIFY_STOREFRONT_TOKEN: `set (${token.length} chars)`,
-            apiUrl: `https://${domain}/api/2024-01/graphql.json`,
+            apiUrl: `https://${domain}/admin/api/2026-01/graphql.json`,
             elapsedMs: Date.now() - startTime,
           },
-          hint: 'Check Vercel function logs for detailed Shopify API response. Common causes: wrong store domain, invalid/expired token, API version sunset.',
+          hint: 'Check Vercel function logs for detailed Shopify API response. Common causes: expired OAuth token (re-run /api/shopify/auth), wrong store domain, API version issue.',
         },
         { status: 502 }
       );
     }
 
-    // Sale items detected via compareAtPrice on variants (no separate discount fetch needed)
+    // Sale items detected via compareAtPrice on variants
     const saleCount = products.filter((p) =>
       p.variants.some((v) => v.compareAtPrice && parseFloat(v.compareAtPrice) > parseFloat(v.price))
     ).length;
 
-    // ── Step 5: Write to cache ─────────────────────────────────────────
+    // ── Step 4: Write to cache ─────────────────────────────────────────
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
