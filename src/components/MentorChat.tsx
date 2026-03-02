@@ -71,13 +71,13 @@ const SUGGESTED_PROMPTS = [
 // Simple markdown renderer (no external dependency)
 // ============================================================================
 
-function renderMarkdown(text: string, isDark: boolean): string {
-  // ALL colors are hardcoded hex — no CSS variables, no Tailwind classes
-  const textColor = isDark ? '#E8E8E8' : '#1A1A1A';
-  const boldColor = isDark ? '#FFFFFF' : '#000000';
-  const linkColor = isDark ? '#60A5FA' : '#2563EB';
-  const codeColor = isDark ? '#E8E8E8' : '#1A1A1A';
-  const codeBg = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)';
+function renderMarkdown(text: string): string {
+  // Use CSS variables so colors automatically adapt to any theme (light or dark)
+  const textColor = 'var(--text-primary)';
+  const boldColor = 'var(--text-primary)';
+  const linkColor = 'var(--accent-600, #2563EB)';
+  const codeColor = 'var(--text-primary)';
+  const codeBg = 'var(--surface-raised)';
 
   let html = text.replace(/<!--[\s\S]*?-->/g, '');
   html = html
@@ -139,19 +139,11 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
   const effectiveTier = tenant ? getSubscriptionTier(tenant) : 'starter';
   const questionLimit = getSunnyQuestionLimit(effectiveTier);
   const isMetered = effectiveTier === 'starter' && questionLimit !== Infinity;
-  const [isDark, setIsDark] = useState(false);
   const [userBubbleTextColor, setUserBubbleTextColor] = useState('#FFFFFF');
 
-  // Compute isDark + user bubble text color from actual CSS variable values
+  // Compute user bubble text color from accent luminance
   useEffect(() => {
-    const styles = getComputedStyle(document.documentElement);
-    // Detect dark/light from the chat panel background (--surface-base)
-    const surfaceBg = styles.getPropertyValue('--surface-base').trim();
-    if (surfaceBg) {
-      setIsDark(getLuminance(surfaceBg) < 0.5);
-    }
-    // User bubble contrast from accent color
-    const accent = styles.getPropertyValue('--accent-500').trim();
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent-500').trim();
     if (accent) setUserBubbleTextColor(getContrastTextColor(accent));
   }, [tenant?.theme_id]);
 
@@ -449,12 +441,12 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
           ) : (
             <>
               {messages.map(msg => (
-                <MessageBubble key={msg.id} message={msg} isDark={isDark} userBubbleTextColor={userBubbleTextColor} />
+                <MessageBubble key={msg.id} message={msg} userBubbleTextColor={userBubbleTextColor} />
               ))}
               {isLoading && messages[messages.length - 1]?.content === '' && (
                 messages[messages.length - 1]?.toolStatus
-                  ? <ToolStatusIndicator status={messages[messages.length - 1].toolStatus!} isDark={isDark} />
-                  : <TypingIndicator isDark={isDark} />
+                  ? <ToolStatusIndicator status={messages[messages.length - 1].toolStatus!} />
+                  : <TypingIndicator />
               )}
             </>
           )}
@@ -543,25 +535,8 @@ function EmptyState({ onSelectPrompt }: { onSelectPrompt: (text: string) => void
 // Message bubble
 // ============================================================================
 
-function MessageBubble({ message, isDark, userBubbleTextColor }: { message: ChatMessage; isDark: boolean; userBubbleTextColor: string }) {
+function MessageBubble({ message, userBubbleTextColor }: { message: ChatMessage; userBubbleTextColor: string }) {
   const isUser = message.role === 'user';
-
-  // HARDCODED inline styles — no CSS variables, no Tailwind color classes
-  const assistantBubbleStyle: React.CSSProperties = isDark
-    ? {
-        backgroundColor: 'rgba(255, 255, 255, 0.10)',
-        color: '#E8E8E8',
-        borderRadius: '16px 16px 16px 4px',
-        padding: '10px 14px',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-      }
-    : {
-        backgroundColor: 'rgba(0, 0, 0, 0.07)',
-        color: '#1A1A1A',
-        borderRadius: '16px 16px 16px 4px',
-        padding: '10px 14px',
-        border: '1px solid rgba(0, 0, 0, 0.08)',
-      };
 
   return (
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
@@ -576,9 +551,12 @@ function MessageBubble({ message, isDark, userBubbleTextColor }: { message: Chat
             </p>
           </div>
         ) : (
-          <div style={assistantBubbleStyle}>
+          <div
+            className="bg-[var(--surface-raised)] text-[var(--text-primary)] border border-[var(--border-subtle)]"
+            style={{ borderRadius: '16px 16px 16px 4px', padding: '10px 14px' }}
+          >
             <div
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content, isDark) }}
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
             />
             {message.isStreaming && message.content && (
               <span className="inline-block w-1.5 h-4 bg-accent-500 ml-0.5 animate-pulse rounded-sm" />
@@ -599,46 +577,36 @@ function MessageBubble({ message, isDark, userBubbleTextColor }: { message: Chat
 // Typing indicator
 // ============================================================================
 
-function TypingIndicator({ isDark }: { isDark: boolean }) {
-  const dotBg = isDark ? '#9CA3AF' : '#6B7280';
-
+function TypingIndicator() {
   return (
     <div className="flex justify-start">
       <div
-        style={{
-          backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.07)',
-          border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
-          borderRadius: '16px 16px 16px 4px',
-          padding: '12px 16px',
-        }}
+        className="bg-[var(--surface-raised)] border border-[var(--border-subtle)]"
+        style={{ borderRadius: '16px 16px 16px 4px', padding: '12px 16px' }}
       >
         <div className="flex gap-1.5 items-center">
-          <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: dotBg, animationDelay: '0ms' }} />
-          <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: dotBg, animationDelay: '150ms' }} />
-          <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: dotBg, animationDelay: '300ms' }} />
+          <span className="w-2 h-2 rounded-full animate-bounce bg-[var(--text-tertiary)]" style={{ animationDelay: '0ms' }} />
+          <span className="w-2 h-2 rounded-full animate-bounce bg-[var(--text-tertiary)]" style={{ animationDelay: '150ms' }} />
+          <span className="w-2 h-2 rounded-full animate-bounce bg-[var(--text-tertiary)]" style={{ animationDelay: '300ms' }} />
         </div>
       </div>
     </div>
   );
 }
 
-function ToolStatusIndicator({ status, isDark }: { status: string; isDark: boolean }) {
+function ToolStatusIndicator({ status }: { status: string }) {
   return (
     <div className="flex justify-start">
       <div
-        style={{
-          backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.07)',
-          border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
-          borderRadius: '16px 16px 16px 4px',
-          padding: '12px 16px',
-        }}
+        className="bg-[var(--surface-raised)] border border-[var(--border-subtle)]"
+        style={{ borderRadius: '16px 16px 16px 4px', padding: '12px 16px' }}
       >
         <div className="flex items-center gap-2">
           <span className="relative flex h-2.5 w-2.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-accent-500" />
           </span>
-          <span style={{ color: isDark ? '#D4D4D4' : '#555555', fontSize: '0.75rem' }}>{status}</span>
+          <span className="text-[var(--text-secondary)] text-xs">{status}</span>
         </div>
       </div>
     </div>
