@@ -273,7 +273,7 @@ function GapsTab({
                     <select
                       value={approveForm.category}
                       onChange={e => setApproveForm({ ...approveForm, category: e.target.value })}
-                      className="mt-1 w-full rounded-md border border-[var(--border-strong)] px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-md border border-[var(--border-strong)] bg-white text-gray-900 px-3 py-2 text-sm"
                     >
                       {CATEGORIES.map(c => (
                         <option key={c} value={c}>{c.replace('_', ' ')}</option>
@@ -285,7 +285,7 @@ function GapsTab({
                     <input
                       value={approveForm.question}
                       onChange={e => setApproveForm({ ...approveForm, question: e.target.value })}
-                      className="mt-1 w-full rounded-md border border-[var(--border-strong)] px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-md border border-[var(--border-strong)] bg-white text-gray-900 px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
@@ -294,7 +294,7 @@ function GapsTab({
                       value={approveForm.answer}
                       onChange={e => setApproveForm({ ...approveForm, answer: e.target.value })}
                       rows={4}
-                      className="mt-1 w-full rounded-md border border-[var(--border-strong)] px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-md border border-[var(--border-strong)] bg-white text-gray-900 px-3 py-2 text-sm"
                     />
                   </div>
                   <div className="flex gap-2">
@@ -419,7 +419,7 @@ function KnowledgeTab({
             <select
               value={newKnowledge.category}
               onChange={e => setNewKnowledge({ ...newKnowledge, category: e.target.value })}
-              className="mt-1 w-full rounded-md border border-[var(--border-strong)] px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-[var(--border-strong)] bg-white text-gray-900 px-3 py-2 text-sm"
             >
               {CATEGORIES.map(c => (
                 <option key={c} value={c}>{c.replace('_', ' ')}</option>
@@ -432,7 +432,7 @@ function KnowledgeTab({
               value={newKnowledge.question}
               onChange={e => setNewKnowledge({ ...newKnowledge, question: e.target.value })}
               placeholder="What question does this answer?"
-              className="mt-1 w-full rounded-md border border-[var(--border-strong)] px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-[var(--border-strong)] bg-white text-gray-900 px-3 py-2 text-sm"
             />
           </div>
           <div>
@@ -442,7 +442,7 @@ function KnowledgeTab({
               onChange={e => setNewKnowledge({ ...newKnowledge, answer: e.target.value })}
               placeholder="The correct answer Sunny should give"
               rows={4}
-              className="mt-1 w-full rounded-md border border-[var(--border-strong)] px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-[var(--border-strong)] bg-white text-gray-900 px-3 py-2 text-sm"
             />
           </div>
           <div className="flex gap-2">
@@ -483,7 +483,7 @@ function KnowledgeTab({
                         value={editAnswer}
                         onChange={e => setEditAnswer(e.target.value)}
                         rows={3}
-                        className="w-full rounded-md border border-[var(--border-strong)] px-3 py-2 text-sm"
+                        className="w-full rounded-md border border-[var(--border-strong)] bg-white text-gray-900 px-3 py-2 text-sm"
                       />
                       <div className="flex gap-2">
                         <button
