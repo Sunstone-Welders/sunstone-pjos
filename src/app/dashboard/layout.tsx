@@ -20,6 +20,19 @@ import MentorChat from '@/components/MentorChat';
 import { getSubscriptionTier, isTrialActive } from '@/lib/subscription';
 
 // ============================================================================
+// Spotlight mini card data (from /api/dashboard/spotlight)
+// ============================================================================
+
+interface SpotlightMiniData {
+  title: string;
+  url: string;
+  imageUrl: string | null;
+  badge: string;
+  price: string | null;
+  salePrice: string | null;
+}
+
+// ============================================================================
 // Nav item definitions
 // ============================================================================
 
@@ -93,6 +106,7 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
   const { tenant, isLoading: tenantLoading, isOwner } = useTenant();
   const [isSunnyOpen, setIsSunnyOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [spotlight, setSpotlight] = useState<SpotlightMiniData | null>(null);
 
   const openSunny = useCallback(() => setIsSunnyOpen(true), []);
   const closeSunny = useCallback(() => setIsSunnyOpen(false), []);
@@ -106,6 +120,27 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
     }
   }, [tenantLoading, tenant, isOwner, router]);
 
+  // Fetch spotlight data for mini card (once on mount)
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchSpotlight() {
+      try {
+        const res = await fetch('/api/dashboard/spotlight');
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data.spotlight) setSpotlight(data.spotlight);
+        }
+      } catch {
+        // Non-critical
+      }
+    }
+    fetchSpotlight();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Hide mini spotlight on POS pages
+  const showSpotlight = spotlight && !pathname.includes('/dashboard/pos');
+
   // Event mode — render children only, no nav chrome
   if (pathname.includes('/event-mode')) {
     return <>{children}</>;
@@ -114,10 +149,10 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--surface-base)]">
       {/* Tablet sidebar: md–lg */}
-      <TabletSidebar />
+      <TabletSidebar spotlight={showSpotlight ? spotlight : null} />
 
       {/* Desktop sidebar: lg+ */}
-      <DesktopSidebar />
+      <DesktopSidebar spotlight={showSpotlight ? spotlight : null} />
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -126,6 +161,9 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
 
         {/* Trial banner */}
         <TrialBanner />
+
+        {/* Mobile spotlight banner (below md) */}
+        {showSpotlight && <MobileSpotlightBanner spotlight={spotlight} />}
 
         {/* Desktop/Tablet header bar — Ask Sunny pill (md+) */}
         <div className="hidden md:flex items-center justify-end px-4 lg:px-8 py-2 shrink-0">
@@ -440,7 +478,7 @@ function MoreSheet({ isOpen, onClose, onSunnyOpen }: { isOpen: boolean; onClose:
 // TabletSidebar (md to lg)
 // ============================================================================
 
-function TabletSidebar() {
+function TabletSidebar({ spotlight }: { spotlight: SpotlightMiniData | null }) {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState(false);
   const { tenant, role } = useTenant();
@@ -492,6 +530,11 @@ function TabletSidebar() {
         })}
       </nav>
 
+      {/* Mini Spotlight */}
+      {spotlight && (
+        <SidebarSpotlightCard spotlight={spotlight} collapsed={!expanded} />
+      )}
+
       {/* Footer */}
       <div className={cn('border-t border-border-default py-3 space-y-1', expanded ? 'px-3' : 'px-2')}>
         {/* Platform Admin */}
@@ -530,7 +573,7 @@ function TabletSidebar() {
 // DesktopSidebar (lg+)
 // ============================================================================
 
-function DesktopSidebar() {
+function DesktopSidebar({ spotlight }: { spotlight: SpotlightMiniData | null }) {
   const pathname = usePathname();
   const { tenant, role } = useTenant();
   const isPlatformAdmin = useIsPlatformAdmin();
@@ -573,6 +616,11 @@ function DesktopSidebar() {
           );
         })}
       </nav>
+
+      {/* Mini Spotlight */}
+      {spotlight && (
+        <SidebarSpotlightCard spotlight={spotlight} collapsed={false} />
+      )}
 
       {/* Footer */}
       <div className="px-3 py-4 border-t border-border-default space-y-1">
@@ -746,6 +794,170 @@ function TenantLogo({ size = 'md' }: { size?: 'sm' | 'md' }) {
 }
 
 // ============================================================================
+// Spotlight Mini Components
+// ============================================================================
+
+/** Sidebar mini card — shown in desktop sidebar (always expanded) and tablet sidebar (collapsed/expanded) */
+function SidebarSpotlightCard({ spotlight, collapsed }: { spotlight: SpotlightMiniData; collapsed: boolean }) {
+  // Collapsed tablet: just a small clickable product image
+  if (collapsed) {
+    return (
+      <div className="px-2 py-2 shrink-0">
+        <a
+          href={spotlight.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`${spotlight.title} — Shop at Sunstone`}
+          className="block w-12 h-12 mx-auto rounded-lg overflow-hidden border border-[var(--accent-200)] hover:border-[var(--accent-400)] transition-colors"
+          style={{ background: 'var(--accent-50)' }}
+        >
+          {spotlight.imageUrl ? (
+            <img
+              src={spotlight.imageUrl}
+              alt={spotlight.title}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <SunstoneLogoIcon className="w-5 h-5 text-[var(--accent-500)]" />
+            </div>
+          )}
+        </a>
+      </div>
+    );
+  }
+
+  // Expanded: compact card with image, title, price, CTA
+  return (
+    <div className="px-3 py-2 shrink-0">
+      <a
+        href={spotlight.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block rounded-xl overflow-hidden border border-[var(--accent-200)] hover:border-[var(--accent-400)] transition-all group"
+        style={{ background: 'linear-gradient(135deg, var(--accent-50), var(--surface-raised))' }}
+      >
+        {/* Image */}
+        {spotlight.imageUrl && (
+          <div className="w-full" style={{ height: 80, overflow: 'hidden' }}>
+            <img
+              src={spotlight.imageUrl}
+              alt={spotlight.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+          </div>
+        )}
+
+        {/* Content */}
+        <div style={{ padding: '10px 12px 12px' }}>
+          {/* Badge */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span
+              className="text-[var(--accent-600)]"
+              style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}
+            >
+              From Sunstone
+            </span>
+            {spotlight.badge && (
+              <span
+                className={spotlight.salePrice ? 'bg-red-500 text-white' : 'bg-[var(--accent-500)] text-[var(--text-on-accent)]'}
+                style={{ fontSize: 8, fontWeight: 600, padding: '1px 6px', borderRadius: 9999 }}
+              >
+                {spotlight.badge}
+              </span>
+            )}
+          </div>
+
+          {/* Title */}
+          <p
+            className="text-[var(--text-primary)] truncate"
+            style={{ fontSize: 13, fontWeight: 600, marginTop: 3, lineHeight: 1.3 }}
+          >
+            {spotlight.title}
+          </p>
+
+          {/* Price */}
+          {spotlight.price && (
+            <p
+              className="text-[var(--text-secondary)]"
+              style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}
+            >
+              {spotlight.price}
+            </p>
+          )}
+
+          {/* CTA */}
+          <span
+            className="text-[var(--accent-600)] group-hover:text-[var(--accent-700)]"
+            style={{ fontSize: 11, fontWeight: 600, marginTop: 6, display: 'inline-block' }}
+          >
+            Shop &rarr;
+          </span>
+        </div>
+      </a>
+    </div>
+  );
+}
+
+/** Mobile slim banner — shown below md, above page content */
+function MobileSpotlightBanner({ spotlight }: { spotlight: SpotlightMiniData }) {
+  return (
+    <a
+      href={spotlight.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="md:hidden flex items-center gap-3 shrink-0 border-b border-[var(--border-default)] hover:bg-[var(--accent-50)] transition-colors"
+      style={{
+        padding: '8px 16px',
+        background: 'linear-gradient(90deg, var(--accent-50), var(--surface-base))',
+      }}
+    >
+      {/* Product image */}
+      <div
+        className="shrink-0 rounded-lg overflow-hidden"
+        style={{ width: 36, height: 36, background: 'var(--surface-raised)' }}
+      >
+        {spotlight.imageUrl ? (
+          <img
+            src={spotlight.imageUrl}
+            alt={spotlight.title}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <SunstoneLogoIcon className="w-4 h-4 text-[var(--accent-500)]" />
+          </div>
+        )}
+      </div>
+
+      {/* Text */}
+      <div className="flex-1 min-w-0">
+        <p
+          className="text-[var(--text-primary)] truncate"
+          style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3 }}
+        >
+          {spotlight.title}
+        </p>
+        <p className="text-[var(--text-tertiary)]" style={{ fontSize: 10 }}>
+          {spotlight.badge}{spotlight.price ? ` · ${spotlight.price}` : ''}
+        </p>
+      </div>
+
+      {/* Arrow */}
+      <svg
+        className="w-4 h-4 text-[var(--accent-500)] shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+    </a>
+  );
+}
+
+// ============================================================================
 // Icons
 // ============================================================================
 
@@ -850,6 +1062,14 @@ function LogoutIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+    </svg>
+  );
+}
+
+function SunstoneLogoIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 2L14.09 8.26L20 9.27L15.55 13.97L16.91 20L12 16.9L7.09 20L8.45 13.97L4 9.27L9.91 8.26L12 2Z" />
     </svg>
   );
 }
