@@ -149,10 +149,10 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--surface-base)]">
       {/* Tablet sidebar: md–lg */}
-      <TabletSidebar spotlight={showSpotlight ? spotlight : null} />
+      <TabletSidebar />
 
       {/* Desktop sidebar: lg+ */}
-      <DesktopSidebar spotlight={showSpotlight ? spotlight : null} />
+      <DesktopSidebar />
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -163,7 +163,7 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
         <TrialBanner />
 
         {/* Mobile spotlight banner (below md) */}
-        {showSpotlight && <MobileSpotlightBanner spotlight={spotlight} />}
+        {showSpotlight && <SpotlightBanner spotlight={spotlight} />}
 
         {/* Desktop/Tablet header bar — Ask Sunny pill (md+) */}
         <div className="hidden md:flex items-center justify-end px-4 lg:px-8 py-2 shrink-0">
@@ -478,7 +478,7 @@ function MoreSheet({ isOpen, onClose, onSunnyOpen }: { isOpen: boolean; onClose:
 // TabletSidebar (md to lg)
 // ============================================================================
 
-function TabletSidebar({ spotlight }: { spotlight: SpotlightMiniData | null }) {
+function TabletSidebar() {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState(false);
   const { tenant, role } = useTenant();
@@ -530,11 +530,6 @@ function TabletSidebar({ spotlight }: { spotlight: SpotlightMiniData | null }) {
         })}
       </nav>
 
-      {/* Mini Spotlight */}
-      {spotlight && (
-        <SidebarSpotlightCard spotlight={spotlight} collapsed={!expanded} />
-      )}
-
       {/* Footer */}
       <div className={cn('border-t border-border-default py-3 space-y-1', expanded ? 'px-3' : 'px-2')}>
         {/* Platform Admin */}
@@ -573,7 +568,7 @@ function TabletSidebar({ spotlight }: { spotlight: SpotlightMiniData | null }) {
 // DesktopSidebar (lg+)
 // ============================================================================
 
-function DesktopSidebar({ spotlight }: { spotlight: SpotlightMiniData | null }) {
+function DesktopSidebar() {
   const pathname = usePathname();
   const { tenant, role } = useTenant();
   const isPlatformAdmin = useIsPlatformAdmin();
@@ -616,11 +611,6 @@ function DesktopSidebar({ spotlight }: { spotlight: SpotlightMiniData | null }) 
           );
         })}
       </nav>
-
-      {/* Mini Spotlight */}
-      {spotlight && (
-        <SidebarSpotlightCard spotlight={spotlight} collapsed={false} />
-      )}
 
       {/* Footer */}
       <div className="px-3 py-4 border-t border-border-default space-y-1">
@@ -797,116 +787,14 @@ function TenantLogo({ size = 'md' }: { size?: 'sm' | 'md' }) {
 // Spotlight Mini Components
 // ============================================================================
 
-/** Sidebar mini card — shown in desktop sidebar (always expanded) and tablet sidebar (collapsed/expanded) */
-function SidebarSpotlightCard({ spotlight, collapsed }: { spotlight: SpotlightMiniData; collapsed: boolean }) {
-  // Collapsed tablet: just a small clickable product image
-  if (collapsed) {
-    return (
-      <div className="px-2 py-2 shrink-0">
-        <a
-          href={spotlight.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          title={`${spotlight.title} — Shop at Sunstone`}
-          className="block w-12 h-12 mx-auto rounded-lg overflow-hidden border border-[var(--accent-200)] hover:border-[var(--accent-400)] transition-colors"
-          style={{ background: 'var(--accent-50)' }}
-        >
-          {spotlight.imageUrl ? (
-            <img
-              src={spotlight.imageUrl}
-              alt={spotlight.title}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <SunstoneLogoIcon className="w-5 h-5 text-[var(--accent-500)]" />
-            </div>
-          )}
-        </a>
-      </div>
-    );
-  }
-
-  // Expanded: compact card with image, title, price, CTA
-  return (
-    <div className="px-3 py-2 shrink-0">
-      <a
-        href={spotlight.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block rounded-xl overflow-hidden border border-[var(--accent-200)] hover:border-[var(--accent-400)] transition-all group"
-        style={{ background: 'linear-gradient(135deg, var(--accent-50), var(--surface-raised))' }}
-      >
-        {/* Image */}
-        {spotlight.imageUrl && (
-          <div className="w-full" style={{ height: 80, overflow: 'hidden' }}>
-            <img
-              src={spotlight.imageUrl}
-              alt={spotlight.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
-          </div>
-        )}
-
-        {/* Content */}
-        <div style={{ padding: '10px 12px 12px' }}>
-          {/* Badge */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span
-              className="text-[var(--accent-600)]"
-              style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}
-            >
-              From Sunstone
-            </span>
-            {spotlight.badge && (
-              <span
-                className={spotlight.salePrice ? 'bg-red-500 text-white' : 'bg-[var(--accent-500)] text-[var(--text-on-accent)]'}
-                style={{ fontSize: 8, fontWeight: 600, padding: '1px 6px', borderRadius: 9999 }}
-              >
-                {spotlight.badge}
-              </span>
-            )}
-          </div>
-
-          {/* Title */}
-          <p
-            className="text-[var(--text-primary)] truncate"
-            style={{ fontSize: 13, fontWeight: 600, marginTop: 3, lineHeight: 1.3 }}
-          >
-            {spotlight.title}
-          </p>
-
-          {/* Price */}
-          {spotlight.price && (
-            <p
-              className="text-[var(--text-secondary)]"
-              style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}
-            >
-              {spotlight.price}
-            </p>
-          )}
-
-          {/* CTA */}
-          <span
-            className="text-[var(--accent-600)] group-hover:text-[var(--accent-700)]"
-            style={{ fontSize: 11, fontWeight: 600, marginTop: 6, display: 'inline-block' }}
-          >
-            Shop &rarr;
-          </span>
-        </div>
-      </a>
-    </div>
-  );
-}
-
-/** Mobile slim banner — shown below md, above page content */
-function MobileSpotlightBanner({ spotlight }: { spotlight: SpotlightMiniData }) {
+/** Slim inline spotlight banner — shown on all screen sizes above page content */
+function SpotlightBanner({ spotlight }: { spotlight: SpotlightMiniData }) {
   return (
     <a
       href={spotlight.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="md:hidden flex items-center gap-3 shrink-0 border-b border-[var(--border-default)] hover:bg-[var(--accent-50)] transition-colors"
+      className="flex items-center gap-3 shrink-0 border-b border-[var(--border-default)] hover:bg-[var(--accent-50)] transition-colors"
       style={{
         padding: '8px 16px',
         background: 'linear-gradient(90deg, var(--accent-50), var(--surface-base))',

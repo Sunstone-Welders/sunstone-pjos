@@ -44,7 +44,7 @@ export default function DashboardPage() {
     },
     {
       type: 'sunstone_product',
-      priority: 7,
+      priority: 50,
       data: {
         title: 'Set Up Your Inventory',
         body: 'Add your chains, charms, and supplies to start tracking stock and pricing products automatically.',

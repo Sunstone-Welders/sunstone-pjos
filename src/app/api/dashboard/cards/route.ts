@@ -15,7 +15,7 @@
 //  35. Recent Messages (broadcasts in last 7 days)
 //  30. Networking Nudge (no events in 14 days)
 //  45. PJ University (tenants < 30 days old)
-//   7. Sunstone Product Spotlight (ALWAYS — weekly catalog rotation)
+//  50. Sunstone Product Spotlight (ALWAYS — weekly catalog rotation)
 //
 // Resilience: Each card generator is wrapped in try/catch so one failing
 // query never kills the entire dashboard. Revenue + Sunstone are guaranteed.
@@ -28,7 +28,7 @@ import type { DashboardCard } from '@/types';
 
 // Bump this version whenever card generation logic changes. Cached cards with
 // a different version are treated as stale and regenerated on next load.
-const CARD_CACHE_VERSION = 5;
+const CARD_CACHE_VERSION = 6;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -76,7 +76,7 @@ function fallbackCards(): DashboardCard[] {
     },
     {
       type: 'sunstone_product',
-      priority: 7,
+      priority: 50,
       data: {
         title: 'Set Up Your Inventory',
         body: 'Add your chains, charms, and supplies to start tracking stock and pricing products automatically.',
@@ -731,14 +731,14 @@ async function generateCards(
     if (spotlightProduct) {
       cards.push({
         type: 'sunstone_product',
-        priority: 7,
+        priority: 50,
         data: spotlightProduct,
       });
     } else {
       // Fallback: static tip if catalog tables don't exist yet
       cards.push({
         type: 'sunstone_product',
-        priority: 7,
+        priority: 50,
         data: getSunstoneTipFallback(
           lowStockResult.data?.length || 0,
           clientCountResult.count || 0,
@@ -751,7 +751,7 @@ async function generateCards(
     // Static fallback
     cards.push({
       type: 'sunstone_product',
-      priority: 7,
+      priority: 50,
       data: {
         title: 'Explore Sunstone',
         body: 'Premium chains, charms, and welders for your permanent jewelry business.',
