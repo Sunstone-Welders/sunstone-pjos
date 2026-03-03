@@ -1,11 +1,11 @@
 // src/app/api/receipts/email/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerSupabase, createServiceRoleClient } from '@/lib/supabase/server';
 
 interface ReceiptEmailBody {
   to: string;
   tenantName: string;
   tenantAccentColor?: string;
-  tenantId?: string;
   clientId?: string;
   eventName?: string;
   tagline?: string;
@@ -70,7 +70,7 @@ function buildReceiptHTML(data: ReceiptEmailBody): string {
     <tr>
       <td style="padding: 32px 16px;">
         <table role="presentation" style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
-          
+
           <!-- Header -->
           <tr>
             <td style="padding: 32px 32px 24px; text-align: center; border-bottom: 1px solid #f3f4f6;">
@@ -154,6 +154,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Auth check ──────────────────────────────────────────────────────
+    const supabase = await createServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ sent: false, error: 'Not authenticated' }, { status: 401 });
+    }
+
+    // Derive tenant from user's membership — don't trust tenantId from body
+    const { data: member } = await supabase
+      .from('tenant_members')
+      .select('tenant_id')
+      .eq('user_id', user.id)
+      .limit(1)
+      .single();
+
+    if (!member) {
+      return NextResponse.json({ sent: false, error: 'No tenant membership' }, { status: 403 });
+    }
+
+    const tenantId = member.tenant_id;
+
     const body: ReceiptEmailBody = await request.json();
 
     if (!body.to || !body.tenantName || !body.items || !body.total) {
@@ -178,35 +200,34 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('[Receipt Email Error]', error);
       return NextResponse.json(
-        { sent: false, error: error.message || 'Failed to send email' },
+        { sent: false, error: 'Failed to send email' },
         { status: 500 }
       );
     }
 
-    // Log to message_log (fire-and-forget)
-    if (body.tenantId) {
-      import('@/lib/supabase/server').then(({ createServiceRoleClient }) =>
-        createServiceRoleClient().then(svc =>
-          svc.from('message_log').insert({
-            tenant_id: body.tenantId,
-            client_id: body.clientId || null,
-            direction: 'outbound',
-            channel: 'email',
-            recipient_email: body.to,
-            subject: `Your receipt from ${body.tenantName}`,
-            body: `Receipt: ${body.items.length} item(s), $${body.total.toFixed(2)}`,
-            source: 'receipt',
-            status: 'sent',
-          })
-        )
-      ).catch(() => {});
+    // Log to message_log (fire-and-forget) — use server-derived tenantId
+    try {
+      const svc = await createServiceRoleClient();
+      await svc.from('message_log').insert({
+        tenant_id: tenantId,
+        client_id: body.clientId || null,
+        direction: 'outbound',
+        channel: 'email',
+        recipient_email: body.to,
+        subject: `Your receipt from ${body.tenantName}`,
+        body: `Receipt: ${body.items.length} item(s), $${body.total.toFixed(2)}`,
+        source: 'receipt',
+        status: 'sent',
+      });
+    } catch {
+      // Non-critical — don't fail the receipt send
     }
 
     return NextResponse.json({ sent: true, id: data?.id });
   } catch (err: any) {
     console.error('[Receipt Email Error]', err);
     return NextResponse.json(
-      { sent: false, error: err?.message || 'Failed to send email' },
+      { sent: false, error: 'Failed to send email' },
       { status: 500 }
     );
   }

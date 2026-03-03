@@ -11,9 +11,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { fetchAllProducts, getShopifyAccessToken } from '@/lib/shopify';
+import { verifyPlatformAdmin, AdminAuthError } from '@/lib/admin/verify-platform-admin';
 import type { SunstoneProduct } from '@/lib/shopify';
 
 export async function GET(request: NextRequest) {
+  // ── Auth: platform admins only ──────────────────────────────────────
+  try {
+    await verifyPlatformAdmin();
+  } catch (err) {
+    if (err instanceof AdminAuthError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    return NextResponse.json({ error: 'Not authorized' }, { status: 403 });
+  }
+
   const startTime = Date.now();
   const domain = process.env.SHOPIFY_STORE_DOMAIN;
 
