@@ -371,21 +371,24 @@ function WaiverPageInner() {
                 placeholder="(555) 123-4567"
               />
 
-              {/* SMS Consent */}
+              {/* SMS Consent — required for A2P 10DLC compliance */}
               <label className="flex items-start gap-3 cursor-pointer">
                 <span className="flex-shrink-0 pt-0.5">
                   <input
                     type="checkbox"
                     checked={smsConsent}
                     onChange={(e) => setSmsConsent(e.target.checked)}
+                    required
                     className="w-6 h-6 rounded border-2 border-[var(--border-default)] accent-[var(--accent-primary)] cursor-pointer"
                   />
                 </span>
-                <span className="text-xs leading-relaxed text-[var(--text-tertiary)]">
-                  I agree to receive text messages from this business, including queue
-                  notifications, service receipts, and aftercare instructions. Message
-                  frequency varies. Message &amp; data rates may apply. Reply STOP to
-                  opt out at any time. Reply HELP for assistance.
+                <span style={{ fontSize: 12, lineHeight: 1.6 }} className="text-[var(--text-secondary)]">
+                  By providing my phone number, I consent to receive text messages from
+                  this business via Sunstone Studio. Messages may include queue position
+                  updates, service notifications, appointment reminders, receipts, and
+                  aftercare instructions. Message frequency varies, typically 1–3 messages
+                  per visit. Message and data rates may apply. Reply STOP to unsubscribe
+                  at any time. Reply HELP for help.
                 </span>
               </label>
 
@@ -417,9 +420,12 @@ function WaiverPageInner() {
               <Button
                 variant="primary"
                 className="w-full"
-                onClick={() =>
-                  form.name ? setStep('sign') : setError('Please enter your name')
-                }
+                onClick={() => {
+                  if (!form.name) return setError('Please enter your name');
+                  if (!smsConsent) return setError('Please agree to the SMS consent to continue');
+                  setError('');
+                  setStep('sign');
+                }}
                 style={{ backgroundColor: brandColor }}
               >
                 Continue to Sign
@@ -515,6 +521,29 @@ function WaiverPageInner() {
           </Card>
         )}
       </div>
+
+      {/* Footer */}
+      <footer className="text-center mt-12 pb-6 text-xs text-[var(--text-tertiary)]" style={{ lineHeight: 1.8 }}>
+        <span>Powered by Sunstone Studio</span>
+        <span className="mx-1.5">|</span>
+        <a
+          href="https://permanentjewelry.sunstonewelders.com/pages/privacy-policy"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-[var(--text-secondary)] transition-colors"
+        >
+          Privacy Policy
+        </a>
+        <span className="mx-1.5">|</span>
+        <a
+          href="https://permanentjewelry.sunstonewelders.com/pages/terms-conditions"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-[var(--text-secondary)] transition-colors"
+        >
+          Terms &amp; Conditions
+        </a>
+      </footer>
     </div>
   );
 }
