@@ -7,7 +7,7 @@
 // Compiled from 45+ official Sunstone documents, training materials, and
 // founder interviews. This is the single source of truth for Sunny's responses.
 //
-// Last updated: 2026-02-24
+// Last updated: 2026-03-03
 // =============================================================================
 
 // =============================================================================
@@ -1863,6 +1863,10 @@ export const PJOS_PLATFORM_GUIDE = {
         bestFor: 'High-volume artists or teams who want zero fees and unlimited team access.',
       },
     },
+    crmAddOn: {
+      overview: 'CRM features (workflows, templates, automated follow-ups, broadcast messaging) are enabled as an add-on by contacting Sunstone. When enabled, you get access to the full CRM suite within your existing plan.',
+      includes: ['Automated follow-up workflows', 'Message templates', 'Broadcast messaging to client segments', 'Re-engagement campaigns', 'Birthday and anniversary automations'],
+    },
     trial: 'New accounts get a 60-day Pro trial to explore all features. After the trial, you keep your data and can upgrade or continue on the free Starter plan.',
     upgrading: 'Go to Settings → Subscription tab to see your current plan and upgrade. Payment is handled through Stripe.',
     whatHappensAfterTrial: 'If your trial expires without upgrading, you move to the Starter plan. You keep all your data, events, inventory, and clients — you just lose access to Pro features like full reports, CRM, and unlimited Sunny questions.',
@@ -1898,15 +1902,24 @@ export const PJOS_PLATFORM_GUIDE = {
   // 9.13 Ask Sunny
   // ---------------------------------------------------------------------------
   askSunny: {
-    overview: 'Sunny is your AI mentor built right into Sunstone Studio. She knows permanent jewelry techniques, Sunstone products, business strategy, and how the app works.',
+    overview: 'Sunny is your AI mentor built right into Sunstone Studio. She knows permanent jewelry techniques, Sunstone products, business strategy, and how the app works. She can search the live Sunstone product catalog (281+ products), manage your inventory, clients, events, and more — all through conversation.',
     howToAccess: 'Look for the chat icon in the bottom-right corner of any dashboard page. Click it to open Sunny.',
     whatSunnyHelps: [
-      'Welding technique and settings — "What joule setting for 24g gold filled?"',
-      'Business advice — "How should I price my bracelets?"',
-      'Event planning — "How much inventory should I bring to a 6-hour market?"',
+      'Welding technique and settings — "What joule setting for 24g gold filled on the Zapp Plus 2?"',
+      'Business advice and pricing strategy — "How should I price my bracelets?" or "What markup should I use?"',
+      'Event planning and inventory calculations — "How much inventory should I bring to a 6-hour market?"',
       'App guidance — "How do I create an event?" or "Where do I find my reports?"',
       'Product knowledge — "What is the difference between gold filled and solid gold?"',
+      'Search the Sunstone product catalog — "Show me gold fill chains" or "How much is the Chloe chain?"',
+      'Manage your inventory — add items, update prices, check stock levels, set up starter kit chains',
+      'Manage clients — look up client info, add tags, view waiver history',
+      'Create and manage events — set up new events, view upcoming events, check P&L',
+      'Pull revenue and sales reports — "How much did I make this month?"',
+      'CRM workflows and templates — create follow-up sequences, broadcast messages to clients',
+      'Track expenses — add and view business expenses for accurate P&L',
+      'Process refunds — help with refund workflows for completed sales',
       'Troubleshooting — "My welds keep breaking, what am I doing wrong?"',
+      'Starter kit setup — "Add my Dream kit to inventory" with automatic chain details and pricing',
     ],
     questionLimits: {
       starter: '5 questions per month on the Starter plan.',

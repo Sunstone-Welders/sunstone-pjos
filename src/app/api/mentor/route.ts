@@ -389,7 +389,7 @@ const SUBSECTIONS: Subsection[] = [
     id: 'app-crm-value',
     label: 'CRM Value & How Artists Use It',
     data: PJOS_PLATFORM_GUIDE.crmValue,
-    keywords: ['crm', 'follow up', 'follow-up', 'repeat client', 'repeat customer', 'retention', 'keep clients', 'bring back', 'birthday text', 'campaign', 'broadcast', 'workflow', 'automated', 'automation', 'private party', 'party invite', 'girls night', 'why crm', 'is crm worth it', 'do i need crm', 'slow season', 'miss you text', 're-engagement'],
+    keywords: ['crm', 'follow up', 'follow-up', 'repeat client', 'repeat customer', 'retention', 'keep clients', 'bring back', 'birthday text', 'campaign', 'broadcast', 'workflow', 'automated', 'automation', 'private party', 'party invite', 'girls night', 'why crm', 'is crm worth it', 'do i need crm', 'slow season', 'miss you text', 're-engagement', 'add-on', 'addon', 'crm add'],
     priority: 1,
   },
   {
