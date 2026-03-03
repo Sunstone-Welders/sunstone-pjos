@@ -245,9 +245,10 @@ export default function ChainPricingConfig({
         <div className="space-y-4">
           {/* Large price input */}
           <div>
-            <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-              Price per Inch
+            <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">
+              Sell Price per Inch
             </label>
+            <p className="text-xs text-[var(--text-tertiary)] mb-2">What you charge customers per inch</p>
             <div className="relative max-w-xs">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-medium text-[var(--text-tertiary)]">
                 $

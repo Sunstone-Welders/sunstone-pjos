@@ -113,7 +113,7 @@ export function ProductSelector({
       const { chain, productType: pt } = inchAdjuster;
       onAddToCart({
         inventory_item_id: chain.id,
-        name: `${chain.name} ${pt.name}`,
+        name: `${chain.name} — ${pt.name} (${inches}in)`,
         quantity: 1,
         unit_price: price,
         discount_type: null,

@@ -78,6 +78,9 @@ export function InchAdjuster({ chain, productType, onAdd, onCancel }: InchAdjust
             <div className="text-[11px] uppercase tracking-[0.06em] text-[var(--text-tertiary)] font-semibold mb-2">
               Calculated Price
             </div>
+            <div className="text-[15px] text-[var(--text-secondary)] font-medium mb-1">
+              {numInches} &times; ${pricePerInch.toFixed(2)}/in = ${calculatedPrice.toFixed(2)}
+            </div>
             <div className="text-[48px] font-bold text-[var(--text-primary)] tracking-tighter leading-none">
               ${calculatedPrice.toFixed(2)}
             </div>

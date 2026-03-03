@@ -753,7 +753,7 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
   };
 
   // â”€â”€â”€ Cost label â”€â”€â”€
-  const costLabel = type === 'chain' ? 'Cost per Inch' : 'Cost per Unit';
+  const costLabel = type === 'chain' ? 'Your Cost per Inch' : 'Cost per Unit';
   const quantityLabel = type === 'chain' ? 'Quantity on Hand (inches)' : 'Quantity on Hand';
 
   return (
@@ -906,9 +906,12 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
 
             {/* Cost */}
             <div>
-              <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
+              <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">
                 {costLabel}
               </label>
+              {type === 'chain' && (
+                <p className="text-xs text-[var(--text-tertiary)] mb-1.5">What you paid per inch for this chain</p>
+              )}
               <div className="relative max-w-[200px]">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-[var(--text-tertiary)]">
                   $

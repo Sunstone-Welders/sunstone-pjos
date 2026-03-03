@@ -81,6 +81,11 @@ export function ChainGrid({ chains, chainPrices, onSelect, selectedChainId }: Ch
               <div className="text-[12px] text-[var(--text-tertiary)] mt-1.5 pl-[18px]">
                 {chain.quantity_on_hand.toFixed(0)} {chain.unit} in stock
               </div>
+              {chain.pricing_mode === 'per_inch' && (
+                <span className="inline-block ml-[18px] mt-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-[var(--accent-subtle)] text-[var(--accent-primary)]">
+                  per inch
+                </span>
+              )}
             </div>
             <div className="text-[20px] font-bold text-[var(--text-primary)] mt-3 tracking-tight">
               {getDisplayPrice(chain, chainPrices)}

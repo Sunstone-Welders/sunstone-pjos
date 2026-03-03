@@ -17,10 +17,14 @@ export function ProductTypeRow({
   onSelectFlatRate,
   onSelectPerInch,
 }: ProductTypeRowProps) {
-  // Only show product types that have a price set for this chain
-  const availableTypes = productTypes.filter((pt) =>
-    chainPrices.some((p) => p.inventory_item_id === chain.id && p.product_type_id === pt.id)
-  );
+  // Per-inch chains: show ALL product types (price is per-inch regardless of type)
+  // Per-product chains: only show types that have a price configured
+  const isPerInch = chain.pricing_mode === 'per_inch';
+  const availableTypes = isPerInch
+    ? productTypes
+    : productTypes.filter((pt) =>
+        chainPrices.some((p) => p.inventory_item_id === chain.id && p.product_type_id === pt.id)
+      );
 
   if (availableTypes.length === 0) {
     return (
