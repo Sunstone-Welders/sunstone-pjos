@@ -59,6 +59,6 @@ export async function GET() {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error('[Shopify Auth] Error:', err);
-    return NextResponse.json({ error: 'Unexpected error', detail: err.message }, { status: 500 });
+    return NextResponse.json({ error: 'Unexpected error' }, { status: 500 });
   }
 }

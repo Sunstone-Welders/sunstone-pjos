@@ -14,6 +14,9 @@ import { verifyPlatformAdmin, AdminAuthError } from '@/lib/admin/verify-platform
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { runAgenticLoop, buildAgenticSSEStream } from '@/lib/agentic-loop';
 import { ATLAS_TOOL_DEFINITIONS, executeAtlasTool, getAtlasToolStatusLabel } from '@/lib/atlas-tools';
+import { checkRateLimit } from '@/lib/rate-limit';
+
+const ATLAS_RATE_LIMIT = { prefix: 'atlas', limit: 10, windowSeconds: 60 };
 
 // ============================================================================
 // Comprehensive Platform Data Fetcher
@@ -358,6 +361,13 @@ async function getPlatformData(serviceClient: any) {
 export async function POST(req: NextRequest) {
   try {
     const admin = await verifyPlatformAdmin();
+
+    // Rate limit by admin user
+    const rl = checkRateLimit(admin.id, ATLAS_RATE_LIMIT);
+    if (!rl.allowed) {
+      return NextResponse.json({ error: 'Too many requests. Please wait a moment.' }, { status: 429 });
+    }
+
     const serviceClient = await createServiceRoleClient();
 
     const body = await req.json();
@@ -598,7 +608,7 @@ After a tool executes, summarize the result naturally. If a tool errors, explain
     } catch (err: any) {
       console.error('[Atlas] Agentic loop error:', err?.message, err?.stack);
       return NextResponse.json(
-        { error: `AI service error: ${err?.message || 'unknown'}` },
+        { error: 'AI service error' },
         { status: 502 }
       );
     }

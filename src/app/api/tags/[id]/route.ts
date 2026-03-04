@@ -26,7 +26,7 @@ export async function PATCH(
     if (error.code === '23505') {
       return NextResponse.json({ error: 'A tag with that name already exists' }, { status: 409 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
   return NextResponse.json(data);
 }
@@ -45,6 +45,6 @@ export async function DELETE(
     .delete()
     .eq('id', id);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   return NextResponse.json({ success: true });
 }

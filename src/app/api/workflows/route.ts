@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: true });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
 
   return NextResponse.json(workflows || []);
 }
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (wfError || !workflow) {
-    return NextResponse.json({ error: wfError?.message || 'Failed to create workflow' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create workflow' }, { status: 500 });
   }
 
   // Insert steps if provided
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
       }))
     );
     if (stepsError) {
-      return NextResponse.json({ error: stepsError.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to save workflow steps' }, { status: 500 });
     }
   }
 
@@ -140,7 +140,7 @@ export async function PATCH(request: NextRequest) {
       .from('workflow_templates')
       .update(updates)
       .eq('id', id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 
   // Replace steps if provided
@@ -161,7 +161,7 @@ export async function PATCH(request: NextRequest) {
         }))
       );
       if (stepsError) {
-        return NextResponse.json({ error: stepsError.message }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to save workflow steps' }, { status: 500 });
       }
     }
   }
@@ -183,7 +183,7 @@ export async function DELETE(request: NextRequest) {
     .delete()
     .eq('id', id);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
 
   return NextResponse.json({ success: true });
 }

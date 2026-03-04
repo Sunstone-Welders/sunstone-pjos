@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { resolveAudience } from '@/lib/broadcasts';
 import { renderTemplate } from '@/lib/templates';
+import { checkRateLimit } from '@/lib/rate-limit';
+
+const RATE_LIMIT = { prefix: 'broadcast-send', limit: 5, windowSeconds: 60 };
 
 export async function POST(
   request: NextRequest,
@@ -11,6 +14,12 @@ export async function POST(
   const supabase = await createServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // Rate limit by user
+  const rl = checkRateLimit(user.id, RATE_LIMIT);
+  if (!rl.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
 
   // Load broadcast
   const { data: broadcast } = await supabase

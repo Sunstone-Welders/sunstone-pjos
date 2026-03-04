@@ -1,30 +1,64 @@
+// ============================================================================
+// Send Message — src/app/api/clients/send-message/route.ts
+// ============================================================================
+// POST: Send an SMS or email to a client. Derives tenantId from the caller's
+// session and verifies the client belongs to that tenant.
+// ============================================================================
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { renderTemplate } from '@/lib/templates';
+import { checkRateLimit } from '@/lib/rate-limit';
+
+const RATE_LIMIT = { prefix: 'send-msg', limit: 30, windowSeconds: 60 };
 
 export async function POST(request: NextRequest) {
   const supabase = await createServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = await request.json();
-  const { tenantId, clientId, channel, subject, message } = body;
-
-  if (!tenantId || !clientId || !channel || !message) {
-    return NextResponse.json({ error: 'tenantId, clientId, channel, and message are required' }, { status: 400 });
+  // Rate limit by user
+  const rl = checkRateLimit(user.id, RATE_LIMIT);
+  if (!rl.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
   }
 
-  // Fetch client and tenant for variable resolution
-  const [clientRes, tenantRes] = await Promise.all([
-    supabase.from('clients').select('first_name, last_name, email, phone').eq('id', clientId).single(),
-    supabase.from('tenants').select('name, phone').eq('id', tenantId).single(),
-  ]);
+  // Derive tenant from session — ignore body's tenantId
+  const { data: member } = await supabase
+    .from('tenant_members')
+    .select('tenant_id')
+    .eq('user_id', user.id)
+    .limit(1)
+    .single();
 
-  if (!clientRes.data) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
-  if (!tenantRes.data) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+  if (!member) return NextResponse.json({ error: 'No tenant membership' }, { status: 403 });
+  const tenantId = member.tenant_id;
 
-  const client = clientRes.data;
-  const tenant = tenantRes.data;
+  const body = await request.json();
+  const { clientId, channel, subject, message } = body;
+
+  if (!clientId || !channel || !message) {
+    return NextResponse.json({ error: 'clientId, channel, and message are required' }, { status: 400 });
+  }
+
+  // Fetch client AND verify it belongs to this tenant
+  const { data: client } = await supabase
+    .from('clients')
+    .select('first_name, last_name, email, phone')
+    .eq('id', clientId)
+    .eq('tenant_id', tenantId)
+    .single();
+
+  if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
+
+  // Fetch tenant info for template variables
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('name, phone')
+    .eq('id', tenantId)
+    .single();
+
+  if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
 
   // Resolve template variables
   const variables: Record<string, string> = {
@@ -64,7 +98,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Failed to send message' }, { status: 500 });
+    console.error('Send message error:', err);
+    return NextResponse.json({ error: 'Failed to send message' }, { status: 500 });
   }
 }
 

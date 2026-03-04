@@ -15,7 +15,7 @@ export async function GET(
     .select('id, assigned_at, tag:client_tags(*)')
     .eq('client_id', clientId);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   return NextResponse.json(data);
 }
 
@@ -41,7 +41,7 @@ export async function POST(
     if (error.code === '23505') {
       return NextResponse.json({ error: 'Tag already assigned' }, { status: 409 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
   return NextResponse.json(data, { status: 201 });
 }
@@ -64,6 +64,6 @@ export async function DELETE(
     .eq('client_id', clientId)
     .eq('tag_id', tag_id);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   return NextResponse.json({ success: true });
 }

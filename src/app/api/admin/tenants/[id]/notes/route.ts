@@ -22,7 +22,7 @@ export async function GET(
       .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false });
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ error: 'Failed to fetch notes' }, { status: 500 });
     return NextResponse.json(data || []);
   } catch (err) {
     if (err instanceof AdminAuthError) {
@@ -55,7 +55,7 @@ export async function POST(
       .select()
       .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ error: 'Failed to create note' }, { status: 500 });
     return NextResponse.json(data);
   } catch (err) {
     if (err instanceof AdminAuthError) {
@@ -81,7 +81,7 @@ export async function DELETE(
       .delete()
       .eq('id', body.noteId);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ error: 'Failed to delete note' }, { status: 500 });
     return NextResponse.json({ success: true });
   } catch (err) {
     if (err instanceof AdminAuthError) {

@@ -167,8 +167,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'Unexpected error',
-        detail: err.message,
-        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
       },
       { status: 500 }
     );

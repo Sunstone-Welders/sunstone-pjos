@@ -417,12 +417,13 @@ export const SUNNY_TOOL_DEFINITIONS = [
   // 26. delete_inventory_item
   {
     name: 'delete_inventory_item',
-    description: 'Deactivate or permanently delete an inventory item. ALWAYS confirm with extra caution.',
+    description: 'Deactivate or permanently delete an inventory item. ALWAYS confirm with extra caution. Call once without confirmed to preview, then again with confirmed: true to execute.',
     input_schema: {
       type: 'object',
       properties: {
         search_name: { type: 'string', description: 'Item name to find' },
         action: { type: 'string', enum: ['deactivate', 'delete'], description: 'Deactivate hides it, delete removes it permanently' },
+        confirmed: { type: 'boolean', description: 'Set to true to execute after previewing' },
       },
       required: ['search_name', 'action'],
     },
@@ -1887,13 +1888,24 @@ export async function executeSunnyTool(
 
         const item = matches[0];
 
+        // ── Confirmation gate — preview first, execute only with confirmed: true ──
+        if (!input.confirmed) {
+          return {
+            result: {
+              pending_confirmation: true,
+              preview: `${input.action === 'delete' ? '🗑️ PERMANENTLY DELETE' : '🔒 Deactivate'}: "${item.name}" (${item.type}, ${item.material || 'no material'})`,
+              message: `Are you sure you want to ${input.action} "${item.name}"?${input.action === 'delete' ? ' This cannot be undone.' : ' It will be hidden but can be reactivated later.'}`,
+            },
+          };
+        }
+
         if (input.action === 'deactivate') {
           const { error } = await serviceClient
             .from('inventory_items')
             .update({ is_active: false })
             .eq('id', item.id)
             .eq('tenant_id', tenantId);
-          if (error) return { result: { error: error.message }, isError: true };
+          if (error) return { result: { error: 'Failed to deactivate item' }, isError: true };
           return { result: { success: true, action: 'deactivated', item_name: item.name } };
         } else {
           const { error } = await serviceClient
@@ -1901,7 +1913,7 @@ export async function executeSunnyTool(
             .delete()
             .eq('id', item.id)
             .eq('tenant_id', tenantId);
-          if (error) return { result: { error: error.message }, isError: true };
+          if (error) return { result: { error: 'Failed to delete item' }, isError: true };
           return { result: { success: true, action: 'deleted', item_name: item.name } };
         }
       }

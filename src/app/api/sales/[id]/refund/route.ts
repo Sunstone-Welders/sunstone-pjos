@@ -67,6 +67,22 @@ export async function POST(
       return NextResponse.json({ error: 'Can only refund completed sales' }, { status: 400 });
     }
 
+    // ── Idempotency: check for a recent refund on this sale (within 30s) ──
+    const { data: recentRefund } = await serviceClient
+      .from('refunds')
+      .select('id, created_at')
+      .eq('sale_id', saleId)
+      .gte('created_at', new Date(Date.now() - 30_000).toISOString())
+      .limit(1)
+      .single();
+
+    if (recentRefund) {
+      return NextResponse.json(
+        { error: 'A refund was just processed for this sale. Please wait before retrying.' },
+        { status: 409 }
+      );
+    }
+
     const currentRefundAmount = Number(sale.refund_amount) || 0;
     const saleTotal = Number(sale.total);
     const maxRefundable = saleTotal - currentRefundAmount;
@@ -99,7 +115,7 @@ export async function POST(
       } catch (stripeErr: any) {
         console.error('Stripe refund error:', stripeErr);
         return NextResponse.json({
-          error: `Stripe refund failed: ${stripeErr.message || 'Unknown error'}`,
+          error: 'Payment provider refund failed. Please try again or contact support.',
         }, { status: 500 });
       }
     } else if (provider === 'square' && providerId) {
@@ -137,7 +153,7 @@ export async function POST(
       } catch (sqErr: any) {
         console.error('Square refund error:', sqErr);
         return NextResponse.json({
-          error: `Square refund failed: ${sqErr.message || 'Unknown error'}`,
+          error: 'Payment provider refund failed. Please try again or contact support.',
         }, { status: 500 });
       }
     }
@@ -192,6 +208,6 @@ export async function POST(
 
   } catch (err: any) {
     console.error('Refund API error:', err);
-    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

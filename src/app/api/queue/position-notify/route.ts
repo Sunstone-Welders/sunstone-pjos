@@ -1,26 +1,41 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+// ============================================================================
+// Queue Position Notify — src/app/api/queue/position-notify/route.ts
+// ============================================================================
+// POST: Send an SMS to a customer with their queue position and wait time.
+// Called from the waiver check-in flow (public) and dashboard queue management.
+// Derives tenantId from the queue entry itself — never trusts the client.
+// ============================================================================
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { NextRequest, NextResponse } from 'next/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
+import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
+
+const RATE_LIMIT = { prefix: 'pos-notify', limit: 20, windowSeconds: 60 };
 
 export async function POST(request: NextRequest) {
   try {
-    const { queueEntryId, tenantId } = await request.json();
+    // ── Rate limit by IP (public endpoint) ──────────────────────────────
+    const ip = getClientIP(request);
+    const rl = checkRateLimit(ip, RATE_LIMIT);
+    if (!rl.allowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
 
-    if (!queueEntryId || !tenantId) {
+    const { queueEntryId } = await request.json();
+
+    if (!queueEntryId) {
       return NextResponse.json(
-        { error: 'queueEntryId and tenantId are required' },
+        { error: 'queueEntryId is required' },
         { status: 400 }
       );
     }
 
-    // Look up the queue entry
+    const supabaseAdmin = await createServiceRoleClient();
+
+    // Look up the queue entry — derive tenantId from DB, not from body
     const { data: entry, error: entryErr } = await supabaseAdmin
       .from('queue_entries')
-      .select('id, name, phone, sms_consent, event_id, created_at')
+      .select('id, tenant_id, name, phone, sms_consent, event_id, created_at')
       .eq('id', queueEntryId)
       .single();
 
@@ -30,6 +45,8 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    const tenantId = entry.tenant_id;
 
     // Skip if no SMS consent or no phone
     if (!entry.sms_consent) {
@@ -54,7 +71,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { count } = await positionQuery;
-    const position = (count || 0) + 1; // +1 because they are after the ones ahead
+    const position = (count || 0) + 1;
 
     // Get tenant's avg_service_minutes
     const { data: tenant } = await supabaseAdmin
@@ -109,6 +126,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Position SMS Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to send notification' }, { status: 500 });
   }
 }

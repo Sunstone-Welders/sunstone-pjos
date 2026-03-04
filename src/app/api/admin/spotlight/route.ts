@@ -170,7 +170,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     console.error('[Admin Spotlight] POST (sync) error:', err);
-    return NextResponse.json({ error: err.message || 'Sync failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Sync failed' }, { status: 500 });
   }
 }
 

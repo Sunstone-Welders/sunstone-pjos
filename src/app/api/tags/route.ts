@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
     .eq('tenant_id', tenantId)
     .order('name');
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
 
   // Migrate non-palette colors to nearest palette match (fire-and-forget)
   for (const tag of tags || []) {
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
     if (error.code === '23505') {
       return NextResponse.json({ error: 'A tag with that name already exists' }, { status: 409 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
   return NextResponse.json(data, { status: 201 });
 }

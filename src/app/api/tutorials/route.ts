@@ -36,14 +36,14 @@ export async function GET() {
       .eq('tenant_id', member.tenant_id);
 
     if (fetchError) {
-      return NextResponse.json({ error: fetchError.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to load tutorial progress' }, { status: 500 });
     }
 
     return NextResponse.json({ progress: progress || [] });
   } catch (error: any) {
     console.error('Tutorials GET error:', error);
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
@@ -89,14 +89,14 @@ export async function POST(request: NextRequest) {
       );
 
     if (upsertError) {
-      return NextResponse.json({ error: upsertError.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to save tutorial progress' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Tutorials POST error:', error);
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

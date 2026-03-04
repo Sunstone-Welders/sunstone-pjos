@@ -173,7 +173,7 @@ function ActivityTab({ tenantId }: { tenantId: string }) {
   const [viewDetail, setViewDetail] = useState<Broadcast | null>(null);
 
   const fetchBroadcasts = useCallback(async () => {
-    const res = await fetch(`/api/broadcasts?tenantId=${tenantId}`);
+    const res = await fetch('/api/broadcasts');
     if (res.ok) setBroadcasts(await res.json());
     setLoading(false);
   }, [tenantId]);
@@ -339,7 +339,7 @@ function NewBroadcastTab({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        tenant_id: tenantId, name: name.trim(), channel,
+        name: name.trim(), channel,
         template_id: useTemplate ? templateId : null,
         custom_subject: !useTemplate ? customSubject : null,
         custom_body: !useTemplate ? customBody : null,

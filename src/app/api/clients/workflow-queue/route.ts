@@ -30,7 +30,10 @@ export async function GET(request: NextRequest) {
   }
 
   const { data, error } = await query.limit(20);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('Workflow queue error:', error);
+    return NextResponse.json({ error: 'Failed to load workflow queue' }, { status: 500 });
+  }
 
   // Enrich with client info
   const items = (data || []).map((item: any) => ({

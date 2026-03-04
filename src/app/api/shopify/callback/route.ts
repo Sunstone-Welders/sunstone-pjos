@@ -134,7 +134,7 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     console.error('[Shopify Callback] Unexpected error:', err);
     return new NextResponse(
-      `<html><body><h1>Error</h1><p>Unexpected error: ${err.message}</p></body></html>`,
+      `<html><body><h1>Error</h1><p>An unexpected error occurred. Please try again.</p></body></html>`,
       { status: 500, headers: { 'Content-Type': 'text/html' } }
     );
   }

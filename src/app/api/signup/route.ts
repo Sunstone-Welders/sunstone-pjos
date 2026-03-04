@@ -8,9 +8,19 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
+
+const RATE_LIMIT = { prefix: 'signup', limit: 5, windowSeconds: 300 };
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit by IP (5 signups per 5 minutes)
+    const ip = getClientIP(request);
+    const rl = checkRateLimit(ip, RATE_LIMIT);
+    if (!rl.allowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
+
     const { userId, businessName, firstName } = await request.json();
 
     if (!userId || !businessName) {
@@ -58,7 +68,7 @@ export async function POST(request: NextRequest) {
     if (tenantError) {
       console.error('Tenant creation failed:', tenantError);
       return NextResponse.json(
-        { error: tenantError.message },
+        { error: 'Failed to create account' },
         { status: 500 }
       );
     }
@@ -93,7 +103,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Signup API error:', error);
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

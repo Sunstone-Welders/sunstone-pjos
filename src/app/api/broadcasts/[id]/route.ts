@@ -16,7 +16,10 @@ export async function GET(
     .eq('id', id)
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('Broadcast GET error:', error);
+    return NextResponse.json({ error: 'Failed to load broadcast' }, { status: 500 });
+  }
   if (!broadcast) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   // Get message log
@@ -43,6 +46,9 @@ export async function DELETE(
     .delete()
     .eq('id', id);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('Broadcast DELETE error:', error);
+    return NextResponse.json({ error: 'Failed to delete broadcast' }, { status: 500 });
+  }
   return NextResponse.json({ success: true });
 }

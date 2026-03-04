@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase, createServiceRoleClient } from '@/lib/supabase/server';
 import { getSubscriptionTier, getSunnyQuestionLimit } from '@/lib/subscription';
 import { getCachedCatalog, formatCatalogForPrompt } from '@/lib/shopify';
+import { checkRateLimit } from '@/lib/rate-limit';
 import {
   EQUIPMENT_KNOWLEDGE,
   WELDING_TECHNIQUE_KNOWLEDGE,
@@ -722,6 +723,8 @@ async function fetchTenantContext(serviceClient: any, tenantId: string) {
 // POST handler
 // ============================================================================
 
+const MENTOR_RATE_LIMIT = { prefix: 'mentor', limit: 20, windowSeconds: 60 };
+
 export async function POST(request: NextRequest) {
   try {
     // 1. Auth
@@ -729,6 +732,12 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    // 1b. Rate limit
+    const rl = checkRateLimit(user.id, MENTOR_RATE_LIMIT);
+    if (!rl.allowed) {
+      return NextResponse.json({ error: 'Too many requests. Please wait a moment.' }, { status: 429 });
     }
 
     // 2. Tenant

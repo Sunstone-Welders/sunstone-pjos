@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
+
+const RATE_LIMIT = { prefix: 'queue-notify', limit: 10, windowSeconds: 60 };
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit by IP (public endpoint)
+    const ip = getClientIP(request);
+    const rl = checkRateLimit(ip, RATE_LIMIT);
+    if (!rl.allowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
+
     const body = await request.json();
     const { phone, name, tenantName, tenantId, smsConsent } = body;
 
@@ -50,6 +60,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ sent: true, sid: message.sid });
   } catch (error: any) {
     console.error('SMS Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to send notification' }, { status: 500 });
   }
 }
