@@ -885,11 +885,7 @@ function SettingsPage() {
     ? `${businessName}${businessTypeLabel && businessType ? ` · ${businessTypeLabel}` : ''}`
     : 'Set up your business info';
 
-  const paymentSummary = squareConnected && stripeConnected
-    ? 'Square + Stripe connected'
-    : squareConnected
-      ? 'Square connected'
-      : stripeConnected
+  const paymentSummary = stripeConnected
         ? 'Stripe connected'
         : 'Connect a payment processor';
 
@@ -1093,107 +1089,41 @@ function SettingsPage() {
       >
         <div className="space-y-5 pt-4">
           <p className="text-sm text-[var(--text-secondary)]">
-            Connect a payment processor to accept card payments. You can connect both, but only one processes card payments at a time.
+            Connect your Stripe account to accept card payments directly through Sunstone Studio. Customers pay via QR code or payment link — you get instant reconciliation and automatic receipts.
           </p>
 
-          {/* Side-by-side processor cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Stripe card */}
-            <div className={`relative rounded-xl border-2 p-4 space-y-3 transition-colors ${
-              stripeConnected ? 'border-[var(--accent-primary)] bg-[var(--surface-subtle)]' : 'border-[var(--border-default)]'
-            }`}>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-[var(--text-primary)]">Stripe</span>
-                <Badge variant="accent" size="sm">Recommended</Badge>
-              </div>
-              <p className="text-xs text-[var(--text-secondary)]">
-                Full integration — card payments, Tap to Pay, automatic fee collection, and refunds
-              </p>
-              <div className="flex items-center gap-2">
-                {stripeConnected ? (
-                  <Badge variant="accent" size="sm">Connected</Badge>
-                ) : (
-                  <Badge variant="default" size="sm">Not connected</Badge>
-                )}
-              </div>
+          {/* Stripe card */}
+          <div className={`relative rounded-xl border-2 p-5 space-y-3 transition-colors ${
+            stripeConnected ? 'border-[var(--accent-primary)] bg-[var(--surface-subtle)]' : 'border-[var(--border-default)]'
+          }`}>
+            <div className="flex items-center justify-between">
+              <span className="text-base font-semibold text-[var(--text-primary)]">Stripe Connect</span>
               {stripeConnected ? (
-                <Button variant="danger" size="sm" onClick={disconnectStripe} loading={disconnectingStripe}>
-                  Disconnect
-                </Button>
+                <Badge variant="accent" size="sm">Connected</Badge>
               ) : (
+                <Badge variant="default" size="sm">Not connected</Badge>
+              )}
+            </div>
+            {stripeConnected ? (
+              <>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  You can accept payments via QR code and text link in the POS.
+                </p>
+                <Button variant="danger" size="sm" onClick={disconnectStripe} loading={disconnectingStripe}>
+                  Disconnect Stripe
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  Customers scan a QR code or receive a text link to pay securely with their card. Platform fees are collected automatically.
+                </p>
                 <Button variant="primary" size="sm" onClick={() => { window.location.href = '/api/stripe/authorize'; }}>
                   Connect Stripe
                 </Button>
-              )}
-            </div>
-
-            {/* Square card */}
-            <div className={`relative rounded-xl border-2 p-4 space-y-3 transition-colors ${
-              squareConnected ? 'border-[var(--accent-primary)] bg-[var(--surface-subtle)]' : 'border-[var(--border-default)]'
-            }`}>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-[var(--text-primary)]">Square</span>
-              </div>
-              <p className="text-xs text-[var(--text-secondary)]">
-                Accept card payments through your existing Square account
-              </p>
-              <div className="flex items-center gap-2">
-                {squareConnected ? (
-                  <Badge variant="accent" size="sm">Connected</Badge>
-                ) : (
-                  <Badge variant="default" size="sm">Not connected</Badge>
-                )}
-              </div>
-              {squareConnected ? (
-                <Button variant="danger" size="sm" onClick={disconnectSquare} loading={disconnectingSquare}>
-                  Disconnect
-                </Button>
-              ) : (
-                <Button variant="primary" size="sm" onClick={() => { window.location.href = '/api/square/authorize'; }}>
-                  Connect Square
-                </Button>
-              )}
-            </div>
+              </>
+            )}
           </div>
-
-          {/* Default processor toggle — shown when both connected */}
-          {squareConnected && stripeConnected && (
-            <>
-              <div className="border-t border-[var(--border-subtle)]" />
-              <div className="space-y-3">
-                <span className="text-sm font-medium text-[var(--text-primary)]">Default for Card Payments</span>
-                <p className="text-xs text-[var(--text-secondary)]">
-                  Choose which processor handles card payments at checkout.
-                </p>
-                <div className="flex gap-3">
-                  <label className={`flex-1 flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                    defaultProcessor === 'stripe' ? 'border-[var(--accent-primary)] bg-[var(--surface-subtle)]' : 'border-[var(--border-default)]'
-                  }`}>
-                    <input
-                      type="radio"
-                      name="defaultProcessor"
-                      checked={defaultProcessor === 'stripe'}
-                      onChange={() => saveDefaultProcessor('stripe')}
-                      className="accent-[var(--accent-primary)]"
-                    />
-                    <span className="text-sm font-medium text-[var(--text-primary)]">Stripe</span>
-                  </label>
-                  <label className={`flex-1 flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                    defaultProcessor === 'square' ? 'border-[var(--accent-primary)] bg-[var(--surface-subtle)]' : 'border-[var(--border-default)]'
-                  }`}>
-                    <input
-                      type="radio"
-                      name="defaultProcessor"
-                      checked={defaultProcessor === 'square'}
-                      onChange={() => saveDefaultProcessor('square')}
-                      className="accent-[var(--accent-primary)]"
-                    />
-                    <span className="text-sm font-medium text-[var(--text-primary)]">Square</span>
-                  </label>
-                </div>
-              </div>
-            </>
-          )}
 
           {/* Fee handling */}
           {feeRate > 0 && (

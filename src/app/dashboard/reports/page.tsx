@@ -80,10 +80,13 @@ const money = (n: number) => {
 };
 
 const paymentMethodLabels: Record<string, string> = {
+  stripe_link: 'Stripe (QR/Link)',
+  cash: 'Cash',
+  venmo: 'Venmo / Zelle',
+  card_external: 'External Card',
+  // Legacy values for older sales
   card_present: 'Card',
   card_not_present: 'Card (Remote)',
-  cash: 'Cash',
-  venmo: 'Venmo',
   other: 'Other',
 };
 

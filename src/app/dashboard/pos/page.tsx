@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
 import { QRCode, FullScreenQR } from '@/components/QRCode';
 import CartPanel from '@/components/CartPanel';
-import { ProductSelector, QueueBadge, CheckoutFlow } from '@/components/pos';
+import { ProductSelector, QueueBadge, CheckoutFlow, PendingPayments } from '@/components/pos';
 import type { CompletedSaleData, CheckoutStep } from '@/components/pos';
 import SunnyTutorial from '@/components/SunnyTutorial';
 import type {
@@ -207,19 +207,14 @@ export default function StoreModePage() {
     finally { setSendingSMS(false); }
   };
 
-  // ── Sale completion ────────────────────────────────────────────────────
+  // ── Create pending sale (for Stripe payment link flow) ──────────────
 
-  const completeSale = async () => {
-    if (!tenant || !cart.payment_method) return;
-    if (cart.items.length === 0) { toast.error('Cart is empty'); return; }
-    setProcessing(true);
+  const createPendingSale = async (): Promise<string | null> => {
+    if (!tenant) return null;
+    if (cart.items.length === 0) { toast.error('Cart is empty'); return null; }
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const isCardPayment = cart.payment_method === 'card_present' || cart.payment_method === 'card_not_present';
-      const provider = isCardPayment ? (tenant.default_payment_processor || 'stripe') : null;
-      const isSquare = provider === 'square';
 
-      // Build sale items for RPC
       const saleItems = cart.items.map((item) => ({
         inventory_item_id: item.inventory_item_id || null,
         name: item.name,
@@ -234,7 +229,6 @@ export default function StoreModePage() {
         jump_ring_cost: null,
       }));
 
-      // Build atomic inventory deductions
       const deductions: { item_id: string; amount: number; log_movement: boolean }[] = [];
       for (const item of cart.items) {
         if (!item.inventory_item_id) continue;
@@ -244,7 +238,6 @@ export default function StoreModePage() {
         deductions.push({ item_id: item.inventory_item_id, amount: deduct, log_movement: false });
       }
 
-      // Single transactional RPC — sale + items + inventory + queue all-or-nothing
       const { data: saleId, error: rpcError } = await supabase.rpc('create_sale_transaction', {
         p_tenant_id: tenant.id,
         p_event_id: null,
@@ -253,12 +246,107 @@ export default function StoreModePage() {
         p_discount_amount: cart.discount_amount,
         p_tax_amount: cart.tax_amount,
         p_tip_amount: cart.tip_amount,
-        p_platform_fee_amount: isSquare ? 0 : cart.platform_fee_amount,
+        p_platform_fee_amount: cart.platform_fee_amount,
+        p_total: cart.total,
+        p_payment_method: 'stripe_link',
+        p_payment_status: 'pending',
+        p_payment_provider: 'stripe',
+        p_platform_fee_rate: PLATFORM_FEE_RATES[tenant.subscription_tier],
+        p_fee_handling: tenant.fee_handling || null,
+        p_status: 'completed',
+        p_receipt_email: receiptEmail || null,
+        p_receipt_phone: receiptPhone || null,
+        p_notes: cart.notes || 'Store sale',
+        p_completed_by: user?.id || null,
+        p_items: saleItems,
+        p_inventory_deductions: deductions,
+        p_queue_entry_id: activeQueueEntry?.id || null,
+      });
+      if (rpcError) throw rpcError;
+      return saleId || null;
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to create sale');
+      return null;
+    }
+  };
+
+  // ── Handle Stripe payment completed (from polling/realtime) ──────────
+
+  const handlePaymentCompleted = async (saleId: string) => {
+    if (!tenant) return;
+    if (activeQueueEntry) setActiveQueueEntry(null);
+
+    const saleData: CompletedSaleData = {
+      saleId,
+      saleDate: new Date().toISOString(),
+      items: cart.items.length > 0 ? cart.items.map((item: any) => ({
+        name: item.name, quantity: item.quantity, unitPrice: item.unit_price, lineTotal: item.line_total,
+      })) : [{ name: 'Payment', quantity: 1, unitPrice: 0, lineTotal: 0 }],
+      subtotal: cart.subtotal,
+      taxAmount: cart.tax_amount,
+      taxRate: taxProfile ? Number(taxProfile.rate) : 0,
+      tipAmount: cart.tip_amount,
+      total: cart.total,
+      paymentMethod: 'stripe_link',
+    };
+
+    setTodaySales((p) => ({ count: p.count + 1, total: p.total + cart.total }));
+    setCompletedSale(saleData);
+    cart.reset(); setStep('confirmation'); setShowCart(false);
+    setEmailSent(false); setSmsSent(false); setEmailError(''); setSmsError('');
+    setQueueRefresh((n) => n + 1);
+    toast.success('Payment received!');
+
+    const { data: refreshed } = await supabase.from('inventory_items').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('type').order('name');
+    if (refreshed) setInventory(refreshed as InventoryItem[]);
+  };
+
+  // ── Sale completion (external payments: cash, venmo, card_external) ──
+
+  const completeSale = async () => {
+    if (!tenant || !cart.payment_method) return;
+    if (cart.items.length === 0) { toast.error('Cart is empty'); return; }
+    setProcessing(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const saleItems = cart.items.map((item) => ({
+        inventory_item_id: item.inventory_item_id || null,
+        name: item.name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        discount_type: item.discount_type || null,
+        discount_value: item.discount_value || 0,
+        line_total: item.line_total,
+        product_type_id: item.product_type_id || null,
+        product_type_name: item.product_type_name || null,
+        inches_used: item.inches_used || null,
+        jump_ring_cost: null,
+      }));
+
+      const deductions: { item_id: string; amount: number; log_movement: boolean }[] = [];
+      for (const item of cart.items) {
+        if (!item.inventory_item_id) continue;
+        const inv = inventory.find((i) => i.id === item.inventory_item_id);
+        if (!inv) continue;
+        const deduct = inv.type === 'chain' && item.inches_used ? item.inches_used : item.quantity;
+        deductions.push({ item_id: item.inventory_item_id, amount: deduct, log_movement: false });
+      }
+
+      const { data: saleId, error: rpcError } = await supabase.rpc('create_sale_transaction', {
+        p_tenant_id: tenant.id,
+        p_event_id: null,
+        p_client_id: cart.client_id || null,
+        p_subtotal: cart.subtotal,
+        p_discount_amount: cart.discount_amount,
+        p_tax_amount: cart.tax_amount,
+        p_tip_amount: cart.tip_amount,
+        p_platform_fee_amount: cart.platform_fee_amount,
         p_total: cart.total,
         p_payment_method: cart.payment_method,
         p_payment_status: 'completed',
-        p_payment_provider: provider,
-        p_platform_fee_rate: isSquare ? 0 : PLATFORM_FEE_RATES[tenant.subscription_tier],
+        p_payment_provider: null,
+        p_platform_fee_rate: PLATFORM_FEE_RATES[tenant.subscription_tier],
         p_fee_handling: tenant.fee_handling || null,
         p_status: 'completed',
         p_receipt_email: receiptEmail || null,
@@ -274,7 +362,6 @@ export default function StoreModePage() {
 
       if (activeQueueEntry) setActiveQueueEntry(null);
 
-      // Save completed sale data for confirmation screen
       const saleData: CompletedSaleData = {
         saleId,
         saleDate: new Date().toISOString(),
@@ -302,21 +389,12 @@ export default function StoreModePage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            to: receiptEmail,
-            tenantName: tenant.name,
-            tenantId: tenant.id,
-            clientId: cart.client_id || undefined,
-            tenantAccentColor: tenant.brand_color || undefined,
-            tagline: tenant.receipt_tagline || undefined,
-            footer: tenant.receipt_footer || undefined,
-            saleDate: saleData.saleDate,
-            items: saleData.items,
-            subtotal: saleData.subtotal,
-            taxAmount: saleData.taxAmount,
-            taxRate: saleData.taxRate,
-            tipAmount: saleData.tipAmount,
-            total: saleData.total,
-            paymentMethod: saleData.paymentMethod,
+            to: receiptEmail, tenantName: tenant.name, tenantId: tenant.id,
+            clientId: cart.client_id || undefined, tenantAccentColor: tenant.brand_color || undefined,
+            tagline: tenant.receipt_tagline || undefined, footer: tenant.receipt_footer || undefined,
+            saleDate: saleData.saleDate, items: saleData.items,
+            subtotal: saleData.subtotal, taxAmount: saleData.taxAmount, taxRate: saleData.taxRate,
+            tipAmount: saleData.tipAmount, total: saleData.total, paymentMethod: saleData.paymentMethod,
           }),
         }).then(async (r) => {
           if (r.ok) {
@@ -331,14 +409,10 @@ export default function StoreModePage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            to: receiptPhone.replace(/[^\d+]/g, ''),
-            tenantName: tenant.name,
-            tenantId: tenant.id,
-            clientId: cart.client_id || undefined,
-            total: saleData.total,
-            itemCount: saleData.items.reduce((s: number, i: any) => s + i.quantity, 0),
-            paymentMethod: saleData.paymentMethod,
-            footer: tenant.receipt_footer || undefined,
+            to: receiptPhone.replace(/[^\d+]/g, ''), tenantName: tenant.name,
+            tenantId: tenant.id, clientId: cart.client_id || undefined,
+            total: saleData.total, itemCount: saleData.items.reduce((s: number, i: any) => s + i.quantity, 0),
+            paymentMethod: saleData.paymentMethod, footer: tenant.receipt_footer || undefined,
           }),
         }).then(async (r) => {
           if (r.ok) {
@@ -348,7 +422,6 @@ export default function StoreModePage() {
         }).catch(() => {});
       }
 
-      // Fire-and-forget auto-tagging
       if (cart.client_id) {
         fetch('/api/clients/auto-tag', {
           method: 'POST',
@@ -357,7 +430,6 @@ export default function StoreModePage() {
         }).catch(() => {});
       }
 
-      // Refresh inventory
       const { data: refreshed } = await supabase.from('inventory_items').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('type').order('name');
       if (refreshed) setInventory(refreshed as InventoryItem[]);
     } catch (err: any) { toast.error(err?.message || 'Sale failed'); }
@@ -489,6 +561,19 @@ export default function StoreModePage() {
               />
             )}
 
+            {/* ═══ Pending Payments ═══ */}
+            {step === 'items' && tenant && (
+              <div className="mb-4">
+                <PendingPayments
+                  tenantId={tenant.id}
+                  onPaymentCompleted={(saleId) => {
+                    setTodaySales((p) => ({ count: p.count + 1, total: p.total }));
+                    toast.success('Payment received!');
+                  }}
+                />
+              </div>
+            )}
+
             {/* ═══ CHECKOUT FLOW (Tip → Payment → Confirmation) ═══ */}
             <CheckoutFlow
               step={step}
@@ -496,6 +581,7 @@ export default function StoreModePage() {
               taxAmount={cart.tax_amount}
               tipAmount={cart.tip_amount}
               total={cart.total}
+              platformFeeAmount={cart.platform_fee_amount}
               paymentMethod={cart.payment_method}
               tenantName={tenant.name}
               itemCount={cart.items.length}
@@ -505,7 +591,12 @@ export default function StoreModePage() {
               processing={processing}
               items={cart.items.map((i: any) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price, lineTotal: i.line_total }))}
               activeQueueEntry={activeQueueEntry}
-              cardProcessor={tenant.default_payment_processor}
+              stripeConnected={!!tenant.stripe_account_id}
+              tenantId={tenant.id}
+              onCreatePendingSale={createPendingSale}
+              onPaymentCompleted={handlePaymentCompleted}
+              receiptPhone={receiptPhone}
+              mode="store"
               onContinueToPayment={() => setStep('payment')}
               completedSale={completedSale}
               receiptConfig={receiptConfig}
@@ -515,7 +606,6 @@ export default function StoreModePage() {
               sendingEmail={sendingEmail}
               emailSent={emailSent}
               emailError={emailError}
-              receiptPhone={receiptPhone}
               onSetReceiptPhone={setReceiptPhone}
               onSendSMS={sendSMSReceipt}
               sendingSMS={sendingSMS}

@@ -12,7 +12,7 @@ export type BusinessType = 'permanent_jewelry' | 'salon_spa' | 'boutique' | 'pop
 export type InventoryType = 'chain' | 'jump_ring' | 'charm' | 'connector' | 'other';
 export type InventoryUnit = 'ft' | 'in' | 'each' | 'pack';
 export type MovementType = 'restock' | 'sale' | 'waste' | 'adjustment';
-export type PaymentMethod = 'card_present' | 'card_not_present' | 'cash' | 'venmo' | 'other';
+export type PaymentMethod = 'stripe_link' | 'cash' | 'venmo' | 'card_external';
 export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'refunded';
 export type QueueStatus = 'waiting' | 'notified' | 'served' | 'no_show';
 export type SaleStatus = 'draft' | 'completed' | 'voided';
@@ -242,6 +242,9 @@ export interface Sale {
   refund_amount: number;
   refunded_at: string | null;
   refunded_by: string | null;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  platform_fee_collected: number;
   status: SaleStatus;
   receipt_email: string | null;
   receipt_phone: string | null;

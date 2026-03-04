@@ -1,11 +1,13 @@
 // ============================================================================
 // Stripe Webhook Route — src/app/api/stripe/webhook/route.ts
 // ============================================================================
-// Handles Stripe subscription lifecycle events. No auth — verified by
-// Stripe webhook signature. Uses service role to bypass RLS.
+// Handles Stripe subscription lifecycle events AND POS payment link events
+// from connected accounts. No auth — verified by Stripe webhook signature.
+// Uses service role to bypass RLS.
 //
 // Events handled:
-//   - checkout.session.completed
+//   - checkout.session.completed (subscription + POS payment links)
+//   - checkout.session.expired (POS payment link timeout)
 //   - customer.subscription.created
 //   - customer.subscription.updated
 //   - customer.subscription.deleted
@@ -80,11 +82,48 @@ export async function POST(request: NextRequest) {
   try {
     switch (event.type) {
       // ================================================================
-      // Checkout completed — tenant just subscribed
+      // Checkout completed — subscription OR POS payment link
       // ================================================================
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
+        const saleId = session.metadata?.sale_id;
 
+        // ── POS Payment Link completed (from connected account) ──
+        if (session.mode === 'payment' && saleId) {
+          const paymentIntentId = typeof session.payment_intent === 'string'
+            ? session.payment_intent : null;
+
+          // Retrieve the application fee from the payment intent
+          let feeCollected = 0;
+          if (paymentIntentId && event.account) {
+            try {
+              const pi = await stripe.paymentIntents.retrieve(
+                paymentIntentId,
+                { expand: ['application_fee'] },
+                { stripeAccount: event.account }
+              );
+              feeCollected = (pi as any).application_fee?.amount
+                ? (pi as any).application_fee.amount / 100
+                : 0;
+            } catch {
+              // Non-critical — fee tracking won't block sale completion
+            }
+          }
+
+          await serviceRole
+            .from('sales')
+            .update({
+              payment_status: 'completed',
+              stripe_payment_intent_id: paymentIntentId,
+              platform_fee_collected: feeCollected,
+            })
+            .eq('id', saleId);
+
+          console.log(`[Webhook] POS payment completed — sale ${saleId}, fee collected: $${feeCollected}`);
+          break;
+        }
+
+        // ── Subscription checkout completed ──
         if (session.mode !== 'subscription') break;
 
         const customerId = session.customer as string;
@@ -128,6 +167,24 @@ export async function POST(request: NextRequest) {
         }
 
         console.log(`[Webhook] checkout.session.completed — tenant ${tenantId}, tier ${tier}`);
+        break;
+      }
+
+      // ================================================================
+      // Checkout expired — POS payment link timed out
+      // ================================================================
+      case 'checkout.session.expired': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const saleId = session.metadata?.sale_id;
+
+        if (saleId) {
+          await serviceRole
+            .from('sales')
+            .update({ payment_status: 'expired' })
+            .eq('id', saleId);
+
+          console.log(`[Webhook] POS payment expired — sale ${saleId}`);
+        }
         break;
       }
 

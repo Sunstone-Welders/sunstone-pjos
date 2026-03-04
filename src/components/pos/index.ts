@@ -6,4 +6,5 @@ export { InchAdjuster } from './InchAdjuster';
 export { AddOnsSection } from './AddOnsSection';
 export { QueueBadge } from './QueueBadge';
 export { CheckoutFlow } from './checkout';
+export { PendingPayments } from './PendingPayments';
 export type { CompletedSaleData, CheckoutStep } from './checkout';

@@ -23,7 +23,7 @@ import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Moda
 import { QRCode, FullScreenQR } from '@/components/QRCode';
 import CartPanel from '@/components/CartPanel';
 import JumpRingPickerModal from '@/components/JumpRingPickerModal';
-import { ProductSelector, QueueBadge, CheckoutFlow } from '@/components/pos';
+import { ProductSelector, QueueBadge, CheckoutFlow, PendingPayments } from '@/components/pos';
 import type { CompletedSaleData, CheckoutStep } from '@/components/pos';
 import type { QueueEntry } from '@/components/MiniQueueStrip';
 import type {
@@ -285,6 +285,88 @@ function EventModePageInner() {
     setReceiptPhone('');
     cart.setClientId(null);
     setQueueRefresh((n) => n + 1);
+  };
+
+  // ── Create pending sale (for Stripe payment link flow) ──
+
+  const createPendingSale = async (): Promise<string | null> => {
+    if (!tenant || !eventId) return null;
+    if (cart.items.length === 0) { toast.error('Cart is empty'); return null; }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      let clientId = cart.client_id;
+      if (!clientId && (receiptEmail || receiptPhone)) clientId = await findOrCreateClient(receiptEmail, receiptPhone);
+
+      const saleItems = cart.items.map((item: any) => {
+        const resolution = jumpRingResolutions.find((r: JumpRingResolution) => r.cart_item_id === item.id);
+        const jumpRingCost = resolution ? resolution.jump_ring_cost_each * resolution.jump_rings_needed : 0;
+        return {
+          inventory_item_id: item.inventory_item_id || null,
+          name: item.name, quantity: item.quantity, unit_price: item.unit_price,
+          discount_type: item.discount_type || null, discount_value: item.discount_value || 0,
+          line_total: item.line_total, product_type_id: item.product_type_id || null,
+          product_type_name: item.product_type_name || null, inches_used: item.inches_used || null,
+          jump_ring_cost: jumpRingCost,
+        };
+      });
+
+      const deductions: { item_id: string; amount: number; log_movement: boolean; notes: string | null; performed_by: string | null }[] = [];
+      for (const item of cart.items as any[]) {
+        if (!item.inventory_item_id) continue;
+        const inv = inventory.find((i) => i.id === item.inventory_item_id);
+        if (!inv) continue;
+        let deduct: number; let movementNotes: string;
+        if (inv.type === 'chain' && item.inches_used) {
+          deduct = item.inches_used * item.quantity;
+          movementNotes = `${item.product_type_name || 'Chain'} (${item.inches_used} in)`;
+        } else { deduct = item.quantity; movementNotes = ''; }
+        deductions.push({ item_id: item.inventory_item_id, amount: deduct, log_movement: true, notes: movementNotes || null, performed_by: user?.id || null });
+      }
+
+      const { data: saleId, error: rpcError } = await supabase.rpc('create_sale_transaction', {
+        p_tenant_id: tenant.id, p_event_id: eventId, p_client_id: clientId || null,
+        p_subtotal: cart.subtotal, p_discount_amount: cart.discount_amount,
+        p_tax_amount: cart.tax_amount, p_tip_amount: cart.tip_amount,
+        p_platform_fee_amount: cart.platform_fee_amount, p_total: cart.total,
+        p_payment_method: 'stripe_link', p_payment_status: 'pending', p_payment_provider: 'stripe',
+        p_platform_fee_rate: PLATFORM_FEE_RATES[tenant.subscription_tier],
+        p_fee_handling: tenant.fee_handling || null, p_status: 'completed',
+        p_receipt_email: receiptEmail || null, p_receipt_phone: receiptPhone || null,
+        p_notes: cart.notes || null, p_completed_by: user?.id || null,
+        p_items: saleItems, p_inventory_deductions: deductions,
+        p_queue_entry_id: activeQueueEntry?.id || null,
+      });
+      if (rpcError) throw rpcError;
+      return saleId || null;
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to create sale');
+      return null;
+    }
+  };
+
+  // ── Handle Stripe payment completed ──
+
+  const handlePaymentCompleted = async (saleId: string) => {
+    if (!tenant) return;
+    if (activeQueueEntry) setActiveQueueEntry(null);
+
+    const saleData: CompletedSaleData = {
+      saleId, saleDate: new Date().toISOString(),
+      items: cart.items.length > 0 ? cart.items.map((i: any) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price, lineTotal: i.line_total })) : [{ name: 'Payment', quantity: 1, unitPrice: 0, lineTotal: 0 }],
+      subtotal: cart.subtotal, taxAmount: cart.tax_amount,
+      taxRate: cart.tax_rate, tipAmount: cart.tip_amount,
+      total: cart.total, paymentMethod: 'stripe_link',
+    };
+
+    setTodaySales((s) => ({ count: s.count + 1, total: s.total + cart.total }));
+    setCompletedSale(saleData); cart.reset(); setShowCart(false);
+    setEmailSent(false); setSmsSent(false); setEmailError(''); setSmsError('');
+    setJumpRingResolutions([]); setQueueRefresh((n) => n + 1);
+    setStep('confirmation');
+    toast.success('Payment received!');
+
+    const { data: refreshed } = await supabase.from('inventory_items').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('type').order('name');
+    if (refreshed) setInventory(refreshed as InventoryItem[]);
   };
 
   // ── Sale completion — with jump ring auto-deduction ──
@@ -637,6 +719,20 @@ function EventModePageInner() {
               />
             )}
 
+            {/* ◆◆◆ Pending Payments ◆◆◆ */}
+            {step === 'items' && tenant && eventId && (
+              <div className="mb-4">
+                <PendingPayments
+                  tenantId={tenant.id}
+                  eventId={eventId}
+                  onPaymentCompleted={(saleId) => {
+                    setTodaySales((s) => ({ count: s.count + 1, total: s.total }));
+                    toast.success('Payment received!');
+                  }}
+                />
+              </div>
+            )}
+
             {/* ◆◆◆ CHECKOUT FLOW (Tip → Payment → Confirmation) ◆◆◆ */}
             <CheckoutFlow
               step={step}
@@ -644,6 +740,7 @@ function EventModePageInner() {
               taxAmount={cart.tax_amount}
               tipAmount={cart.tip_amount}
               total={cart.total}
+              platformFeeAmount={cart.platform_fee_amount}
               paymentMethod={cart.payment_method}
               tenantName={tenant?.name || ''}
               itemCount={cart.items.length}
@@ -653,6 +750,12 @@ function EventModePageInner() {
               processing={processing}
               items={cart.items.map((i: any) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price, lineTotal: i.line_total }))}
               activeQueueEntry={activeQueueEntry}
+              stripeConnected={!!tenant?.stripe_account_id}
+              tenantId={tenant?.id || ''}
+              onCreatePendingSale={createPendingSale}
+              onPaymentCompleted={handlePaymentCompleted}
+              receiptPhone={receiptPhone}
+              mode="event"
               onContinueToPayment={() => setStep('payment')}
               jumpRingData={pendingJumpRingResolutions.length > 0 ? {
                 saleTotal: completedSale?.total ?? 0,
@@ -676,7 +779,6 @@ function EventModePageInner() {
               sendingEmail={sendingEmail}
               emailSent={emailSent}
               emailError={emailError}
-              receiptPhone={receiptPhone}
               onSetReceiptPhone={setReceiptPhone}
               onSendSMS={sendSMSReceipt}
               sendingSMS={sendingSMS}

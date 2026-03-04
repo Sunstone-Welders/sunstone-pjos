@@ -31,6 +31,7 @@ interface CheckoutFlowProps {
   taxAmount: number;
   tipAmount: number;
   total: number;
+  platformFeeAmount?: number;
   paymentMethod: PaymentMethod | null;
   // Tip screen
   tenantName: string;
@@ -43,6 +44,14 @@ interface CheckoutFlowProps {
   items: Array<{ name: string; quantity: number; unitPrice: number; lineTotal: number }>;
   activeQueueEntry?: { name: string } | null;
   cardProcessor?: string | null;
+  // Stripe payment link props
+  stripeConnected?: boolean;
+  tenantId?: string;
+  saleId?: string | null;
+  onCreatePendingSale?: () => Promise<string | null>;
+  onPaymentCompleted?: (saleId: string) => void;
+  receiptPhone?: string;
+  mode?: 'event' | 'store';
   // Step navigation
   onContinueToPayment: () => void;
   // Jump ring step (Event Mode only)
@@ -58,8 +67,7 @@ interface CheckoutFlowProps {
   sendingEmail: boolean;
   emailSent: boolean;
   emailError: string;
-  receiptPhone: string;
-  onSetReceiptPhone: (v: string) => void;
+  onSetReceiptPhone?: (v: string) => void;
   onSendSMS: () => void;
   sendingSMS: boolean;
   smsSent: boolean;
@@ -73,6 +81,7 @@ export function CheckoutFlow({
   taxAmount,
   tipAmount,
   total,
+  platformFeeAmount,
   paymentMethod,
   tenantName,
   itemCount,
@@ -83,6 +92,13 @@ export function CheckoutFlow({
   items,
   activeQueueEntry,
   cardProcessor,
+  stripeConnected,
+  tenantId,
+  saleId,
+  onCreatePendingSale,
+  onPaymentCompleted,
+  receiptPhone,
+  mode,
   onContinueToPayment,
   jumpRingData,
   onJumpRingConfirm,
@@ -95,7 +111,6 @@ export function CheckoutFlow({
   sendingEmail,
   emailSent,
   emailError,
-  receiptPhone,
   onSetReceiptPhone,
   onSendSMS,
   sendingSMS,
@@ -132,8 +147,16 @@ export function CheckoutFlow({
         subtotal={subtotal}
         taxAmount={taxAmount}
         tipAmount={tipAmount}
+        platformFeeAmount={platformFeeAmount ?? 0}
         activeQueueEntry={activeQueueEntry}
-        cardProcessor={cardProcessor}
+        stripeConnected={stripeConnected ?? false}
+        tenantId={tenantId ?? ''}
+        saleId={saleId ?? null}
+        onCreatePendingSale={onCreatePendingSale ?? (async () => null)}
+        onPaymentCompleted={onPaymentCompleted ?? (() => {})}
+        receiptPhone={receiptPhone}
+        tenantName={tenantName}
+        mode={mode}
       />
     );
   } else if (step === 'jump_ring' && jumpRingData && onJumpRingConfirm && onJumpRingSkip) {
@@ -157,8 +180,8 @@ export function CheckoutFlow({
         sendingEmail={sendingEmail}
         emailSent={emailSent}
         emailError={emailError}
-        receiptPhone={receiptPhone}
-        onSetReceiptPhone={onSetReceiptPhone}
+        receiptPhone={receiptPhone ?? ''}
+        onSetReceiptPhone={onSetReceiptPhone ?? (() => {})}
         onSendSMS={onSendSMS}
         sendingSMS={sendingSMS}
         smsSent={smsSent}
