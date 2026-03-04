@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import type { InventoryItem, ProductType, ChainProductPrice, CartItem } from '@/types';
 import { MaterialTabs } from './MaterialTabs';
 import { ChainGrid } from './ChainGrid';
@@ -31,6 +31,7 @@ export function ProductSelector({
   // ── Chain selection state ──
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
   const [selectedChain, setSelectedChain] = useState<InventoryItem | null>(null);
+  const productTypeRef = useRef<HTMLDivElement>(null);
   const [inchAdjuster, setInchAdjuster] = useState<{
     chain: InventoryItem;
     productType: ProductType;
@@ -75,6 +76,10 @@ export function ProductSelector({
     } else {
       setSelectedChain(chain);
       setInchAdjuster(null);
+      // Auto-scroll to product type selector after it renders
+      setTimeout(() => {
+        productTypeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
     }
   }, [selectedChain, resetSelection]);
 
@@ -246,13 +251,15 @@ export function ProductSelector({
 
               {/* Product type row — appears after chain tap */}
               {selectedChain && (
-                <ProductTypeRow
-                  chain={selectedChain}
-                  productTypes={productTypes}
-                  chainPrices={chainPrices}
-                  onSelectFlatRate={handleFlatRateSelect}
-                  onSelectPerInch={handlePerInchSelect}
-                />
+                <div ref={productTypeRef}>
+                  <ProductTypeRow
+                    chain={selectedChain}
+                    productTypes={productTypes}
+                    chainPrices={chainPrices}
+                    onSelectFlatRate={handleFlatRateSelect}
+                    onSelectPerInch={handlePerInchSelect}
+                  />
+                </div>
               )}
             </>
           )}
