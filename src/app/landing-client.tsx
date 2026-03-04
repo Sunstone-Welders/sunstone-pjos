@@ -292,6 +292,7 @@ function SunnyChat() {
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -302,6 +303,43 @@ function SunnyChat() {
   useEffect(() => {
     if (open && inputRef.current) inputRef.current.focus()
   }, [open])
+
+  // Listen for suggested question clicks from the landing page
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const question = (e as CustomEvent).detail
+      if (question) {
+        setOpen(true)
+        setPendingQuestion(question)
+      }
+    }
+    window.addEventListener('sunny-ask', handler)
+    return () => window.removeEventListener('sunny-ask', handler)
+  }, [])
+
+  // Auto-send pending question after chat panel opens
+  useEffect(() => {
+    if (open && pendingQuestion && !loading) {
+      const q = pendingQuestion
+      setPendingQuestion(null)
+      const timer = setTimeout(() => {
+        setInput('')
+        const newMsgs = [...msgs, { role: 'user', text: q }]
+        setMsgs(newMsgs)
+        setLoading(true)
+        fetch('/api/sunny-demo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: newMsgs }),
+        })
+          .then((res) => res.json())
+          .then((data) => setMsgs((prev) => [...prev, { role: 'assistant', text: data.reply }]))
+          .catch(() => setMsgs((prev) => [...prev, { role: 'assistant', text: 'Oops — something went wrong. Try again in a moment!' }]))
+          .finally(() => setLoading(false))
+      }, 400)
+      return () => clearTimeout(timer)
+    }
+  }, [open, pendingQuestion, loading, msgs])
 
   const send = useCallback(async () => {
     if (!input.trim() || loading) return
@@ -1095,6 +1133,7 @@ export default function LandingPageClient() {
               ].map((q) => (
                 <button
                   key={q}
+                  onClick={() => window.dispatchEvent(new CustomEvent('sunny-ask', { detail: q }))}
                   style={{
                     padding: '12px 22px',
                     borderRadius: 12,
@@ -1113,7 +1152,7 @@ export default function LandingPageClient() {
               ))}
             </div>
             <p style={{ textAlign: 'center', marginTop: 20, fontSize: 13, color: C.textMuted }}>
-              Click the ✦ button in the corner to start a conversation with Sunny.
+              Click any question above to start a live conversation with Sunny.
             </p>
           </Reveal>
         </div>
