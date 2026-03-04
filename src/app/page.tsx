@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     type: 'website',
     images: [
       {
-        url: '/landing/hero-dashboard.png',
+        url: '/landing/hero-dashboard.webp',
         width: 1200,
         height: 630,
         alt: 'Sunstone Studio dashboard showing AI-powered business insights',
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Sunstone Studio — Your Entire PJ Business. One Beautiful Platform.',
     description: 'POS, inventory, AI mentor, CRM, waivers, reports — built for permanent jewelry artists.',
-    images: ['/landing/hero-dashboard.png'],
+    images: ['/landing/hero-dashboard.webp'],
   },
   robots: { index: true, follow: true },
   alternates: { canonical: 'https://sunstonepj.app' },

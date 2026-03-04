@@ -123,7 +123,7 @@ const FEATURES = [
     name: 'Sunny — Your AI Business Mentor',
     desc: "Like having a permanent jewelry expert and assistant on call 24/7. Sunny helps with weld settings, pricing, event planning, and inventory — but she doesn't just advise. She takes action. Ask her to text your clients, plan your next event, or recommend new chains to stock.",
     highlight: 'She knows YOUR business — your inventory, clients, and sales data',
-    img: '/landing/sunny-texting.png',
+    img: '/landing/sunny-texting.webp',
     imgAlt: 'Sunny AI drafting a personalized text message to 10 clients about an upcoming Saturday pop-up event',
   },
   {
@@ -131,7 +131,7 @@ const FEATURES = [
     name: 'Point of Sale — Built for How You Sell',
     desc: 'Lightning-fast checkout designed for pop-ups, salons, and markets. Tap a chain, pick the product type, swipe to pay. Automatic jump ring deduction, tip screen, receipt delivery — one fluid motion from selection to sale.',
     highlight: 'Event Mode + Store Mode — works everywhere you do',
-    img: '/landing/pos-store.png',
+    img: '/landing/pos-store.webp',
     imgAlt: 'Store Mode POS showing chain product grid with metal type filters, cart panel with items, and checkout total',
   },
   {
@@ -139,7 +139,7 @@ const FEATURES = [
     name: 'Reports That Actually Help',
     desc: "Know your numbers without a finance degree. Revenue, COGS, profit margins, event comparisons, average sale value — all calculated automatically from your real sales data. Sunny even analyzes the trends and tells you what to do next.",
     highlight: 'AI-powered insights included — not just charts',
-    img: '/landing/reports.png',
+    img: '/landing/reports.webp',
     imgAlt: 'Year-to-date financial reports showing $22K revenue, $8.9K net profit, 46 sales with detailed cost breakdown',
   },
   {
@@ -147,7 +147,7 @@ const FEATURES = [
     name: 'Client Relationships, Not Transactions',
     desc: "Every client gets a profile — purchase history, preferences, birthday, notes, tags. Smart suggestions tell you when to reach out. Automated follow-up workflows handle aftercare, review requests, and re-engagement while you focus on creating.",
     highlight: 'Included in your 60-day Pro trial · Add-on after trial',
-    img: '/landing/client-profile.png',
+    img: '/landing/client-profile.webp',
     imgAlt: 'Client profile for Maddy Carty showing contact actions, suggested outreach, and activity timeline',
   },
   {
@@ -155,7 +155,7 @@ const FEATURES = [
     name: 'Events, Queue & Digital Waivers',
     desc: "Print a QR code. Customers scan, sign the waiver, and join the queue — all from their phone. You see the real-time queue, manage who's next, and never lose track of a customer. No more clipboards. No more chaos.",
     highlight: "Your customers feel VIP. You stay completely organized.",
-    img: '/landing/waiver-checkin.png',
+    img: '/landing/waiver-checkin.webp',
     imgAlt: 'Digital waiver and check-in form showing customer sign-up with name, email, phone, and event selection',
   },
   {
@@ -163,21 +163,21 @@ const FEATURES = [
     name: 'Smart Inventory — By the Inch',
     desc: "Track every inch of every chain. Cost per inch, sale price, stock levels, low-stock alerts, reorder points — all automatic. Price by the product or by the inch. Jump rings auto-deduct on every sale. You always know exactly where you stand.",
     highlight: 'Automatic COGS tracking · Jump ring auto-deduction',
-    img: '/landing/inventory.png',
+    img: '/landing/inventory.webp',
     imgAlt: 'Inventory management table showing chains with cost, price, stock levels, and material types',
   },
 ]
 
 const THEME_DATA = [
-  { name: 'Rose Gold & Cream', img: '/landing/themes/rose-gold.png' },
-  { name: 'Soft Blush & Ivory', img: '/landing/themes/soft-blush.png' },
-  { name: 'Sage & Linen', img: '/landing/themes/sage-linen.png' },
-  { name: 'French Blue & Linen', img: '/landing/themes/french-blue.png' },
-  { name: 'Midnight & Gold', img: '/landing/themes/midnight-gold.png' },
-  { name: 'Deep Plum & Champagne', img: '/landing/themes/deep-plum.png' },
-  { name: 'Forest & Gold', img: '/landing/themes/forest-gold.png' },
-  { name: 'Deep Ocean & Pearl', img: '/landing/themes/deep-ocean.png' },
-  { name: 'Warm Slate & Pearl', img: '/landing/themes/warm-slate.png' },
+  { name: 'Rose Gold & Cream', img: '/landing/themes/rose-gold.webp' },
+  { name: 'Soft Blush & Ivory', img: '/landing/themes/soft-blush.webp' },
+  { name: 'Sage & Linen', img: '/landing/themes/sage-linen.webp' },
+  { name: 'French Blue & Linen', img: '/landing/themes/french-blue.webp' },
+  { name: 'Midnight & Gold', img: '/landing/themes/midnight-gold.webp' },
+  { name: 'Deep Plum & Champagne', img: '/landing/themes/deep-plum.webp' },
+  { name: 'Forest & Gold', img: '/landing/themes/forest-gold.webp' },
+  { name: 'Deep Ocean & Pearl', img: '/landing/themes/deep-ocean.webp' },
+  { name: 'Warm Slate & Pearl', img: '/landing/themes/warm-slate.webp' },
 ]
 
 /* ─── HOOKS ─── */
@@ -233,7 +233,7 @@ function Reveal({
 function SunstoneLogo({ size = 34 }: { size?: number }) {
   return (
     <Image
-      src="/landing/sunstone-logo.png"
+      src="/landing/sunstone-logo.webp"
       alt="Sunstone Studio"
       width={size}
       height={size}
@@ -892,7 +892,7 @@ export default function LandingPageClient() {
         <Reveal delay={0.4} style={{ maxWidth: 880, width: '100%', marginTop: 60 }}>
           <DeviceFrame>
             <Image
-              src="/landing/hero-dashboard.png"
+              src="/landing/hero-dashboard.webp"
               alt="Sunstone Studio dashboard with AI-powered Sunny's Take, revenue tracking, upcoming event, and inventory alerts"
               width={880}
               height={550}
