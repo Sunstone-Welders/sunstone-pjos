@@ -1498,7 +1498,7 @@ export default function LandingPageClient() {
           }}
         >
           <span>© 2026 Sunstone Welders. All rights reserved.</span>
-          <span>Made with ✦ in Payson, Utah</span>
+          <span>Made with ✦ in Spanish Fork, Utah</span>
         </div>
       </footer>
 
