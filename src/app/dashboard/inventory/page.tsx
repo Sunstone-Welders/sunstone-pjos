@@ -25,6 +25,7 @@ import ChainPricingConfig, { type PriceConfigRow } from '@/components/inventory/
 import SupplierDropdown from '@/components/inventory/SupplierDropdown';
 import MaterialDropdown from '@/components/inventory/MaterialDropdown';
 import type { InventoryItem, InventoryType, InventoryUnit, PricingMode, Material } from '@/types';
+import { Skeleton } from '@/components/ui';
 import SunnyTutorial from '@/components/SunnyTutorial';
 
 // â”€â”€â”€ Constants â”€â”€â”€
@@ -282,8 +283,14 @@ export default function InventoryPage() {
 
       {/* â”€â”€â”€ Inventory List â”€â”€â”€ */}
       {loading ? (
-        <div className="py-12 text-center text-sm text-[var(--text-tertiary)]">
-          Loading inventoryâ€¦
+        <div className="rounded-xl border border-[var(--border-default)] overflow-hidden bg-[var(--surface-base)]">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-[var(--border-default)] last:border-b-0">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-20 ml-auto" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+          ))}
         </div>
       ) : filteredItems.length === 0 ? (
         <Card padding="lg">
@@ -646,9 +653,10 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
         }
       }
     } else {
-      // Non-chain: warn if no sell price
+      // Non-chain: block save if no sell price
       if (sellPrice <= 0) {
-        toast.warning('No sell price set â€” this item won\'t have a price in the POS.');
+        toast.error('A sell price is required for non-chain items.');
+        return false;
       }
     }
 

@@ -28,6 +28,7 @@ import {
   Textarea,
 } from '@/components/ui';
 import { QRCode, FullScreenQR } from '@/components/QRCode';
+import { Skeleton } from '@/components/ui';
 import SunnyTutorial from '@/components/SunnyTutorial';
 
 export default function EventsPage() {
@@ -188,9 +189,18 @@ export default function EventsPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="py-16 text-center">
-          <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-          <p className="text-text-tertiary mt-3 text-sm">Loading events…</p>
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-base)] p-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-2 flex-1">
+                  <Skeleton className="h-5 w-48" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+                <Skeleton className="h-6 w-16 rounded-full" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : events.length === 0 ? (
         <Card className="py-16 text-center">
@@ -561,11 +571,29 @@ function EventFormModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    const startTime = new Date(form.start_time);
+
+    // H3: Prevent creating events in the past (new events only)
+    if (!event && startTime < new Date()) {
+      toast.error('Start time cannot be in the past.');
+      return;
+    }
+
+    // H5: End time must be after start time
+    if (form.end_time) {
+      const endTime = new Date(form.end_time);
+      if (endTime <= startTime) {
+        toast.error('End time must be after the start time.');
+        return;
+      }
+    }
+
     onSave({
       name: form.name,
       description: form.description || null,
       location: form.location || null,
-      start_time: new Date(form.start_time).toISOString(),
+      start_time: startTime.toISOString(),
       end_time: form.end_time
         ? new Date(form.end_time).toISOString()
         : null,

@@ -32,3 +32,4 @@ export {
   type TabsTriggerProps,
   type TabsContentProps,
 } from './Tabs';
+export { Skeleton } from './Skeleton';

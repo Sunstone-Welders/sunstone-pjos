@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useTenant } from '@/hooks/use-tenant';
 import { useRouter } from 'next/navigation';
 import { DashboardCardGrid } from '@/components/dashboard';
+import { Skeleton } from '@/components/ui';
 import type { DashboardCard } from '@/types';
 import { format } from 'date-fns';
 
@@ -131,8 +132,20 @@ export default function DashboardPage() {
   // ── Loading ────────────────────────────────────────────────────────────
   if (tenantLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
+      <div className="space-y-6" style={{ maxWidth: 900 }}>
+        <div className="flex items-start justify-between">
+          <div>
+            <Skeleton className="h-8 w-48 mb-2" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+          <Skeleton className="h-10 w-28 rounded-xl" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <Skeleton className="h-28 rounded-xl" />
+          <Skeleton className="h-28 rounded-xl" />
+          <Skeleton className="h-28 rounded-xl" />
+        </div>
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     );
   }

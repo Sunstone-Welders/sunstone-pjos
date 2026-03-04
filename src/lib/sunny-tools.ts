@@ -942,6 +942,9 @@ export async function executeSunnyTool(
 
       // ── 8. send_message (CONFIRMATION REQUIRED) ──
       case 'send_message': {
+        if (!input.body || !input.body.trim()) {
+          return { result: { error: 'Message body cannot be empty' }, isError: true };
+        }
         // Fetch client + tenant for variables
         const [cRes, tRes] = await Promise.all([
           serviceClient.from('clients').select('first_name, last_name, email, phone').eq('id', input.client_id).eq('tenant_id', tenantId).single(),

@@ -52,6 +52,11 @@ export async function POST(
     }
   }
 
+  if (!messageBody || messageBody.trim().length === 0) {
+    await supabase.from('broadcasts').update({ status: 'draft' }).eq('id', id);
+    return NextResponse.json({ error: 'Message content cannot be empty.' }, { status: 400 });
+  }
+
   // Load tenant
   const { data: tenant } = await supabase
     .from('tenants')
@@ -61,6 +66,14 @@ export async function POST(
 
   // Resolve audience
   const audience = await resolveAudience(supabase, broadcast.tenant_id, broadcast.target_type, broadcast.target_id);
+
+  if (audience.length === 0) {
+    await supabase.from('broadcasts').update({ status: 'draft' }).eq('id', id);
+    return NextResponse.json(
+      { error: 'No recipients match this broadcast criteria. Check your segment filters.' },
+      { status: 400 }
+    );
+  }
 
   // For SMS, check consent from most recent waiver
   const smsConsentMap: Record<string, boolean> = {};

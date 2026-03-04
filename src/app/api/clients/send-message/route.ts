@@ -37,8 +37,20 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { clientId, channel, subject, message } = body;
 
-  if (!clientId || !channel || !message) {
+  const trimmedMessage = message?.trim();
+  if (!clientId || !channel || !trimmedMessage) {
     return NextResponse.json({ error: 'clientId, channel, and message are required' }, { status: 400 });
+  }
+
+  // Enforce message length limits
+  const MAX_SMS_LENGTH = 1600;
+  const MAX_EMAIL_LENGTH = 50000;
+  const maxLen = channel === 'sms' ? MAX_SMS_LENGTH : MAX_EMAIL_LENGTH;
+  if (trimmedMessage.length > maxLen) {
+    return NextResponse.json(
+      { error: `Message too long. ${channel === 'sms' ? 'SMS' : 'Email'} limit is ${maxLen.toLocaleString()} characters.` },
+      { status: 400 }
+    );
   }
 
   // Fetch client AND verify it belongs to this tenant
@@ -68,7 +80,7 @@ export async function POST(request: NextRequest) {
     business_phone: tenant.phone || '',
   };
 
-  const resolvedMessage = renderTemplate(message, variables);
+  const resolvedMessage = renderTemplate(trimmedMessage, variables);
   const resolvedSubject = subject ? renderTemplate(subject, variables) : '';
 
   try {

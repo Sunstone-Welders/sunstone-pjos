@@ -142,14 +142,17 @@ export default function ComposeModal({
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={channel === 'sms' ? 4 : 8}
+              maxLength={channel === 'sms' ? 1600 : 50000}
               className="w-full px-3 py-2.5 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--surface-raised)] text-[var(--text-primary)] resize-y min-h-[80px] focus:outline-none focus:ring-2 focus:ring-[var(--accent-subtle)]"
               placeholder={`Type your message... Variables like {{client_name}} and {{business_name}} will be replaced.`}
             />
-            {channel === 'sms' && (
-              <span className={`text-xs font-medium ${body.length <= 160 ? 'text-success-600' : body.length <= 320 ? 'text-warning-600' : 'text-error-600'}`}>
-                {body.length} / 160 characters
-              </span>
-            )}
+            <span className={`text-xs font-medium ${
+              channel === 'sms'
+                ? (body.length <= 160 ? 'text-success-600' : body.length <= 320 ? 'text-warning-600' : 'text-error-600')
+                : (body.length <= 40000 ? 'text-[var(--text-tertiary)]' : 'text-error-600')
+            }`}>
+              {body.length.toLocaleString()} / {channel === 'sms' ? '1,600' : '50,000'}
+            </span>
           </div>
 
           {/* Preview */}

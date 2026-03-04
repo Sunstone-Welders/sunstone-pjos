@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Card, CardContent } from '@/components/ui';
+import { Button, Card, CardContent, Skeleton } from '@/components/ui';
 import ClientCard from './ClientCard';
 import type { Client, ClientTag } from '@/types';
 
@@ -69,7 +69,22 @@ export default function ClientList({
   };
 
   if (loading) {
-    return <div className="text-[var(--text-tertiary)] py-12 text-center">Loading...</div>;
+    return (
+      <div className="space-y-2">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <Card key={i} padding="sm">
+            <CardContent className="p-4 flex items-center gap-4">
+              <Skeleton className="w-10 h-10 rounded-full shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-3 w-48" />
+              </div>
+              <Skeleton className="h-6 w-16 rounded-full" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
   }
 
   if (clients.length === 0) {

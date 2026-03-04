@@ -21,6 +21,7 @@ export default function QueuePage() {
   const [selectedEvent, setSelectedEvent] = useState<string>('');
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notifying, setNotifying] = useState(false);
   const supabase = createClient();
 
   // Load active events
@@ -70,38 +71,47 @@ export default function QueuePage() {
     const nextEntry = entries.find((e) => e.status === 'waiting');
     if (!nextEntry) { toast.error('No one waiting'); return; }
 
-    // Update status
-    await supabase
-      .from('queue_entries')
-      .update({ status: 'notified', notified_at: new Date().toISOString() })
-      .eq('id', nextEntry.id);
+    setNotifying(true);
+    try {
+      // Update status
+      await supabase
+        .from('queue_entries')
+        .update({ status: 'notified', notified_at: new Date().toISOString() })
+        .eq('id', nextEntry.id);
 
-    // Send SMS via API (only if phone exists and customer consented)
-    if (nextEntry.phone && nextEntry.sms_consent) {
-      try {
-        const res = await fetch('/api/queue/notify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone: nextEntry.phone,
-            name: nextEntry.name,
-            tenantName: tenant?.name,
-            smsConsent: nextEntry.sms_consent,
-          }),
-        });
-        const data = await res.json();
-        if (data.sent) {
-          toast.success(`Notified ${nextEntry.name} via SMS`);
-        } else {
-          toast.success(`${nextEntry.name} is next — notify them in person`);
+      // Send SMS via API (only if phone exists and customer consented)
+      if (nextEntry.phone && nextEntry.sms_consent) {
+        try {
+          const res = await fetch('/api/queue/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              phone: nextEntry.phone,
+              name: nextEntry.name,
+              tenantName: tenant?.name,
+              smsConsent: nextEntry.sms_consent,
+            }),
+          });
+          if (!res.ok) {
+            toast.error(`Failed to send SMS to ${nextEntry.name}`);
+          } else {
+            const data = await res.json();
+            if (data.sent) {
+              toast.success(`Notified ${nextEntry.name} via SMS`);
+            } else {
+              toast.success(`${nextEntry.name} is next — notify them in person`);
+            }
+          }
+        } catch {
+          toast.error('SMS service unavailable — notify in person');
         }
-      } catch {
-        toast.success(`Status updated (SMS unavailable)`);
+      } else if (nextEntry.phone && !nextEntry.sms_consent) {
+        toast.success(`${nextEntry.name} is next — no SMS consent, notify in person`);
+      } else {
+        toast.success(`${nextEntry.name} marked as notified (no phone)`);
       }
-    } else if (nextEntry.phone && !nextEntry.sms_consent) {
-      toast.success(`${nextEntry.name} is next — no SMS consent, notify in person`);
-    } else {
-      toast.success(`${nextEntry.name} marked as notified (no phone)`);
+    } finally {
+      setNotifying(false);
     }
   };
 
@@ -127,7 +137,7 @@ export default function QueuePage() {
             {waiting.length} waiting · {notified.length} notified
           </p>
         </div>
-        <Button variant="primary" size="lg" onClick={notifyNext}>
+        <Button variant="primary" size="lg" onClick={notifyNext} loading={notifying} disabled={notifying || waiting.length === 0}>
           Notify Next
         </Button>
       </div>
@@ -145,7 +155,18 @@ export default function QueuePage() {
       )}
 
       {loading ? (
-        <div className="text-text-tertiary py-12 text-center">Loading...</div>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-base)] p-4 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-[var(--surface-raised)] animate-pulse shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-32 rounded bg-[var(--surface-raised)] animate-pulse" />
+                <div className="h-3 w-48 rounded bg-[var(--surface-raised)] animate-pulse" />
+              </div>
+              <div className="h-6 w-16 rounded-full bg-[var(--surface-raised)] animate-pulse" />
+            </div>
+          ))}
+        </div>
       ) : entries.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
