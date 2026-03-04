@@ -584,7 +584,7 @@ function TenantProfilePanel({
                     disabled={actionLoading}
                     className="text-sm border border-[var(--border-default)] rounded-lg px-3 py-1 bg-[var(--surface-raised)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#FF7A00] disabled:opacity-50"
                   >
-                    <option value="free">Free</option>
+                    <option value="starter">Starter</option>
                     <option value="pro">Pro</option>
                     <option value="business">Business</option>
                   </select>
@@ -857,7 +857,7 @@ function BroadcastModal({
                 className="mt-2 text-sm border border-[var(--border-default)] rounded-lg px-3 py-1.5 bg-[var(--surface-subtle)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#FF7A00]"
               >
                 <option value="all">All plans</option>
-                <option value="free">Free</option>
+                <option value="starter">Starter</option>
                 <option value="pro">Pro</option>
                 <option value="business">Business</option>
               </select>
@@ -1006,14 +1006,13 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 function TierBadge({ tier }: { tier: string }) {
   const styles: Record<string, string> = {
-    free: 'bg-[var(--surface-subtle)] text-[var(--text-secondary)]',
     starter: 'bg-[var(--surface-subtle)] text-[var(--text-secondary)]',
     pro: 'bg-blue-500/10 text-blue-400',
     business: 'bg-yellow-500/10 text-yellow-400',
   };
-  const label = tier === 'starter' ? 'Free' : tier.charAt(0).toUpperCase() + tier.slice(1);
+  const label = tier.charAt(0).toUpperCase() + tier.slice(1);
   return (
-    <span className={cn('inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium', styles[tier] || styles.free)}>
+    <span className={cn('inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium', styles[tier] || styles.starter)}>
       {label}
     </span>
   );

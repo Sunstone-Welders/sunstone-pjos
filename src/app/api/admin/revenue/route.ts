@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 
     // ── By plan tier ──
     const byTier: Record<string, { gmv: number; fees: number; count: number }> = {
-      free: { gmv: 0, fees: 0, count: 0 },
+      starter: { gmv: 0, fees: 0, count: 0 },
       pro: { gmv: 0, fees: 0, count: 0 },
       business: { gmv: 0, fees: 0, count: 0 },
     };
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
 
       // By tenant
       if (!byTenant[sale.tenant_id]) {
-        const info = tenantMap[sale.tenant_id] || { name: 'Unknown', tier: 'free' };
+        const info = tenantMap[sale.tenant_id] || { name: 'Unknown', tier: 'starter' };
         byTenant[sale.tenant_id] = { name: info.name, tier: info.tier, gmv: 0, fees: 0, count: 0 };
       }
       byTenant[sale.tenant_id].gmv += total;
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
       byTenant[sale.tenant_id].count++;
 
       // By tier
-      const tier = tenantMap[sale.tenant_id]?.tier || 'free';
+      const tier = tenantMap[sale.tenant_id]?.tier || 'starter';
       if (byTier[tier]) {
         byTier[tier].gmv += total;
         byTier[tier].fees += fee;

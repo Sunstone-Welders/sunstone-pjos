@@ -28,8 +28,9 @@ const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
 // Map Stripe price IDs to our tier names
 function getTierFromPriceId(priceId: string): SubscriptionTier {
-  if (priceId === process.env.STRIPE_PRO_PRICE_ID) return 'pro';
-  if (priceId === process.env.STRIPE_BUSINESS_PRICE_ID) return 'business';
+  if (priceId === process.env.STRIPE_PRICE_STARTER) return 'starter';
+  if (priceId === process.env.STRIPE_PRICE_PRO) return 'pro';
+  if (priceId === process.env.STRIPE_PRICE_BUSINESS) return 'business';
   return 'starter';
 }
 

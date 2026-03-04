@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 interface OverviewStats {
   totalTenants: number;
   totalUsers: number;
-  planBreakdown: { free: number; pro: number; business: number };
+  planBreakdown: { starter: number; pro: number; business: number };
   platformRevenue: number;
   recentSignups: Array<{ name: string; created_at: string; tier: string }>;
   activeToday: number;
@@ -89,9 +89,9 @@ export default function AdminOverviewPage() {
       const revenueData = await revenueRes.json();
 
       // Calculate stats
-      const planBreakdown = { free: 0, pro: 0, business: 0 };
+      const planBreakdown = { starter: 0, pro: 0, business: 0 };
       for (const t of tenants) {
-        const tier = (t.subscription_tier || 'free') as keyof typeof planBreakdown;
+        const tier = (t.subscription_tier || 'starter') as keyof typeof planBreakdown;
         if (planBreakdown[tier] !== undefined) planBreakdown[tier]++;
       }
 
@@ -106,7 +106,7 @@ export default function AdminOverviewPage() {
         .map((t: any) => ({
           name: t.name,
           created_at: t.created_at,
-          tier: t.subscription_tier || 'free',
+          tier: t.subscription_tier || 'starter',
         }));
 
       setStats({
@@ -185,7 +185,7 @@ export default function AdminOverviewPage() {
                 Plan Breakdown
               </h3>
               <div className="space-y-3">
-                <PlanRow tier="Free" count={stats.planBreakdown.free} total={stats.totalTenants} color="bg-[var(--text-tertiary)]" />
+                <PlanRow tier="Starter" count={stats.planBreakdown.starter} total={stats.totalTenants} color="bg-[var(--text-tertiary)]" />
                 <PlanRow tier="Pro" count={stats.planBreakdown.pro} total={stats.totalTenants} color="bg-info-500" />
                 <PlanRow tier="Business" count={stats.planBreakdown.business} total={stats.totalTenants} color="bg-warning-500" />
               </div>
@@ -339,12 +339,12 @@ function PlanRow({ tier, count, total, color }: { tier: string; count: number; t
 
 function TierBadge({ tier }: { tier: string }) {
   const styles: Record<string, string> = {
-    free: 'bg-[var(--surface-subtle)] text-[var(--text-secondary)]',
+    starter: 'bg-[var(--surface-subtle)] text-[var(--text-secondary)]',
     pro: 'bg-info-50 text-info-600',
     business: 'bg-warning-50 text-warning-600',
   };
   return (
-    <span className={cn('inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0', styles[tier] || styles.free)}>
+    <span className={cn('inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0', styles[tier] || styles.starter)}>
       {tier.charAt(0).toUpperCase() + tier.slice(1)}
     </span>
   );

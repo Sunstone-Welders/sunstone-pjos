@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       if (!owner) continue;
 
       // Resolve template variables
-      const tierLabel = tenant.subscription_tier === 'starter' ? 'Free' :
+      const tierLabel = tenant.subscription_tier === 'starter' ? 'Starter' :
         tenant.subscription_tier.charAt(0).toUpperCase() + tenant.subscription_tier.slice(1);
       const resolvedBody = payload.body
         .replace(/\{\{tenant_name\}\}/g, tenant.name)

@@ -38,8 +38,8 @@ const C = {
 const PRICING = [
   {
     name: 'Starter',
-    price: 'Free',
-    period: '',
+    price: '$99',
+    period: '/mo',
     fee: '3% platform fee',
     tagline: 'Everything you need to launch',
     popular: false,
@@ -54,7 +54,7 @@ const PRICING = [
   },
   {
     name: 'Pro',
-    price: '$129',
+    price: '$169',
     period: '/mo',
     fee: '1.5% platform fee',
     tagline: 'For growing businesses',
@@ -63,7 +63,7 @@ const PRICING = [
       'Everything in Starter, plus:',
       'Unlimited Sunny AI access',
       'Advanced reports & insights',
-      'Team member access',
+      'Up to 3 team members',
       'Custom brand themes',
       'Priority support',
     ],
@@ -691,10 +691,10 @@ export default function LandingPageClient() {
   ]
 
   return (
-    <div style={{ fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif", color: C.text, background: C.bg }}>
+    <div style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", color: C.text, background: C.bg }}>
       {/* ─── GLOBAL STYLES ─── */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=DM+Sans:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400;1,9..144,600&family=Inter:wght@400;500;600;700&display=swap');
         html { scroll-behavior: smooth; }
         ::selection { background: ${C.wineBg}; color: ${C.wine}; }
         @keyframes sunnySlideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
@@ -708,7 +708,7 @@ export default function LandingPageClient() {
         .hero-anim-4 { animation-delay: 0.3s; }
         .hero-anim-5 { animation-delay: 0.4s; }
         .landing-container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
-        .serif { font-family: 'Playfair Display', Georgia, serif; }
+        .serif { font-family: 'Fraunces', Georgia, serif; }
         @media (max-width: 900px) {
           .grid-2 { grid-template-columns: 1fr !important; }
           .grid-3 { grid-template-columns: 1fr !important; max-width: 420px !important; margin-left: auto !important; margin-right: auto !important; }
@@ -1290,7 +1290,7 @@ export default function LandingPageClient() {
                   <div style={{ fontSize: 14.5, color: C.textSec, marginBottom: 24 }}>{plan.tagline}</div>
                   <div className="serif" style={{ fontSize: 44, fontWeight: 400, marginBottom: 4 }}>
                     {plan.price}
-                    <span style={{ fontSize: 16, color: C.textMuted, fontFamily: "'DM Sans', sans-serif" }}>{plan.period}</span>
+                    <span style={{ fontSize: 16, color: C.textMuted, fontFamily: "'Inter', sans-serif" }}>{plan.period}</span>
                   </div>
                   <div style={{ fontSize: 13.5, color: C.textMuted, marginBottom: 30 }}>{plan.fee}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 30 }}>

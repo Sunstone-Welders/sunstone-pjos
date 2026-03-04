@@ -85,7 +85,7 @@ export async function PATCH(
     const update: Record<string, any> = {};
 
     if (body.subscription_tier !== undefined) {
-      const validTiers = ['free', 'pro', 'business'];
+      const validTiers = ['starter', 'pro', 'business'];
       if (!validTiers.includes(body.subscription_tier)) {
         return NextResponse.json({ error: 'Invalid subscription tier' }, { status: 400 });
       }

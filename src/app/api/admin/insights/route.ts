@@ -128,9 +128,9 @@ async function collectPlatformData(serviceClient: any): Promise<PlatformData> {
     (t: any) => new Date(t.created_at) >= startOfLastMonth && new Date(t.created_at) < startOfThisMonth
   ).length;
 
-  const byTier: Record<string, number> = { free: 0, pro: 0, business: 0 };
+  const byTier: Record<string, number> = { starter: 0, pro: 0, business: 0 };
   for (const t of allTenants) {
-    const tier = t.subscription_tier || 'free';
+    const tier = t.subscription_tier || 'starter';
     byTier[tier] = (byTier[tier] || 0) + 1;
   }
 
@@ -213,13 +213,13 @@ async function collectPlatformData(serviceClient: any): Promise<PlatformData> {
   const avgFeePerTransaction = salesThisMonth.length > 0 ? platformFeesThisMonth / salesThisMonth.length : 0;
 
   // Revenue by tier
-  const revenueByTier: Record<string, number> = { free: 0, pro: 0, business: 0 };
+  const revenueByTier: Record<string, number> = { starter: 0, pro: 0, business: 0 };
   const tenantTierMap: Record<string, string> = {};
   for (const t of allTenants) {
-    tenantTierMap[t.id] = t.subscription_tier || 'free';
+    tenantTierMap[t.id] = t.subscription_tier || 'starter';
   }
   for (const s of salesThisMonth) {
-    const tier = tenantTierMap[s.tenant_id] || 'free';
+    const tier = tenantTierMap[s.tenant_id] || 'starter';
     revenueByTier[tier] = (revenueByTier[tier] || 0) + (Number(s.platform_fee_amount) || 0);
   }
 
@@ -398,7 +398,7 @@ IMPORTANT: Return ONLY the JSON array, no markdown, no backticks, no extra text.
 TENANT HEALTH:
 - Total tenants: ${data.tenantHealth.total}
 - New this month: ${data.tenantHealth.newThisMonth} (last month: ${data.tenantHealth.newLastMonth})
-- By tier: Free: ${data.tenantHealth.byTier.free || 0}, Pro: ${data.tenantHealth.byTier.pro || 0}, Business: ${data.tenantHealth.byTier.business || 0}
+- By tier: Starter: ${data.tenantHealth.byTier.starter || 0}, Pro: ${data.tenantHealth.byTier.pro || 0}, Business: ${data.tenantHealth.byTier.business || 0}
 - Active in last 7 days: ${data.tenantHealth.activeIn7Days} of ${data.tenantHealth.total} (${data.tenantHealth.engagementRate}% engagement)
 - Tenants with zero sales: ${data.tenantHealth.zeroSalesTenants.map(t => `${t.name} (${t.daysSinceSignup} days since signup)`).join(', ') || 'None'}
 - Churn risk tenants (active 30d ago, inactive last 14d): ${data.tenantHealth.churnRiskTenants.map(t => `${t.name} (last active: ${new Date(t.lastActive).toLocaleDateString()})`).join(', ') || 'None'}
@@ -408,7 +408,7 @@ REVENUE:
 - Platform fees this month: $${data.revenue.platformFeesThisMonth.toFixed(2)} (last month: $${data.revenue.platformFeesLastMonth.toFixed(2)})
 - GMV this month: $${data.revenue.gmvThisMonth.toFixed(2)} (last month: $${data.revenue.gmvLastMonth.toFixed(2)})
 - Avg platform fee per transaction: $${data.revenue.avgFeePerTransaction.toFixed(2)}
-- Revenue by tier: Free: $${(data.revenue.revenueByTier.free || 0).toFixed(2)}, Pro: $${(data.revenue.revenueByTier.pro || 0).toFixed(2)}, Business: $${(data.revenue.revenueByTier.business || 0).toFixed(2)}
+- Revenue by tier: Starter: $${(data.revenue.revenueByTier.starter || 0).toFixed(2)}, Pro: $${(data.revenue.revenueByTier.pro || 0).toFixed(2)}, Business: $${(data.revenue.revenueByTier.business || 0).toFixed(2)}
 - Top tenants by GMV this month: ${data.revenue.topTenantsByGMV.map(t => `${t.name}: $${t.gmv.toFixed(2)}`).join(', ') || 'None'}
 
 FEATURE ADOPTION:

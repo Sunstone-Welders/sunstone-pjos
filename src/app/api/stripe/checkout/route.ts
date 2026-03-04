@@ -16,8 +16,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 const PRICE_IDS: Record<string, string | undefined> = {
-  pro: process.env.STRIPE_PRO_PRICE_ID,
-  business: process.env.STRIPE_BUSINESS_PRICE_ID,
+  starter: process.env.STRIPE_PRICE_STARTER,
+  pro: process.env.STRIPE_PRICE_PRO,
+  business: process.env.STRIPE_PRICE_BUSINESS,
 };
 
 export async function POST(request: NextRequest) {
@@ -31,14 +32,14 @@ export async function POST(request: NextRequest) {
 
     // 2. Get request body
     const { tier } = await request.json();
-    if (!tier || !['pro', 'business'].includes(tier)) {
-      return NextResponse.json({ error: 'Invalid tier. Must be "pro" or "business".' }, { status: 400 });
+    if (!tier || !['starter', 'pro', 'business'].includes(tier)) {
+      return NextResponse.json({ error: 'Invalid tier. Must be "starter", "pro", or "business".' }, { status: 400 });
     }
 
     const priceId = PRICE_IDS[tier];
     if (!priceId) {
       return NextResponse.json(
-        { error: `STRIPE_${tier.toUpperCase()}_PRICE_ID environment variable not configured.` },
+        { error: `STRIPE_PRICE_${tier.toUpperCase()} environment variable not configured.` },
         { status: 500 }
       );
     }

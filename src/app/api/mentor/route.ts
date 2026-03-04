@@ -692,7 +692,7 @@ async function fetchTenantContext(serviceClient: any, tenantId: string) {
 
     return {
       businessName: tenant?.name || 'Your Business',
-      tier: tenant?.subscription_tier || 'free',
+      tier: tenant?.subscription_tier || 'starter',
       since: tenant?.created_at ? new Date(tenant.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'recently',
       sales: salesCountRes.count || 0,
       clientCount: clientsCountRes.count || 0,
@@ -706,7 +706,7 @@ async function fetchTenantContext(serviceClient: any, tenantId: string) {
     console.error('[Mentor] Error fetching tenant context:', error);
     return {
       businessName: 'Your Business',
-      tier: 'free',
+      tier: 'starter',
       since: 'recently',
       sales: 0,
       clientCount: 0,

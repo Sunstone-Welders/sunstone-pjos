@@ -1845,13 +1845,13 @@ export const PJOS_PLATFORM_GUIDE = {
     overview: 'Sunstone Studio has three subscription tiers designed to grow with your business.',
     tiers: {
       starter: {
-        price: 'Free',
+        price: '$99/month',
         platformFee: '3% per transaction',
         features: ['Basic POS (Event Mode and Store Mode)', 'Inventory management', 'Queue and waivers', '5 Sunny AI questions per month', '1 team member'],
         bestFor: 'Artists just getting started who want to try the platform.',
       },
       pro: {
-        price: '$129/month',
+        price: '$169/month',
         platformFee: '1.5% per transaction',
         features: ['Everything in Starter', 'Unlimited Sunny AI questions', 'Full business reports with P&L', 'AI insights', 'Client CRM', 'Up to 3 team members'],
         bestFor: 'Active artists who do regular events and want full business intelligence.',
@@ -1867,9 +1867,9 @@ export const PJOS_PLATFORM_GUIDE = {
       overview: 'CRM features (workflows, templates, automated follow-ups, broadcast messaging) are enabled as an add-on by contacting Sunstone. When enabled, you get access to the full CRM suite within your existing plan.',
       includes: ['Automated follow-up workflows', 'Message templates', 'Broadcast messaging to client segments', 'Re-engagement campaigns', 'Birthday and anniversary automations'],
     },
-    trial: 'New accounts get a 60-day Pro trial to explore all features. After the trial, you keep your data and can upgrade or continue on the free Starter plan.',
+    trial: 'New accounts get a 60-day Pro trial to explore all features. After the trial, you keep your data and can choose any plan starting at $99/month.',
     upgrading: 'Go to Settings → Subscription tab to see your current plan and upgrade. Payment is handled through Stripe.',
-    whatHappensAfterTrial: 'If your trial expires without upgrading, you move to the Starter plan. You keep all your data, events, inventory, and clients — you just lose access to Pro features like full reports, CRM, and unlimited Sunny questions.',
+    whatHappensAfterTrial: 'If your trial expires without choosing a plan, you move to the Starter plan ($99/month). You keep all your data, events, inventory, and clients — you just lose access to Pro features like full reports, CRM, and unlimited Sunny questions.',
     feeExplainer: 'The platform fee is a small percentage added to each sale. On Starter it is 3%, on Pro it is 1.5%, and on Business it is 0%. You can choose to pass this fee to your customer or absorb it yourself in Settings.',
   },
 

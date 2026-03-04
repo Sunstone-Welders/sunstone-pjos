@@ -899,7 +899,7 @@ function SettingsPage() {
       ? `Pro Trial · ${trialDays} day${trialDays !== 1 ? 's' : ''} left`
       : hasActiveSubscription
         ? `${tier.charAt(0).toUpperCase() + tier.slice(1)} Plan · $${SUBSCRIPTION_PRICES[tier]}/mo`
-        : 'Starter · Free';
+        : `Starter · $${SUBSCRIPTION_PRICES.starter}/mo`;
 
   const receiptAutoStatus = [
     autoEmailReceipt && 'Email',

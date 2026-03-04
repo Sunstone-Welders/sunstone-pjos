@@ -199,10 +199,10 @@ export default function AdminRevenuePage() {
       <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] p-6">
         <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Revenue by Plan Tier</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {(['free', 'pro', 'business'] as const).map(tier => {
+          {(['starter', 'pro', 'business'] as const).map(tier => {
             const tierData = data.by_tier[tier] || { gmv: 0, fees: 0, count: 0 };
             const tierColors: Record<string, string> = {
-              free: 'border-l-[var(--text-tertiary)]',
+              starter: 'border-l-[var(--text-tertiary)]',
               pro: 'border-l-info-500',
               business: 'border-l-warning-500',
             };
@@ -283,12 +283,12 @@ export default function AdminRevenuePage() {
 
 function TierBadge({ tier }: { tier: string }) {
   const styles: Record<string, string> = {
-    free: 'bg-[var(--surface-subtle)] text-[var(--text-secondary)]',
+    starter: 'bg-[var(--surface-subtle)] text-[var(--text-secondary)]',
     pro: 'bg-info-50 text-info-600',
     business: 'bg-warning-50 text-warning-600',
   };
   return (
-    <span className={cn('inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium', styles[tier] || styles.free)}>
+    <span className={cn('inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium', styles[tier] || styles.starter)}>
       {tier.charAt(0).toUpperCase() + tier.slice(1)}
     </span>
   );

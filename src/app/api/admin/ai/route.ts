@@ -444,15 +444,15 @@ Core Feature Set:
 - Atlas AI: Platform admin intelligence (this is you)
 
 Subscription Tiers:
-- Starter (Free): 3% platform fee, 5 Sunny questions/month, 1 team member, basic POS and inventory
-- Pro ($129/month): 1.5% platform fee, unlimited Sunny, full reports, AI insights, 3 team members
+- Starter ($99/month): 3% platform fee, 5 Sunny questions/month, 1 team member, basic POS and inventory
+- Pro ($169/month): 1.5% platform fee, unlimited Sunny, full reports, AI insights, 3 team members
 - Business ($279/month): 0% platform fee, everything in Pro, unlimited team members, priority support
 - Trial: 60-day Pro trial for new accounts, defaults to Starter after expiry
 - CRM: Enabled per-tenant by admin toggle (crm_enabled flag on tenants table). Gives access to workflows, templates, broadcast messaging, and automated follow-ups.
 
 Revenue Model:
 - Platform fees on each sale (3%/1.5%/0% by tier) — tenants choose to pass to customer or absorb
-- Monthly subscriptions (Pro $129, Business $279)
+- Monthly subscriptions (Starter $99, Pro $169, Business $279)
 
 TENANT HEALTH SIGNALS — How to interpret the data:
 - Active events in last 30 days = healthy, engaged tenant

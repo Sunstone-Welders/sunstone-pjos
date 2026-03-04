@@ -434,8 +434,8 @@ export const PLATFORM_FEE_RATES: Record<SubscriptionTier, number> = {
 };
 
 export const SUBSCRIPTION_PRICES: Record<SubscriptionTier, number> = {
-  starter: 0,
-  pro: 129,
+  starter: 99,
+  pro: 169,
   business: 279,
 };
 

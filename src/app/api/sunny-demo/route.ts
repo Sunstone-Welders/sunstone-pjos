@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { checkRateLimit, getClientIP } from '@/lib/rate-limit'
+
+const SUNNY_DEMO_RATE_LIMIT = { prefix: 'sunny-demo', limit: 10, windowSeconds: 60 };
 
 const SUNNY_DEMO_SYSTEM = `You are Sunny, the AI business mentor inside Sunstone Studio — a platform built by Sunstone Welders for permanent jewelry artists. You're chatting with a potential customer on the landing page.
 
 WHAT YOU CAN ANSWER FULLY:
 - All platform features: POS (Event Mode + Store Mode), Smart Inventory (chain by the inch, jump ring auto-deduction, COGS tracking), Client CRM, Events/Queue/Digital Waivers with QR check-in, Reports & Business Intelligence, 9 Beautiful Themes, Team/Staff permissions
-- Subscription pricing: Starter (Free, 3% platform fee), Pro ($129/mo, 1.5% fee), Business ($279/mo, 0% fee). All plans include a 60-day free Pro trial. No credit card required.
+- Subscription pricing: Starter ($99/mo, 3% platform fee), Pro ($169/mo, 1.5% fee), Business ($279/mo, 0% fee). All plans include a 60-day free Pro trial. No credit card required.
 - General PJ business questions at a surface level
 - Sunstone welders (Zapp, Zapp Plus 2, mPulse) at a high level — direct to permanentjewelry.sunstonewelders.com for purchasing
 - How Sunny works inside the platform
@@ -23,6 +26,15 @@ NEVER: Make up features that don't exist. Discuss competitors negatively. Give m
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 10 requests per minute per IP
+    const ip = getClientIP(request);
+    const rl = checkRateLimit(ip, SUNNY_DEMO_RATE_LIMIT);
+    if (!rl.allowed) {
+      return NextResponse.json({
+        reply: "I'm getting a lot of questions right now! Give me a moment and try again shortly.",
+      }, { status: 429 });
+    }
+
     const { messages } = await request.json()
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
