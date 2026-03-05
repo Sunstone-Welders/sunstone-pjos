@@ -389,6 +389,13 @@ const SUBSECTIONS: Subsection[] = [
     keywords: ['client list', 'clients', 'customer list', 'crm', 'customer database', 'waiver history', 'add client', 'customer info', 'find client', 'client page', 'copy waiver link', 'waiver link'],
   },
   {
+    id: 'app-messaging',
+    label: 'Messages & Dedicated Phone Number',
+    data: PJOS_PLATFORM_GUIDE.subscriptionAndBilling.crmAddOn,
+    keywords: ['message', 'messages', 'text', 'sms', 'reply', 'conversation', 'dedicated number', 'phone number', 'business number', 'two way', 'inbox', 'unread', 'text back', 'reply to client', 'messaging', 'chat', 'two-way sms'],
+    priority: 2,
+  },
+  {
     id: 'app-crm-value',
     label: 'CRM Value & How Artists Use It',
     data: PJOS_PLATFORM_GUIDE.crmValue,

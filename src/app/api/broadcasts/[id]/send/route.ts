@@ -4,6 +4,7 @@ import { resolveAudience } from '@/lib/broadcasts';
 import { renderTemplate } from '@/lib/templates';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logSmsCost, logEmailCost } from '@/lib/cost-tracker';
+import { sendSMS as twilioSendSMS } from '@/lib/twilio';
 
 const RATE_LIMIT = { prefix: 'broadcast-send', limit: 5, windowSeconds: 60 };
 
@@ -134,7 +135,18 @@ export async function POST(
 
     try {
       if (broadcast.channel === 'sms') {
-        await sendSMS(contactField!, renderedBody);
+        const sid = await twilioSendSMS({ to: contactField!, body: renderedBody, tenantId: broadcast.tenant_id });
+        // Write to conversations for two-way thread
+        supabase.from('conversations').insert({
+          tenant_id: broadcast.tenant_id,
+          client_id: client.id,
+          phone_number: contactField!,
+          direction: 'outbound',
+          body: renderedBody,
+          twilio_sid: sid,
+          status: 'delivered',
+          read: true,
+        }).then(null, () => {});
       } else {
         await sendEmail(contactField!, renderedSubject || 'Message from ' + (tenant?.name || 'Business'), renderedBody);
       }
@@ -193,23 +205,6 @@ export async function POST(
     sent: sentCount,
     failed: failedCount,
     skipped: skippedCount,
-  });
-}
-
-// ── SMS via Twilio ──────────────────────────────────────────────────────────
-
-async function sendSMS(to: string, body: string) {
-  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
-    console.log(`[Broadcast SMS Skipped] Would send to ${to}: ${body.slice(0, 50)}…`);
-    return; // Gracefully skip if not configured
-  }
-
-  const twilio = require('twilio');
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  await client.messages.create({
-    body,
-    from: process.env.TWILIO_PHONE_NUMBER,
-    to,
   });
 }
 

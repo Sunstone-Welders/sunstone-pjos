@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
 import { logSmsCost } from '@/lib/cost-tracker';
+import { sendSMS } from '@/lib/twilio';
 
 const RATE_LIMIT = { prefix: 'queue-notify', limit: 10, windowSeconds: 60 };
 
@@ -26,20 +27,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ sent: false, reason: 'no_sms_consent' });
     }
 
-    // Only send if Twilio is configured
-    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
-      console.log(`[SMS Skipped] Would notify ${name} at ${phone}`);
+    const smsBody = `Hi ${name}! You're next at the ${tenantName || 'Sunstone'} booth. Please head over now!`;
+    const sid = await sendSMS({ to: phone, body: smsBody, tenantId: tenantId || undefined });
+
+    if (!sid) {
       return NextResponse.json({ sent: false, reason: 'Twilio not configured' });
     }
-
-    const twilio = require('twilio');
-    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-
-    const message = await client.messages.create({
-      body: `Hi ${name}! You're next at the ${tenantName || 'Sunstone'} booth. Please head over now!`,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: phone,
-    });
 
     // Log SMS cost (fire-and-forget)
     if (tenantId) {
@@ -55,7 +48,7 @@ export async function POST(request: NextRequest) {
             direction: 'outbound',
             channel: 'sms',
             recipient_phone: phone,
-            body: `Hi ${name}! You're next at the ${tenantName || 'Sunstone'} booth. Please head over now!`,
+            body: smsBody,
             source: 'queue_notify',
             status: 'sent',
           })
@@ -63,7 +56,7 @@ export async function POST(request: NextRequest) {
       ).catch(() => {});
     }
 
-    return NextResponse.json({ sent: true, sid: message.sid });
+    return NextResponse.json({ sent: true, sid });
   } catch (error: any) {
     console.error('SMS Error:', error);
     return NextResponse.json({ error: 'Failed to send notification' }, { status: 500 });

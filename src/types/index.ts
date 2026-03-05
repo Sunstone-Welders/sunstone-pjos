@@ -72,6 +72,11 @@ export interface Tenant {
   min_monthly_transactions: number;
   is_suspended: boolean;
   crm_enabled: boolean;
+  // Dedicated phone
+  dedicated_phone_number: string | null;
+  dedicated_phone_sid: string | null;
+  crm_activated_at: string | null;
+  crm_deactivated_at: string | null;
   // Receipts
   auto_email_receipt: boolean;
   auto_sms_receipt: boolean;
@@ -290,6 +295,8 @@ export interface Client {
   notes: string | null;
   birthday: string | null;
   last_visit_at: string | null;
+  unread_messages: number;
+  last_message_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -737,5 +744,22 @@ export interface GiftCardRedemption {
   amount: number;
   redeemed_at: string;
   redeemed_by: string | null;
+  created_at: string;
+}
+
+// ============================================================================
+// Conversations (Two-Way SMS)
+// ============================================================================
+
+export interface ConversationMessage {
+  id: string;
+  tenant_id: string;
+  client_id: string | null;
+  phone_number: string;
+  direction: 'inbound' | 'outbound';
+  body: string;
+  twilio_sid: string | null;
+  status: 'delivered' | 'failed' | 'pending';
+  read: boolean;
   created_at: string;
 }

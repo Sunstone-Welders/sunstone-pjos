@@ -235,6 +235,7 @@ export function PaymentScreen({
           url: checkoutUrl,
           tenantName,
           total,
+          tenantId,
         }),
       });
       const data = await res.json();

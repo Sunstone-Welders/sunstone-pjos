@@ -12,6 +12,7 @@ import { getThemeById } from '@/lib/themes';
 import type { Client, ClientTag, Waiver, Sale, SaleItem } from '@/types';
 import type { WaiverPDFData } from '@/lib/generate-waiver-pdf';
 import ComposeModal from './ComposeModal';
+import ConversationPanel from './ConversationPanel';
 import RefundModal from '@/components/RefundModal';
 import type { RefundModalSaleSummary } from '@/components/RefundModal';
 
@@ -70,6 +71,7 @@ export default function ClientProfile({ clientId, tenantId, onClose, onEdit, onT
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [showWaiverModal, setShowWaiverModal] = useState(false);
   const [composeChannel, setComposeChannel] = useState<'sms' | 'email' | null>(null);
+  const [showConversation, setShowConversation] = useState(false);
 
   // Workflow enrollment
   const [showWorkflowModal, setShowWorkflowModal] = useState(false);
@@ -348,7 +350,7 @@ export default function ClientProfile({ clientId, tenantId, onClose, onEdit, onT
                   icon: MessageSquareIcon,
                   onClick: () => {
                     if (client.phone) {
-                      setComposeChannel('sms');
+                      setShowConversation(true);
                     } else {
                       toast.error('No phone number on file');
                     }
@@ -693,7 +695,7 @@ export default function ClientProfile({ clientId, tenantId, onClose, onEdit, onT
         />
       )}
 
-      {/* Compose Modal */}
+      {/* Compose Modal (email only now) */}
       {composeChannel && client && tenant && (
         <ComposeModal
           channel={composeChannel}
@@ -704,6 +706,19 @@ export default function ClientProfile({ clientId, tenantId, onClose, onEdit, onT
           onClose={() => setComposeChannel(null)}
           onSent={() => setComposeChannel(null)}
         />
+      )}
+
+      {/* Conversation Panel (two-way SMS) */}
+      {showConversation && client && (
+        <div className="fixed inset-0 z-50 bg-[var(--surface-base)] md:static md:absolute md:inset-0">
+          <ConversationPanel
+            clientId={clientId}
+            clientName={`${client.first_name || ''} ${client.last_name || ''}`.trim()}
+            clientPhone={client.phone || ''}
+            tenantId={tenantId}
+            onClose={() => setShowConversation(false)}
+          />
+        </div>
       )}
 
       {/* Workflow enrollment — mobile: fixed bottom sheet */}

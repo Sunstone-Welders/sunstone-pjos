@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
+import { provisionPhoneNumber } from '@/lib/twilio';
 
 const RATE_LIMIT = { prefix: 'signup', limit: 5, windowSeconds: 300 };
 
@@ -98,6 +99,11 @@ export async function POST(request: NextRequest) {
         console.warn('Failed to set name metadata:', metaError.message);
       }
     }
+
+    // 4. Auto-provision dedicated phone number (non-blocking)
+    provisionPhoneNumber(tenant.id).catch(err =>
+      console.warn('[Signup] Auto-provision phone failed:', err.message)
+    );
 
     return NextResponse.json({ tenantId: tenant.id });
   } catch (error: any) {

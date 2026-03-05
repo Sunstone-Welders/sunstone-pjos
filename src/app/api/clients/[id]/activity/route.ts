@@ -6,7 +6,7 @@ import { createServerSupabase } from '@/lib/supabase/server';
 
 interface ActivityEntry {
   id: string;
-  type: 'purchase' | 'waiver' | 'message_sent' | 'tag_added' | 'workflow_action' | 'note' | 'refund';
+  type: 'purchase' | 'waiver' | 'message_sent' | 'message_received' | 'tag_added' | 'workflow_action' | 'note' | 'refund';
   date: string;
   summary: string;
   details?: string;
@@ -39,7 +39,7 @@ export async function GET(
   const tenantId = request.nextUrl.searchParams.get('tenantId');
   if (!tenantId) return NextResponse.json({ error: 'tenantId required' }, { status: 400 });
 
-  const [salesRes, waiversRes, messagesRes, tagsRes, workflowRes, notesRes, refundsRes] = await Promise.all([
+  const [salesRes, waiversRes, messagesRes, tagsRes, workflowRes, notesRes, refundsRes, inboundRes] = await Promise.all([
     supabase
       .from('sales')
       .select('id, created_at, total, payment_method, payment_provider, refund_status, refund_amount, items:sale_items(name, quantity), event:events(name)')
@@ -88,6 +88,15 @@ export async function GET(
       .eq('tenant_id', tenantId)
       .eq('sale.client_id', clientId)
       .order('created_at', { ascending: false }),
+
+    supabase
+      .from('conversations')
+      .select('id, created_at, body, direction')
+      .eq('client_id', clientId)
+      .eq('tenant_id', tenantId)
+      .eq('direction', 'inbound')
+      .order('created_at', { ascending: false })
+      .limit(50),
   ]);
 
   const entries: ActivityEntry[] = [];
@@ -203,6 +212,18 @@ export async function GET(
         details: note.body,
       });
     }
+  }
+
+  // Inbound messages (from conversations)
+  for (const conv of inboundRes.data || []) {
+    entries.push({
+      id: `inbound-${conv.id}`,
+      type: 'message_received',
+      date: conv.created_at,
+      summary: `Client texted: "${conv.body.length > 80 ? conv.body.slice(0, 80) + '…' : conv.body}"`,
+      details: conv.body,
+      metadata: { channel: 'sms', source: 'inbound' },
+    });
   }
 
   entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());

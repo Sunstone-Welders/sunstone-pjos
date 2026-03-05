@@ -979,6 +979,12 @@ function SettingsPage() {
           {/* Divider */}
           <div className="border-t border-[var(--border-subtle)]" />
 
+          {/* Dedicated Text Number */}
+          <DedicatedPhoneSection tenant={tenant} onProvisioned={refetch} />
+
+          {/* Divider */}
+          <div className="border-t border-[var(--border-subtle)]" />
+
           {/* Logo Upload */}
           <div>
             <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">Logo</label>
@@ -1935,6 +1941,115 @@ function SettingsPage() {
           { title: 'Set up tax profiles', body: 'Create tax profiles for different rates (e.g. state vs county). Assign them to events for automatic tax calculation.' },
         ]}
       />
+    </div>
+  );
+}
+
+// ============================================================================
+// Dedicated Phone Number Section
+// ============================================================================
+
+function DedicatedPhoneSection({ tenant, onProvisioned }: { tenant: any; onProvisioned: () => void }) {
+  const [provisioning, setProvisioning] = useState(false);
+  const [releasing, setReleasing] = useState(false);
+  const [confirmRelease, setConfirmRelease] = useState(false);
+
+  const dedicatedNumber = tenant?.dedicated_phone_number;
+
+  const formatPhoneDisplay = (phone: string) => {
+    const digits = phone.replace(/\D/g, '');
+    const last10 = digits.slice(-10);
+    if (last10.length === 10) {
+      return `(${last10.slice(0, 3)}) ${last10.slice(3, 6)}-${last10.slice(6)}`;
+    }
+    return phone;
+  };
+
+  const handleProvision = async () => {
+    setProvisioning(true);
+    try {
+      const res = await fetch('/api/twilio/provision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      onProvisioned();
+    } catch (err: any) {
+      console.error('Provision failed:', err);
+    } finally {
+      setProvisioning(false);
+    }
+  };
+
+  const handleRelease = async () => {
+    setReleasing(true);
+    try {
+      const res = await fetch('/api/twilio/release', { method: 'POST' });
+      if (!res.ok) throw new Error('Release failed');
+      setConfirmRelease(false);
+      onProvisioned();
+    } catch (err: any) {
+      console.error('Release failed:', err);
+    } finally {
+      setReleasing(false);
+    }
+  };
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+        Dedicated Text Number
+      </label>
+      {dedicatedNumber ? (
+        <div className="bg-[var(--surface-raised)] border border-[var(--border-default)] rounded-xl p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-lg font-semibold text-[var(--text-primary)]">
+                {formatPhoneDisplay(dedicatedNumber)}
+              </p>
+              <p className="text-sm text-[var(--text-tertiary)] mt-0.5">
+                Clients text this number and you see their messages in the app.
+              </p>
+            </div>
+            {!confirmRelease ? (
+              <button
+                onClick={() => setConfirmRelease(true)}
+                className="text-sm text-[var(--text-tertiary)] hover:text-red-500 transition-colors"
+              >
+                Change
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setConfirmRelease(false)}
+                  className="text-sm text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                >
+                  Cancel
+                </button>
+                <Button
+                  variant="secondary"
+                  onClick={handleRelease}
+                  loading={releasing}
+                  className="text-red-500 border-red-200 hover:bg-red-50"
+                >
+                  Release Number
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-[var(--surface-raised)] border border-[var(--border-default)] rounded-xl p-4 flex items-center justify-between">
+          <p className="text-sm text-[var(--text-tertiary)]">
+            No number assigned. Get a dedicated number so clients can text you directly.
+          </p>
+          <Button variant="primary" onClick={handleProvision} loading={provisioning}>
+            Get a Number
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
 import { logSmsCost } from '@/lib/cost-tracker';
+import { sendSMS } from '@/lib/twilio';
 
 const RATE_LIMIT = { prefix: 'pos-notify', limit: 20, windowSeconds: 60 };
 
@@ -93,20 +94,11 @@ export async function POST(request: NextRequest) {
       message = `Hi ${firstName}! You're checked in and #${position} in line. Estimated wait: about ${estimatedWait} minutes. We'll text you when it's your turn!`;
     }
 
-    // Only send if Twilio is configured
-    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
-      console.log(`[SMS Skipped] Would send position SMS to ${firstName} at ${entry.phone}: ${message}`);
+    const sid = await sendSMS({ to: entry.phone, body: message, tenantId });
+
+    if (!sid) {
       return NextResponse.json({ sent: false, reason: 'twilio_not_configured', position, estimatedWait });
     }
-
-    const twilio = require('twilio');
-    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-
-    const result = await client.messages.create({
-      body: message,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: entry.phone,
-    });
 
     // Log SMS cost (fire-and-forget)
     logSmsCost({ tenantId, operation: 'sms_position_notify' });
@@ -124,7 +116,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       sent: true,
-      sid: result.sid,
+      sid,
       position,
       estimatedWait,
     });

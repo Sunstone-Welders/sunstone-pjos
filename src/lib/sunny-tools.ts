@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { renderTemplate } from '@/lib/templates';
+import { sendSMS as twilioSendSMS } from '@/lib/twilio';
 
 // ============================================================================
 // Types
@@ -609,21 +610,13 @@ export function getSunnyToolStatusLabel(name: string): string {
 }
 
 // ============================================================================
-// SMS via Twilio
+// SMS via Twilio (uses shared utility)
 // ============================================================================
 
-async function sendSMS(to: string, body: string) {
-  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
-    console.log(`[Sunny SMS Skipped] Would send to ${to}: ${body.slice(0, 50)}`);
-    return;
-  }
-  const twilio = require('twilio');
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  await client.messages.create({
-    body,
-    from: process.env.TWILIO_PHONE_NUMBER,
-    to,
-  });
+// Note: sendSMS is imported as twilioSendSMS from @/lib/twilio
+// Local wrapper to pass tenantId for dedicated number routing
+async function sendSMS(to: string, body: string, tenantId?: string) {
+  await twilioSendSMS({ to, body, tenantId });
 }
 
 // ============================================================================
@@ -986,7 +979,7 @@ export async function executeSunnyTool(
         // Confirmed — send it
         if (input.channel === 'sms') {
           if (!client.phone) return { result: { error: 'Client has no phone number' }, isError: true };
-          await sendSMS(client.phone, resolvedBody);
+          await sendSMS(client.phone, resolvedBody, tenantId);
         } else {
           if (!client.email) return { result: { error: 'Client has no email address' }, isError: true };
           await sendEmail(client.email, resolvedSubject || `Message from ${tenant?.name || 'your artist'}`, resolvedBody);
@@ -1079,7 +1072,7 @@ export async function executeSunnyTool(
 
           try {
             if (input.channel === 'sms' && client.phone) {
-              await sendSMS(client.phone, resolvedBody);
+              await sendSMS(client.phone, resolvedBody, tenantId);
               sent++;
             } else if (input.channel === 'email' && client.email) {
               await sendEmail(client.email, resolvedSubject || `Message from ${tenant?.name || 'your artist'}`, resolvedBody);

@@ -5,6 +5,8 @@
 // Tools use service role with no tenant scoping (admin has platform-wide access).
 // ============================================================================
 
+import { sendSMS as twilioSendSMS } from '@/lib/twilio';
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -189,21 +191,12 @@ export function getAtlasToolStatusLabel(name: string): string {
 }
 
 // ============================================================================
-// SMS via Twilio (admin-level)
+// SMS via Twilio (admin-level, uses shared utility)
 // ============================================================================
 
+// Admin-level SMS sends from platform number (no tenantId)
 async function sendSMS(to: string, body: string) {
-  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
-    console.log(`[Atlas SMS Skipped] Would send to ${to}: ${body.slice(0, 50)}`);
-    return;
-  }
-  const twilio = require('twilio');
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  await client.messages.create({
-    body,
-    from: process.env.TWILIO_PHONE_NUMBER,
-    to,
-  });
+  await twilioSendSMS({ to, body });
 }
 
 // ============================================================================

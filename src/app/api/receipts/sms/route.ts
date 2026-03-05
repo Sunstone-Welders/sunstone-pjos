@@ -1,5 +1,6 @@
 // src/app/api/receipts/sms/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { sendSMS } from '@/lib/twilio';
 
 interface ReceiptSmsBody {
   to: string;
@@ -14,17 +15,6 @@ interface ReceiptSmsBody {
 
 export async function POST(request: NextRequest) {
   try {
-    if (
-      !process.env.TWILIO_ACCOUNT_SID ||
-      !process.env.TWILIO_AUTH_TOKEN ||
-      !process.env.TWILIO_PHONE_NUMBER
-    ) {
-      return NextResponse.json(
-        { sent: false, error: 'SMS service not configured' },
-        { status: 503 }
-      );
-    }
-
     const body: ReceiptSmsBody = await request.json();
 
     if (!body.to || !body.tenantName || body.total == null) {
@@ -48,17 +38,11 @@ export async function POST(request: NextRequest) {
       smsBody += `\n${body.footer}`;
     }
 
-    const twilio = require('twilio');
-    const client = twilio(
-      process.env.TWILIO_ACCOUNT_SID,
-      process.env.TWILIO_AUTH_TOKEN
-    );
+    const sid = await sendSMS({ to: body.to, body: smsBody, tenantId: body.tenantId || undefined });
 
-    const message = await client.messages.create({
-      body: smsBody,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: body.to,
-    });
+    if (!sid) {
+      return NextResponse.json({ sent: false, error: 'SMS service not configured' }, { status: 503 });
+    }
 
     // Log to message_log (fire-and-forget)
     if (body.tenantId) {
@@ -78,7 +62,7 @@ export async function POST(request: NextRequest) {
       ).catch(() => {});
     }
 
-    return NextResponse.json({ sent: true, sid: message.sid });
+    return NextResponse.json({ sent: true, sid });
   } catch (err: any) {
     console.error('[Receipt SMS Error]', err);
     return NextResponse.json(

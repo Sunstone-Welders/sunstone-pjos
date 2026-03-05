@@ -14,6 +14,7 @@ const ANTHROPIC_PRICING: Record<string, { input: number; output: number; cacheRe
 };
 
 const TWILIO_SMS_COST = 0.0079;   // per segment
+const TWILIO_PHONE_MONTHLY = 1.15; // per phone number per month
 const RESEND_EMAIL_COST = 0.0004; // per email (estimate)
 
 interface AnthropicUsage {
@@ -77,6 +78,23 @@ export function logSmsCost(params: {
       })
     )
     .catch(err => console.error('[CostTracker] Failed to log sms cost:', err));
+}
+
+export function logPhoneRentalCost(params: {
+  tenantId: string;
+  phoneNumber: string;
+}) {
+  createServiceRoleClient()
+    .then(client =>
+      client.from('platform_costs').insert({
+        tenant_id: params.tenantId,
+        service: 'twilio',
+        operation: 'phone_rental',
+        estimated_cost: TWILIO_PHONE_MONTHLY,
+        metadata: { phone_number: params.phoneNumber },
+      })
+    )
+    .catch(err => console.error('[CostTracker] Failed to log phone rental cost:', err));
 }
 
 export function logEmailCost(params: {

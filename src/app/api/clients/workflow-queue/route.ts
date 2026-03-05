@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
+import { sendSMS as twilioSendSMS } from '@/lib/twilio';
 
 export async function GET(request: NextRequest) {
   const supabase = await createServerSupabase();
@@ -85,15 +86,20 @@ export async function POST(request: NextRequest) {
   let sent = false;
   if (item.channel === 'sms' && item.client?.phone) {
     try {
-      if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER) {
-        const twilio = require('twilio');
-        const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-        await twilioClient.messages.create({
-          body: item.message_body,
-          from: process.env.TWILIO_PHONE_NUMBER,
-          to: item.client.phone,
-        });
+      const sid = await twilioSendSMS({ to: item.client.phone, body: item.message_body, tenantId: item.tenant_id });
+      if (sid) {
         sent = true;
+        // Write to conversations for two-way thread
+        supabase.from('conversations').insert({
+          tenant_id: item.tenant_id,
+          client_id: item.client_id,
+          phone_number: item.client.phone,
+          direction: 'outbound',
+          body: item.message_body,
+          twilio_sid: sid,
+          status: 'delivered',
+          read: true,
+        }).then(null, () => {});
       }
     } catch (err: any) {
       console.error('[Workflow SMS] Failed:', err?.message);

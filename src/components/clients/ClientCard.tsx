@@ -36,13 +36,20 @@ export default function ClientCard({
       onClick={onOpenProfile}
     >
       {/* Avatar */}
-      <div
-        className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
-        style={{ backgroundColor: 'var(--accent-muted)' }}
-      >
-        <span className="text-xs font-semibold" style={{ color: 'var(--accent-primary)' }}>
-          {initials}
-        </span>
+      <div className="relative flex-shrink-0">
+        <div
+          className="w-9 h-9 rounded-full flex items-center justify-center"
+          style={{ backgroundColor: 'var(--accent-muted)' }}
+        >
+          <span className="text-xs font-semibold" style={{ color: 'var(--accent-primary)' }}>
+            {initials}
+          </span>
+        </div>
+        {(client.unread_messages || 0) > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+            {client.unread_messages > 9 ? '9+' : client.unread_messages}
+          </span>
+        )}
       </div>
 
       {/* Middle content */}

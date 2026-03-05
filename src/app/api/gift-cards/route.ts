@@ -10,6 +10,7 @@ import { createServerSupabase } from '@/lib/supabase/server';
 import { generateGiftCardCode, formatGiftCardCode } from '@/lib/gift-cards';
 import { logSmsCost, logEmailCost } from '@/lib/cost-tracker';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { sendSMS } from '@/lib/twilio';
 
 const RATE_LIMIT = { prefix: 'gift-card', limit: 20, windowSeconds: 60 };
 
@@ -108,16 +109,7 @@ export async function POST(request: NextRequest) {
         if (personalMessage?.trim()) msgParts.push(`"${personalMessage.trim()}"`);
         msgParts.push('Show this code at your next visit to redeem.');
 
-        let normalized = recipientPhone.trim().replace(/[^\d+]/g, '');
-        if (!normalized.startsWith('+')) normalized = '+1' + normalized;
-
-        const twilio = require('twilio');
-        const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-        await client.messages.create({
-          to: normalized,
-          from: process.env.TWILIO_PHONE_NUMBER,
-          body: msgParts.join(' '),
-        });
+        await sendSMS({ to: recipientPhone.trim(), body: msgParts.join(' '), tenantId });
 
         await supabase
           .from('gift_cards')

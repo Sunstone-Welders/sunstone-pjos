@@ -156,6 +156,7 @@ export function PendingPayments({ tenantId, eventId, onPaymentCompleted }: Pendi
           phone: sale.receipt_phone,
           url: data.url,
           total: sale.total,
+          tenantId,
         }),
       });
 

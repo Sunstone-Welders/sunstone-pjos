@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { formatGiftCardCode } from '@/lib/gift-cards';
 import { logSmsCost, logEmailCost } from '@/lib/cost-tracker';
+import { sendSMS } from '@/lib/twilio';
 
 // ── GET: Gift card detail with redemption history ─────────────────────────
 
@@ -115,15 +116,10 @@ export async function PATCH(
 
     if (giftCard.delivery_method === 'sms' && giftCard.recipient_phone) {
       try {
-        let normalized = giftCard.recipient_phone.replace(/[^\d+]/g, '');
-        if (!normalized.startsWith('+')) normalized = '+1' + normalized;
-
-        const twilio = require('twilio');
-        const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-        await client.messages.create({
-          to: normalized,
-          from: process.env.TWILIO_PHONE_NUMBER,
+        await sendSMS({
+          to: giftCard.recipient_phone,
           body: `🎁 Reminder: You have a $${Number(giftCard.remaining_balance).toFixed(2)} gift card for ${businessName}! Code: ${formatted}. Show at your next visit to redeem.`,
+          tenantId,
         });
 
         logSmsCost({ tenantId, operation: 'gift_card_resend' });

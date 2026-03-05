@@ -10,6 +10,7 @@ import { createServerSupabase } from '@/lib/supabase/server';
 import { renderTemplate } from '@/lib/templates';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logSmsCost, logEmailCost } from '@/lib/cost-tracker';
+import { sendSMS } from '@/lib/twilio';
 
 const RATE_LIMIT = { prefix: 'send-msg', limit: 30, windowSeconds: 60 };
 
@@ -87,8 +88,23 @@ export async function POST(request: NextRequest) {
   try {
     if (channel === 'sms') {
       if (!client.phone) return NextResponse.json({ error: 'Client has no phone number' }, { status: 400 });
-      await sendSMS(client.phone, resolvedMessage);
+      const sid = await sendSMS({ to: client.phone, body: resolvedMessage, tenantId });
       logSmsCost({ tenantId, operation: 'sms_direct' });
+
+      // Write to conversations table for two-way SMS thread
+      supabase.from('conversations').insert({
+        tenant_id: tenantId,
+        client_id: clientId,
+        phone_number: client.phone,
+        direction: 'outbound',
+        body: resolvedMessage,
+        twilio_sid: sid,
+        status: 'delivered',
+        read: true,
+      }).then(null, () => {});
+
+      // Update client's last_message_at
+      supabase.from('clients').update({ last_message_at: new Date().toISOString() }).eq('id', clientId).then(null, () => {});
     } else if (channel === 'email') {
       if (!client.email) return NextResponse.json({ error: 'Client has no email address' }, { status: 400 });
       await sendEmail(client.email, resolvedSubject || 'Message from ' + tenant.name, resolvedMessage);
@@ -116,23 +132,6 @@ export async function POST(request: NextRequest) {
     console.error('Send message error:', err);
     return NextResponse.json({ error: 'Failed to send message' }, { status: 500 });
   }
-}
-
-// ── SMS via Twilio ──────────────────────────────────────────────────────────
-
-async function sendSMS(to: string, body: string) {
-  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
-    console.log(`[Direct SMS Skipped] Would send to ${to}: ${body.slice(0, 50)}`);
-    return;
-  }
-
-  const twilio = require('twilio');
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  await client.messages.create({
-    body,
-    from: process.env.TWILIO_PHONE_NUMBER,
-    to,
-  });
 }
 
 // ── Email via Resend ────────────────────────────────────────────────────────
