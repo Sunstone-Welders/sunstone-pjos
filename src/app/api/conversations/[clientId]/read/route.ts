@@ -1,6 +1,8 @@
 // ============================================================================
 // Mark Conversation Read — POST /api/conversations/:clientId/read
 // ============================================================================
+// Supports phone: prefix for phone-only conversations.
+// ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
@@ -22,20 +24,34 @@ export async function POST(
 
   if (!member) return NextResponse.json({ error: 'No tenant' }, { status: 403 });
 
-  // Mark all unread messages as read
-  await supabase
-    .from('conversations')
-    .update({ read: true })
-    .eq('tenant_id', member.tenant_id)
-    .eq('client_id', clientId)
-    .eq('read', false);
+  const isPhoneOnly = clientId.startsWith('phone:');
 
-  // Reset client unread counter
-  await supabase
-    .from('clients')
-    .update({ unread_messages: 0 })
-    .eq('id', clientId)
-    .eq('tenant_id', member.tenant_id);
+  if (isPhoneOnly) {
+    const phone = decodeURIComponent(clientId.slice(6));
+    // Mark all unread phone-only messages as read
+    await supabase
+      .from('conversations')
+      .update({ read: true })
+      .eq('tenant_id', member.tenant_id)
+      .is('client_id', null)
+      .eq('phone_number', phone)
+      .eq('read', false);
+  } else {
+    // Mark all unread messages as read
+    await supabase
+      .from('conversations')
+      .update({ read: true })
+      .eq('tenant_id', member.tenant_id)
+      .eq('client_id', clientId)
+      .eq('read', false);
+
+    // Reset client unread counter
+    await supabase
+      .from('clients')
+      .update({ unread_messages: 0 })
+      .eq('id', clientId)
+      .eq('tenant_id', member.tenant_id);
+  }
 
   return NextResponse.json({ success: true });
 }

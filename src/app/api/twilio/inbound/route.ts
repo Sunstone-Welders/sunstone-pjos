@@ -72,31 +72,12 @@ export async function POST(request: NextRequest) {
       .eq('tenant_id', tenant.id)
       .or(`phone.eq.${normalizedFrom},phone.eq.${last10},phone.eq.+1${last10},phone.eq.${formatted}`);
 
-    let clientId: string;
+    let clientId: string | null = null;
 
     if (clients && clients.length > 0) {
       clientId = clients[0].id;
-    } else {
-      // Auto-create minimal client for unknown sender
-      const { data: newClient, error: createErr } = await supabase
-        .from('clients')
-        .insert({
-          tenant_id: tenant.id,
-          phone: normalizedFrom,
-          first_name: 'Unknown',
-        })
-        .select('id')
-        .single();
-
-      if (createErr || !newClient) {
-        console.error('[Inbound] Failed to create client:', createErr);
-        return new NextResponse(TWIML_EMPTY, {
-          status: 200,
-          headers: { 'Content-Type': 'text/xml' },
-        });
-      }
-      clientId = newClient.id;
     }
+    // Unknown numbers: no client record created — conversation stored with client_id: null
 
     // Insert conversation message
     await supabase.from('conversations').insert({
@@ -110,20 +91,22 @@ export async function POST(request: NextRequest) {
       read: false,
     });
 
-    // Update client unread count and last message time
-    const { data: currentClient } = await supabase
-      .from('clients')
-      .select('unread_messages')
-      .eq('id', clientId)
-      .single();
+    // Update client unread count and last message time (only if linked to a client)
+    if (clientId) {
+      const { data: currentClient } = await supabase
+        .from('clients')
+        .select('unread_messages')
+        .eq('id', clientId)
+        .single();
 
-    await supabase
-      .from('clients')
-      .update({
-        unread_messages: (currentClient?.unread_messages || 0) + 1,
-        last_message_at: new Date().toISOString(),
-      })
-      .eq('id', clientId);
+      await supabase
+        .from('clients')
+        .update({
+          unread_messages: (currentClient?.unread_messages || 0) + 1,
+          last_message_at: new Date().toISOString(),
+        })
+        .eq('id', clientId);
+    }
 
     // Log cost
     logSmsCost({ tenantId: tenant.id, operation: 'sms_inbound' });
@@ -157,7 +140,7 @@ export async function POST(request: NextRequest) {
       );
     } else if (tenant.sunny_text_mode === 'suggest') {
       // Generate suggestion and store on the conversation message
-      generateSunnySuggestion(tenant, clientId, body.trim(), supabase).catch(err =>
+      generateSunnySuggestion(tenant, clientId, normalizedFrom, body.trim(), supabase).catch(err =>
         console.error('[Inbound] Sunny suggestion failed:', err.message)
       );
     }
@@ -183,24 +166,36 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
 async function buildSunnyContext(
   tenant: { id: string; name: string | null },
-  clientId: string,
+  clientId: string | null,
+  clientPhone: string,
   supabase: any
 ): Promise<string> {
-  // Get recent conversation history
-  const { data: recentMsgs } = await supabase
+  // Get recent conversation history — by client_id if known, otherwise by phone_number
+  let recentQuery = supabase
     .from('conversations')
     .select('direction, body, created_at')
     .eq('tenant_id', tenant.id)
-    .eq('client_id', clientId)
     .order('created_at', { ascending: false })
     .limit(10);
 
-  // Get client info
-  const { data: client } = await supabase
-    .from('clients')
-    .select('first_name, last_name, email, notes, last_visit_at')
-    .eq('id', clientId)
-    .single();
+  if (clientId) {
+    recentQuery = recentQuery.eq('client_id', clientId);
+  } else {
+    recentQuery = recentQuery.is('client_id', null).eq('phone_number', clientPhone);
+  }
+
+  const { data: recentMsgs } = await recentQuery;
+
+  // Get client info (only if linked)
+  let client: any = null;
+  if (clientId) {
+    const { data } = await supabase
+      .from('clients')
+      .select('first_name, last_name, email, notes, last_visit_at')
+      .eq('id', clientId)
+      .single();
+    client = data;
+  }
 
   const history = (recentMsgs || [])
     .reverse()
@@ -209,7 +204,7 @@ async function buildSunnyContext(
 
   const clientName = client
     ? [client.first_name, client.last_name].filter(Boolean).join(' ') || 'Unknown'
-    : 'Unknown';
+    : 'Unknown number';
 
   return `Business: ${tenant.name || 'Permanent Jewelry Studio'}
 Client: ${clientName}${client?.last_visit_at ? ` (last visit: ${new Date(client.last_visit_at).toLocaleDateString()})` : ''}${client?.notes ? `\nNotes: ${client.notes}` : ''}
@@ -232,12 +227,12 @@ Rules:
 
 async function generateAndSendSunnyResponse(
   tenant: { id: string; name: string | null },
-  clientId: string,
+  clientId: string | null,
   clientPhone: string,
   inboundBody: string,
   supabase: any
 ) {
-  const context = await buildSunnyContext(tenant, clientId, supabase);
+  const context = await buildSunnyContext(tenant, clientId, clientPhone, supabase);
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
@@ -281,11 +276,12 @@ async function generateAndSendSunnyResponse(
 
 async function generateSunnySuggestion(
   tenant: { id: string; name: string | null },
-  clientId: string,
+  clientId: string | null,
+  clientPhone: string,
   inboundBody: string,
   supabase: any
 ) {
-  const context = await buildSunnyContext(tenant, clientId, supabase);
+  const context = await buildSunnyContext(tenant, clientId, clientPhone, supabase);
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
@@ -301,15 +297,21 @@ async function generateSunnySuggestion(
   if (!suggestion) return;
 
   // Store the suggestion on the most recent inbound message
-  const { data: latestMsg } = await supabase
+  let latestQuery = supabase
     .from('conversations')
     .select('id')
     .eq('tenant_id', tenant.id)
-    .eq('client_id', clientId)
     .eq('direction', 'inbound')
     .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
+    .limit(1);
+
+  if (clientId) {
+    latestQuery = latestQuery.eq('client_id', clientId);
+  } else {
+    latestQuery = latestQuery.is('client_id', null).eq('phone_number', clientPhone);
+  }
+
+  const { data: latestMsg } = await latestQuery.single();
 
   if (latestMsg) {
     await supabase

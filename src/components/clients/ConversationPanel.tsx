@@ -5,11 +5,21 @@ import { Button } from '@/components/ui';
 import type { ConversationMessage } from '@/types';
 
 interface ConversationPanelProps {
-  clientId: string;
+  clientId: string | null;  // null for phone-only conversations
   clientName: string;
   clientPhone: string;
   tenantId: string;
   onClose: () => void;
+  onClientLinked?: (newClientId: string) => void;
+}
+
+function formatPhoneDisplay(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  const last10 = digits.slice(-10);
+  if (last10.length === 10) {
+    return `(${last10.slice(0, 3)}) ${last10.slice(3, 6)}-${last10.slice(6)}`;
+  }
+  return phone;
 }
 
 export default function ConversationPanel({
@@ -18,6 +28,7 @@ export default function ConversationPanel({
   clientPhone,
   tenantId,
   onClose,
+  onClientLinked,
 }: ConversationPanelProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +41,16 @@ export default function ConversationPanel({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Add as Client state
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [addFirstName, setAddFirstName] = useState('');
+  const [addLastName, setAddLastName] = useState('');
+  const [addEmail, setAddEmail] = useState('');
+  const [addingClient, setAddingClient] = useState(false);
+
+  // Compute API id: client UUID or phone: prefix
+  const apiId = clientId || `phone:${encodeURIComponent(clientPhone)}`;
+
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
@@ -38,8 +59,8 @@ export default function ConversationPanel({
   const fetchMessages = useCallback(async (before?: string) => {
     try {
       const url = before
-        ? `/api/conversations/${clientId}?before=${before}&limit=50`
-        : `/api/conversations/${clientId}?limit=50`;
+        ? `/api/conversations/${apiId}?before=${before}&limit=50`
+        : `/api/conversations/${apiId}?limit=50`;
       const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json();
@@ -52,7 +73,7 @@ export default function ConversationPanel({
     } catch {
       // Silently fail polling
     }
-  }, [clientId]);
+  }, [apiId]);
 
   // Initial load + mark as read
   useEffect(() => {
@@ -61,10 +82,10 @@ export default function ConversationPanel({
       await fetchMessages();
       setLoading(false);
       // Mark conversation as read
-      fetch(`/api/conversations/${clientId}/read`, { method: 'POST' }).catch(() => {});
+      fetch(`/api/conversations/${apiId}/read`, { method: 'POST' }).catch(() => {});
     };
     init();
-  }, [clientId, fetchMessages]);
+  }, [apiId, fetchMessages]);
 
   // Auto-scroll when messages change
   useEffect(() => {
@@ -75,14 +96,14 @@ export default function ConversationPanel({
   useEffect(() => {
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/conversations/${clientId}?limit=50`);
+        const res = await fetch(`/api/conversations/${apiId}?limit=50`);
         if (!res.ok) return;
         const data = await res.json();
         const newMsgs = data.messages || [];
         setMessages(prev => {
           if (newMsgs.length !== prev.length || (newMsgs.length > 0 && newMsgs[newMsgs.length - 1]?.id !== prev[prev.length - 1]?.id)) {
             // Mark new inbound messages as read
-            fetch(`/api/conversations/${clientId}/read`, { method: 'POST' }).catch(() => {});
+            fetch(`/api/conversations/${apiId}/read`, { method: 'POST' }).catch(() => {});
             return newMsgs;
           }
           return prev;
@@ -95,7 +116,7 @@ export default function ConversationPanel({
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [clientId]);
+  }, [apiId]);
 
   // Load earlier
   const loadEarlier = async () => {
@@ -112,7 +133,7 @@ export default function ConversationPanel({
 
     setSending(true);
     try {
-      const res = await fetch(`/api/conversations/${clientId}/send`, {
+      const res = await fetch(`/api/conversations/${apiId}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: trimmed }),
@@ -141,6 +162,35 @@ export default function ConversationPanel({
     }
   };
 
+  // Add as Client handler
+  const handleAddClient = async () => {
+    if (!addFirstName.trim() || addingClient) return;
+    setAddingClient(true);
+    try {
+      const res = await fetch('/api/conversations/link-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: clientPhone,
+          firstName: addFirstName.trim(),
+          lastName: addLastName.trim() || undefined,
+          email: addEmail.trim() || undefined,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setShowAddClient(false);
+        if (onClientLinked) {
+          onClientLinked(data.clientId);
+        }
+      }
+    } catch (err) {
+      console.error('Add client failed:', err);
+    } finally {
+      setAddingClient(false);
+    }
+  };
+
   // Character count and segment info
   const charCount = input.length;
   const segments = charCount <= 160 ? 1 : Math.ceil(charCount / 153);
@@ -160,6 +210,8 @@ export default function ConversationPanel({
     return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
   };
 
+  const isPhoneOnly = clientId === null;
+
   return (
     <div className="flex flex-col h-full bg-[var(--surface-base)]">
       {/* Header */}
@@ -175,9 +227,75 @@ export default function ConversationPanel({
         </button>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-[var(--text-primary)] truncate">{clientName}</p>
-          <p className="text-sm text-[var(--text-tertiary)]">{clientPhone}</p>
+          <p className="text-sm text-[var(--text-tertiary)]">{isPhoneOnly ? formatPhoneDisplay(clientPhone) : clientPhone}</p>
         </div>
       </div>
+
+      {/* Unknown Number Bar — Add as Client prompt */}
+      {isPhoneOnly && (
+        <div className="px-4 py-2.5 bg-[var(--surface-raised)] border-b border-[var(--border-default)]">
+          {!showAddClient ? (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="1.5"/>
+                  <path d="M16 3.13a4 4 0 010 7.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+                <span>Unknown number</span>
+              </div>
+              <button
+                onClick={() => setShowAddClient(true)}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium text-[var(--accent-600)] hover:bg-[var(--accent-50)] transition-colors min-h-[36px]"
+              >
+                Add as Client
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={addFirstName}
+                  onChange={(e) => setAddFirstName(e.target.value)}
+                  placeholder="First name *"
+                  className="flex-1 h-9 px-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-500)]/30 focus:border-[var(--accent-500)]"
+                  autoFocus
+                />
+                <input
+                  type="text"
+                  value={addLastName}
+                  onChange={(e) => setAddLastName(e.target.value)}
+                  placeholder="Last name"
+                  className="flex-1 h-9 px-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-500)]/30 focus:border-[var(--accent-500)]"
+                />
+              </div>
+              <input
+                type="email"
+                value={addEmail}
+                onChange={(e) => setAddEmail(e.target.value)}
+                placeholder="Email (optional)"
+                className="w-full h-9 px-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-500)]/30 focus:border-[var(--accent-500)]"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => { setShowAddClient(false); setAddFirstName(''); setAddLastName(''); setAddEmail(''); }}
+                  className="px-3 py-1.5 rounded-lg text-sm text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors min-h-[36px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddClient}
+                  disabled={!addFirstName.trim() || addingClient}
+                  className="px-4 py-1.5 rounded-lg text-sm font-medium bg-[var(--accent-500)] text-white hover:bg-[var(--accent-600)] disabled:opacity-50 transition-colors min-h-[36px]"
+                >
+                  {addingClient ? 'Saving...' : 'Save Client'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Messages area */}
       <div ref={containerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2">

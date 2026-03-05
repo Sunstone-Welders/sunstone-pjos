@@ -3,6 +3,7 @@
 // ============================================================================
 // Returns messages for a specific client conversation.
 // Supports cursor-based pagination via ?before=<timestamp>&limit=50
+// Supports phone: prefix for phone-only conversations.
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -28,13 +29,21 @@ export async function GET(
   const limit = Math.min(parseInt(request.nextUrl.searchParams.get('limit') || '50'), 100);
   const before = request.nextUrl.searchParams.get('before');
 
+  const isPhoneOnly = clientId.startsWith('phone:');
+
   let query = supabase
     .from('conversations')
     .select('*')
     .eq('tenant_id', member.tenant_id)
-    .eq('client_id', clientId)
     .order('created_at', { ascending: false })
     .limit(limit);
+
+  if (isPhoneOnly) {
+    const phone = decodeURIComponent(clientId.slice(6));
+    query = query.is('client_id', null).eq('phone_number', phone);
+  } else {
+    query = query.eq('client_id', clientId);
+  }
 
   if (before) {
     query = query.lt('created_at', before);

@@ -76,10 +76,9 @@ const sidebarItems: NavItem[] = [
   { href: '/dashboard/events',    label: 'Events',     icon: EventsIcon },
   { href: '/dashboard/pos',       label: 'POS',        icon: POSIcon },
   { href: '/dashboard/clients',   label: 'Clients',    icon: ClientsIcon },
-  // CRM group
-  { href: '/dashboard/messages',    label: 'Messages',    icon: MessagesIcon,    group: 'CRM', requireCrm: true },
-  { href: '/dashboard/broadcasts',  label: 'Broadcasts',  icon: BroadcastsIcon,  group: 'CRM', requireCrm: true },
-  { href: '/dashboard/workflows',   label: 'Workflows',   icon: WorkflowsIcon,   group: 'CRM', requireCrm: true },
+  { href: '/dashboard/messages',  label: 'Messages',   icon: MessagesIcon },
+  // CRM group (single item — Broadcasts page has Workflows tab)
+  { href: '/dashboard/broadcasts', label: 'CRM', icon: BroadcastsIcon, group: 'CRM', requireCrm: true },
   // Other
   { href: '/dashboard/inventory',  label: 'Inventory',  icon: InventoryIcon },
   { href: '/dashboard/gift-cards', label: 'Gift Cards', icon: GiftCardIcon },
@@ -87,19 +86,18 @@ const sidebarItems: NavItem[] = [
   { href: '/dashboard/settings',   label: 'Settings',   icon: SettingsIcon, requirePermission: 'settings:manage' },
 ];
 
-/** Phone bottom tabs — 4 links + center POS */
+/** Phone bottom tabs — Home, POS (center), Messages, CRM, More */
 const phoneTabItems: NavItem[] = [
   { href: '/dashboard',          label: 'Home',     icon: HomeIcon },
-  { href: '/dashboard/events',   label: 'Events',   icon: EventsIcon },
   // POS is rendered separately as the raised center button
   { href: '/dashboard/messages', label: 'Messages', icon: MessagesIcon },
+  { href: '/dashboard/broadcasts', label: 'CRM', icon: BroadcastsIcon, requireCrm: true },
 ];
 
 /** More sheet items — items NOT on the phone tab bar */
 const moreSheetItems: NavItem[] = [
+  { href: '/dashboard/events',     label: 'Events',     icon: EventsIcon },
   { href: '/dashboard/clients',    label: 'Clients',    icon: ClientsIcon },
-  { href: '/dashboard/broadcasts', label: 'Broadcasts', icon: BroadcastsIcon, requireCrm: true },
-  { href: '/dashboard/workflows',  label: 'Workflows',  icon: WorkflowsIcon,  requireCrm: true },
   { href: '/dashboard/inventory',  label: 'Inventory',  icon: InventoryIcon },
   { href: '/dashboard/gift-cards', label: 'Gift Cards', icon: GiftCardIcon },
   { href: '/dashboard/reports',    label: 'Reports',    icon: ReportsIcon },
@@ -356,14 +354,12 @@ function PhoneTopBar({ onSunnyOpen }: { onSunnyOpen: () => void }) {
 function PhoneBottomNav({ onMoreOpen }: { onMoreOpen: () => void }) {
   const pathname = usePathname();
   const unreadCount = useUnreadCount();
+  const crmStatus = useCrmStatus();
 
   return (
     <nav className="md:hidden flex items-end justify-around bg-[var(--surface-base)] border-t border-border-default shrink-0 px-2 safe-area-bottom">
       {/* Home */}
       <PhoneTab href="/dashboard" label="Home" icon={HomeIcon} />
-
-      {/* Events */}
-      <PhoneTab href="/dashboard/events" label="Events" icon={EventsIcon} />
 
       {/* POS — raised center button */}
       <div className="flex flex-col items-center justify-end pb-1.5 -mt-3">
@@ -390,6 +386,9 @@ function PhoneBottomNav({ onMoreOpen }: { onMoreOpen: () => void }) {
       {/* Messages (with unread badge) */}
       <PhoneTab href="/dashboard/messages" label="Messages" icon={MessagesIcon} badge={unreadCount} />
 
+      {/* CRM (with lock if inactive) */}
+      <PhoneTab href={crmStatus.active ? '/dashboard/broadcasts' : '#'} label="CRM" icon={BroadcastsIcon} locked={!crmStatus.active} />
+
       {/* More */}
       <button
         onClick={onMoreOpen}
@@ -403,8 +402,23 @@ function PhoneBottomNav({ onMoreOpen }: { onMoreOpen: () => void }) {
   );
 }
 
-function PhoneTab({ href, label, icon: Icon, badge }: { href: string; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number }) {
+function PhoneTab({ href, label, icon: Icon, badge, locked }: { href: string; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number; locked?: boolean }) {
   const isActive = useIsActive(href);
+
+  if (locked) {
+    return (
+      <span className="flex flex-col items-center justify-center gap-0.5 py-2 min-h-[48px] min-w-[48px] text-[10px] font-medium text-text-tertiary opacity-50">
+        <span className="relative">
+          <Icon className="w-5 h-5" />
+          <svg className="absolute -top-0.5 -right-1 w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+          </svg>
+        </span>
+        <span>{label}</span>
+      </span>
+    );
+  }
+
   return (
     <Link
       href={href}
@@ -606,7 +620,7 @@ function TabletSidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-2 py-3 space-y-1 overflow-y-auto">
-        {mainItems.filter(i => ['Home', 'Events', 'POS', 'Clients'].includes(i.label)).map(item => renderTabletItem(item))}
+        {mainItems.filter(i => ['Home', 'Events', 'POS', 'Clients', 'Messages'].includes(i.label)).map(item => renderTabletItem(item))}
 
         {/* CRM section */}
         {crmItems.length > 0 && (
@@ -623,7 +637,7 @@ function TabletSidebar() {
           </div>
         )}
 
-        {mainItems.filter(i => !['Home', 'Events', 'POS', 'Clients'].includes(i.label)).map(item => renderTabletItem(item))}
+        {mainItems.filter(i => !['Home', 'Events', 'POS', 'Clients', 'Messages'].includes(i.label)).map(item => renderTabletItem(item))}
       </nav>
 
       {/* Footer */}
@@ -729,7 +743,7 @@ function DesktopSidebar() {
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {/* Main nav items (non-CRM) — up through Clients */}
-        {mainItems.filter(i => ['Home', 'Events', 'POS', 'Clients'].includes(i.label)).map(item => renderNavItem(item))}
+        {mainItems.filter(i => ['Home', 'Events', 'POS', 'Clients', 'Messages'].includes(i.label)).map(item => renderNavItem(item))}
 
         {/* CRM Group */}
         {crmItems.length > 0 && (
@@ -752,7 +766,7 @@ function DesktopSidebar() {
         )}
 
         {/* Remaining main nav items (Inventory, Gift Cards, Reports, Settings) */}
-        {mainItems.filter(i => !['Home', 'Events', 'POS', 'Clients'].includes(i.label)).map(item => renderNavItem(item))}
+        {mainItems.filter(i => !['Home', 'Events', 'POS', 'Clients', 'Messages'].includes(i.label)).map(item => renderNavItem(item))}
       </nav>
 
       {/* Footer */}

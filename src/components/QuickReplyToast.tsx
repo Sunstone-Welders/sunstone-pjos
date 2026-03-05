@@ -5,8 +5,9 @@ import { toast } from 'sonner';
 
 interface InboundMessage {
   id: string;
-  client_id: string;
+  client_id: string | null;
   client_name: string;
+  phone_number?: string;
   body: string;
   created_at: string;
 }
@@ -61,12 +62,17 @@ function QuickReplyCard({ msg, onDismiss }: { msg: InboundMessage; onDismiss: ()
   const [sent, setSent] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Determine the API endpoint: client-based or phone-based
+  const sendEndpoint = msg.client_id
+    ? `/api/conversations/${msg.client_id}/send`
+    : `/api/conversations/phone:${encodeURIComponent(msg.phone_number || '')}/send`;
+
   const handleSend = useCallback(async () => {
     const trimmed = reply.trim();
     if (!trimmed || sending) return;
     setSending(true);
     try {
-      const res = await fetch(`/api/conversations/${msg.client_id}/send`, {
+      const res = await fetch(sendEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: trimmed }),
@@ -80,7 +86,7 @@ function QuickReplyCard({ msg, onDismiss }: { msg: InboundMessage; onDismiss: ()
     } finally {
       setSending(false);
     }
-  }, [reply, sending, msg.client_id, onDismiss]);
+  }, [reply, sending, sendEndpoint, onDismiss]);
 
   if (sent) {
     return (
@@ -90,18 +96,29 @@ function QuickReplyCard({ msg, onDismiss }: { msg: InboundMessage; onDismiss: ()
     );
   }
 
+  const displayName = msg.client_name || 'Unknown';
+  const initial = msg.client_id
+    ? (msg.client_name?.charAt(0) || '?')
+    : '#';
+
   return (
     <div className="bg-[var(--surface-raised)] border border-[var(--border-default)] rounded-xl shadow-lg w-80 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 pt-3 pb-1.5">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-full bg-[var(--accent-100)] flex items-center justify-center shrink-0">
-            <span className="text-xs font-bold text-[var(--accent-700)]">
-              {msg.client_name?.charAt(0) || '?'}
-            </span>
+          <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+            msg.client_id ? 'bg-[var(--accent-100)]' : 'bg-[var(--surface-base)]'
+          }`}>
+            {msg.client_id ? (
+              <span className="text-xs font-bold text-[var(--accent-700)]">{initial}</span>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" stroke="var(--text-tertiary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
           </div>
           <span className="text-sm font-semibold text-[var(--text-primary)] truncate">
-            {msg.client_name || 'Unknown'}
+            {displayName}
           </span>
         </div>
         <button onClick={onDismiss} className="p-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">

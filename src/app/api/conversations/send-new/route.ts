@@ -1,22 +1,19 @@
 // ============================================================================
-// Send Conversation Message — POST /api/conversations/:clientId/send
+// Send New Message — POST /api/conversations/send-new
 // ============================================================================
-// Supports phone: prefix for phone-only conversations.
+// Sends a message to a phone number, optionally linked to a client.
+// Used by the New Message compose flow in the Messages page.
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
-import { sendSMS } from '@/lib/twilio';
+import { sendSMS, normalizePhone } from '@/lib/twilio';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logSmsCost } from '@/lib/cost-tracker';
 
-const RATE_LIMIT = { prefix: 'conv-send', limit: 30, windowSeconds: 60 };
+const RATE_LIMIT = { prefix: 'conv-send-new', limit: 20, windowSeconds: 60 };
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ clientId: string }> }
-) {
-  const { clientId } = await params;
+export async function POST(request: NextRequest) {
   const supabase = await createServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -35,86 +32,73 @@ export async function POST(
   if (!member) return NextResponse.json({ error: 'No tenant' }, { status: 403 });
   const tenantId = member.tenant_id;
 
-  const { message } = await request.json();
-  const trimmed = message?.trim();
+  const body = await request.json();
+  const { phone, message, clientId } = body;
 
-  if (!trimmed) {
-    return NextResponse.json({ error: 'Message is required' }, { status: 400 });
+  if (!phone || !message?.trim()) {
+    return NextResponse.json({ error: 'Phone and message are required' }, { status: 400 });
   }
+
+  const trimmed = message.trim();
   if (trimmed.length > 1600) {
     return NextResponse.json({ error: 'Message too long (max 1600 characters)' }, { status: 400 });
   }
 
-  const isPhoneOnly = clientId.startsWith('phone:');
-  let phone: string;
-  let resolvedClientId: string | null = null;
+  const normalizedPhone = normalizePhone(phone);
 
-  if (isPhoneOnly) {
-    phone = decodeURIComponent(clientId.slice(6));
-  } else {
-    // Fetch client and verify tenant ownership
+  // If clientId provided, verify tenant ownership
+  let resolvedClientId: string | null = clientId || null;
+  if (resolvedClientId) {
     const { data: client } = await supabase
       .from('clients')
-      .select('phone')
-      .eq('id', clientId)
+      .select('id')
+      .eq('id', resolvedClientId)
       .eq('tenant_id', tenantId)
       .single();
 
-    if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
-    if (!client.phone) return NextResponse.json({ error: 'Client has no phone number' }, { status: 400 });
-
-    phone = client.phone;
-    resolvedClientId = clientId;
+    if (!client) {
+      resolvedClientId = null; // Client not found, send as phone-only
+    }
   }
 
   try {
-    const sid = await sendSMS({ to: phone, body: trimmed, tenantId });
+    const sid = await sendSMS({ to: normalizedPhone, body: trimmed, tenantId });
 
-    // Insert into conversations
     const { data: msg, error: insertErr } = await supabase
       .from('conversations')
       .insert({
         tenant_id: tenantId,
         client_id: resolvedClientId,
-        phone_number: phone,
+        phone_number: normalizedPhone,
         direction: 'outbound',
         body: trimmed,
         twilio_sid: sid,
         status: sid ? 'delivered' : 'failed',
         read: true,
       })
-      .select('*')
+      .select('id')
       .single();
 
     if (insertErr) {
-      console.error('[Conversation Send] Insert error:', insertErr);
+      console.error('[SendNew] Insert error:', insertErr);
     }
 
-    // Also log to message_log for activity timeline (only if client-linked)
+    // Update client's last_message_at if linked
     if (resolvedClientId) {
-      supabase.from('message_log').insert({
-        tenant_id: tenantId,
-        client_id: resolvedClientId,
-        direction: 'outbound',
-        channel: 'sms',
-        recipient_phone: phone,
-        body: trimmed,
-        source: 'conversation',
-        status: 'sent',
-      }).then(null, () => {});
-
-      // Update client's last_message_at
       supabase.from('clients').update({
         last_message_at: new Date().toISOString(),
       }).eq('id', resolvedClientId).then(null, () => {});
     }
 
-    // Log cost
     logSmsCost({ tenantId, operation: 'sms_conversation' });
 
-    return NextResponse.json({ success: true, message: msg });
+    return NextResponse.json({
+      success: true,
+      conversationId: msg?.id || null,
+      phone: normalizedPhone,
+    });
   } catch (err: any) {
-    console.error('[Conversation Send] Error:', err);
+    console.error('[SendNew] Error:', err);
     return NextResponse.json({ error: 'Failed to send message' }, { status: 500 });
   }
 }
