@@ -723,7 +723,7 @@ export default function LandingPageClient() {
     <div style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", color: C.text, background: C.bg }}>
       {/* ─── GLOBAL STYLES ─── */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400;1,9..144,600&family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=Inter:wght@400;500;600;700&display=swap');
         html { scroll-behavior: smooth; }
         ::selection { background: ${C.wineBg}; color: ${C.wine}; }
         @keyframes sunnySlideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
@@ -737,7 +737,7 @@ export default function LandingPageClient() {
         .hero-anim-4 { animation-delay: 0.3s; }
         .hero-anim-5 { animation-delay: 0.4s; }
         .landing-container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
-        .serif { font-family: 'Fraunces', Georgia, serif; }
+        .serif { font-family: 'Playfair Display', Georgia, serif; }
         @media (max-width: 900px) {
           .grid-2 { grid-template-columns: 1fr !important; }
           .grid-3 { grid-template-columns: 1fr !important; max-width: 420px !important; margin-left: auto !important; margin-right: auto !important; }
