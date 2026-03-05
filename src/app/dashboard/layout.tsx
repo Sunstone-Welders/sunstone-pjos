@@ -17,7 +17,9 @@ import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import type { Permission } from '@/lib/permissions';
 import MentorChat from '@/components/MentorChat';
+import QuickReplyToast from '@/components/QuickReplyToast';
 import { getSubscriptionTier, isTrialActive } from '@/lib/subscription';
+import { getCrmStatus } from '@/lib/crm-status';
 
 // ============================================================================
 // Unread message count hook (polls every 30s)
@@ -64,36 +66,44 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   requirePermission?: Permission;
+  group?: string;
+  requireCrm?: boolean;
 }
 
-/** All 7 sidebar nav items (visible in sidebar + tablet sidebar) */
+/** All sidebar nav items (visible in sidebar + tablet sidebar) */
 const sidebarItems: NavItem[] = [
-  { href: '/dashboard',           label: 'Home',      icon: HomeIcon },
-  { href: '/dashboard/events',    label: 'Events',    icon: EventsIcon },
-  { href: '/dashboard/pos',       label: 'POS',       icon: POSIcon },
-  { href: '/dashboard/clients',   label: 'Clients',   icon: ClientsIcon },
-  { href: '/dashboard/messages',  label: 'Messages',  icon: MessagesIcon },
-  { href: '/dashboard/inventory', label: 'Inventory',  icon: InventoryIcon },
+  { href: '/dashboard',           label: 'Home',       icon: HomeIcon },
+  { href: '/dashboard/events',    label: 'Events',     icon: EventsIcon },
+  { href: '/dashboard/pos',       label: 'POS',        icon: POSIcon },
+  { href: '/dashboard/clients',   label: 'Clients',    icon: ClientsIcon },
+  // CRM group
+  { href: '/dashboard/messages',    label: 'Messages',    icon: MessagesIcon,    group: 'CRM', requireCrm: true },
+  { href: '/dashboard/broadcasts',  label: 'Broadcasts',  icon: BroadcastsIcon,  group: 'CRM', requireCrm: true },
+  { href: '/dashboard/workflows',   label: 'Workflows',   icon: WorkflowsIcon,   group: 'CRM', requireCrm: true },
+  // Other
+  { href: '/dashboard/inventory',  label: 'Inventory',  icon: InventoryIcon },
   { href: '/dashboard/gift-cards', label: 'Gift Cards', icon: GiftCardIcon },
-  { href: '/dashboard/reports',   label: 'Reports',   icon: ReportsIcon },
-  { href: '/dashboard/settings',  label: 'Settings',  icon: SettingsIcon, requirePermission: 'settings:manage' },
+  { href: '/dashboard/reports',    label: 'Reports',    icon: ReportsIcon },
+  { href: '/dashboard/settings',   label: 'Settings',   icon: SettingsIcon, requirePermission: 'settings:manage' },
 ];
 
 /** Phone bottom tabs — 4 links + center POS */
 const phoneTabItems: NavItem[] = [
-  { href: '/dashboard',        label: 'Home',    icon: HomeIcon },
-  { href: '/dashboard/events', label: 'Events',  icon: EventsIcon },
+  { href: '/dashboard',          label: 'Home',     icon: HomeIcon },
+  { href: '/dashboard/events',   label: 'Events',   icon: EventsIcon },
   // POS is rendered separately as the raised center button
-  { href: '/dashboard/clients', label: 'Clients', icon: ClientsIcon },
+  { href: '/dashboard/messages', label: 'Messages', icon: MessagesIcon },
 ];
 
 /** More sheet items — items NOT on the phone tab bar */
 const moreSheetItems: NavItem[] = [
-  { href: '/dashboard/messages',  label: 'Messages',  icon: MessagesIcon },
-  { href: '/dashboard/inventory', label: 'Inventory', icon: InventoryIcon },
+  { href: '/dashboard/clients',    label: 'Clients',    icon: ClientsIcon },
+  { href: '/dashboard/broadcasts', label: 'Broadcasts', icon: BroadcastsIcon, requireCrm: true },
+  { href: '/dashboard/workflows',  label: 'Workflows',  icon: WorkflowsIcon,  requireCrm: true },
+  { href: '/dashboard/inventory',  label: 'Inventory',  icon: InventoryIcon },
   { href: '/dashboard/gift-cards', label: 'Gift Cards', icon: GiftCardIcon },
-  { href: '/dashboard/reports',   label: 'Reports',   icon: ReportsIcon },
-  { href: '/dashboard/settings',  label: 'Settings',  icon: SettingsIcon, requirePermission: 'settings:manage' },
+  { href: '/dashboard/reports',    label: 'Reports',    icon: ReportsIcon },
+  { href: '/dashboard/settings',   label: 'Settings',   icon: SettingsIcon, requirePermission: 'settings:manage' },
 ];
 
 // ============================================================================
@@ -147,6 +157,13 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
       router.replace('/onboarding');
     }
   }, [tenantLoading, tenant, isOwner, router]);
+
+  // Lazy CRM trial check (fire-and-forget on dashboard load)
+  useEffect(() => {
+    if (!tenantLoading && tenant) {
+      fetch('/api/crm/check-trial', { method: 'POST' }).catch(() => {});
+    }
+  }, [tenantLoading, tenant]);
 
   // Fetch spotlight data for mini card (once on mount)
   useEffect(() => {
@@ -218,6 +235,9 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
 
       {/* Mentor Chat — controlled externally */}
       <MentorChat isOpen={isSunnyOpen} onClose={closeSunny} />
+
+      {/* Quick Reply Toast — polls for new inbound messages */}
+      <QuickReplyToast />
     </div>
   );
 }
@@ -232,6 +252,11 @@ function useFilteredItems(items: NavItem[]) {
     if (item.requirePermission && !can(item.requirePermission)) return false;
     return true;
   });
+}
+
+function useCrmStatus() {
+  const { tenant } = useTenant();
+  return getCrmStatus(tenant);
 }
 
 function useIsPlatformAdmin() {
@@ -330,6 +355,7 @@ function PhoneTopBar({ onSunnyOpen }: { onSunnyOpen: () => void }) {
 
 function PhoneBottomNav({ onMoreOpen }: { onMoreOpen: () => void }) {
   const pathname = usePathname();
+  const unreadCount = useUnreadCount();
 
   return (
     <nav className="md:hidden flex items-end justify-around bg-[var(--surface-base)] border-t border-border-default shrink-0 px-2 safe-area-bottom">
@@ -361,8 +387,8 @@ function PhoneBottomNav({ onMoreOpen }: { onMoreOpen: () => void }) {
         </span>
       </div>
 
-      {/* Clients */}
-      <PhoneTab href="/dashboard/clients" label="Clients" icon={ClientsIcon} />
+      {/* Messages (with unread badge) */}
+      <PhoneTab href="/dashboard/messages" label="Messages" icon={MessagesIcon} badge={unreadCount} />
 
       {/* More */}
       <button
@@ -377,7 +403,7 @@ function PhoneBottomNav({ onMoreOpen }: { onMoreOpen: () => void }) {
   );
 }
 
-function PhoneTab({ href, label, icon: Icon }: { href: string; label: string; icon: React.ComponentType<{ className?: string }> }) {
+function PhoneTab({ href, label, icon: Icon, badge }: { href: string; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number }) {
   const isActive = useIsActive(href);
   return (
     <Link
@@ -387,7 +413,15 @@ function PhoneTab({ href, label, icon: Icon }: { href: string; label: string; ic
         isActive ? 'text-[var(--accent-600)]' : 'text-text-tertiary'
       )}
     >
-      <Icon className="w-5 h-5" />
+      <span className="relative">
+        <Icon className="w-5 h-5" />
+        {badge != null && badge > 0 && (
+          <span className="absolute -top-1 -right-1.5 flex items-center justify-center">
+            <span className="absolute inline-flex h-3 w-3 rounded-full bg-red-400 opacity-75 animate-ping" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500" />
+          </span>
+        )}
+      </span>
       <span>{label}</span>
     </Link>
   );
@@ -514,6 +548,43 @@ function TabletSidebar() {
   const handleLogout = useLogout();
   const visibleItems = useFilteredItems(sidebarItems);
   const unreadCount = useUnreadCount();
+  const crmStatus = useCrmStatus();
+
+  const mainItems = visibleItems.filter(i => !i.group);
+  const crmItems = visibleItems.filter(i => i.group === 'CRM');
+
+  const renderTabletItem = (item: NavItem, locked = false) => {
+    const isActive = item.href === '/dashboard'
+      ? pathname === '/dashboard'
+      : pathname.startsWith(item.href);
+    return (
+      <Link
+        key={item.href}
+        href={locked ? '#' : item.href}
+        onClick={locked ? (e: React.MouseEvent) => e.preventDefault() : undefined}
+        title={expanded ? undefined : item.label}
+        className={cn(
+          'flex items-center gap-3 rounded-lg text-sm font-medium transition-colors min-h-[44px]',
+          expanded ? 'px-3' : 'justify-center px-0',
+          locked
+            ? 'text-text-tertiary opacity-50 cursor-not-allowed'
+            : isActive
+              ? 'bg-[var(--nav-active-bg)] text-[var(--nav-active-text)]'
+              : 'text-text-secondary hover:text-text-primary hover:bg-[var(--surface-raised)]'
+        )}
+      >
+        <span className="relative shrink-0">
+          <item.icon className="w-5 h-5" />
+          {item.label === 'Messages' && !locked && unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1.5 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </span>
+        {expanded && <span className="truncate">{item.label}</span>}
+      </Link>
+    );
+  };
 
   return (
     <aside
@@ -535,35 +606,24 @@ function TabletSidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-2 py-3 space-y-1 overflow-y-auto">
-        {visibleItems.map((item) => {
-          const isActive = item.href === '/dashboard'
-            ? pathname === '/dashboard'
-            : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              title={expanded ? undefined : item.label}
-              className={cn(
-                'flex items-center gap-3 rounded-lg text-sm font-medium transition-colors min-h-[44px]',
-                expanded ? 'px-3' : 'justify-center px-0',
-                isActive
-                  ? 'bg-[var(--nav-active-bg)] text-[var(--nav-active-text)]'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-[var(--surface-raised)]'
-              )}
-            >
-              <span className="relative shrink-0">
-                <item.icon className="w-5 h-5" />
-                {item.label === 'Messages' && unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1.5 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
+        {mainItems.filter(i => ['Home', 'Events', 'POS', 'Clients'].includes(i.label)).map(item => renderTabletItem(item))}
+
+        {/* CRM section */}
+        {crmItems.length > 0 && (
+          <div className="pt-2">
+            {expanded && (
+              <div className="flex items-center justify-between px-3 mb-1">
+                <span className="text-[10px] uppercase tracking-wider text-text-tertiary font-semibold">CRM</span>
+                {crmStatus.reason === 'trial' && crmStatus.daysLeft != null && crmStatus.daysLeft <= 14 && (
+                  <span className="text-[10px] font-medium text-warning-600">{crmStatus.daysLeft}d</span>
                 )}
-              </span>
-              {expanded && <span className="truncate">{item.label}</span>}
-            </Link>
-          );
-        })}
+              </div>
+            )}
+            {crmItems.map(item => renderTabletItem(item, !crmStatus.active))}
+          </div>
+        )}
+
+        {mainItems.filter(i => !['Home', 'Events', 'POS', 'Clients'].includes(i.label)).map(item => renderTabletItem(item))}
       </nav>
 
       {/* Footer */}
@@ -611,6 +671,47 @@ function DesktopSidebar() {
   const handleLogout = useLogout();
   const visibleItems = useFilteredItems(sidebarItems);
   const unreadCount = useUnreadCount();
+  const crmStatus = useCrmStatus();
+
+  // Split items into non-CRM and CRM groups
+  const mainItems = visibleItems.filter(i => !i.group);
+  const crmItems = visibleItems.filter(i => i.group === 'CRM');
+
+  const renderNavItem = (item: NavItem, locked = false) => {
+    const isActive = item.href === '/dashboard'
+      ? pathname === '/dashboard'
+      : pathname.startsWith(item.href);
+    return (
+      <Link
+        key={item.href}
+        href={locked ? '#' : item.href}
+        onClick={locked ? (e: React.MouseEvent) => e.preventDefault() : undefined}
+        className={cn(
+          'flex items-center gap-3 px-3 min-h-[48px] rounded-lg text-sm font-medium transition-colors',
+          locked
+            ? 'text-text-tertiary opacity-50 cursor-not-allowed'
+            : isActive
+              ? 'bg-[var(--nav-active-bg)] text-[var(--nav-active-text)] border-l-3 border-[var(--nav-active-border)]'
+              : 'text-text-secondary hover:text-text-primary hover:bg-[var(--surface-raised)]'
+        )}
+      >
+        <span className="relative shrink-0">
+          <item.icon className="w-5 h-5" />
+          {item.label === 'Messages' && !locked && unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1.5 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </span>
+        {item.label}
+        {locked && (
+          <svg className="w-3.5 h-3.5 ml-auto shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+          </svg>
+        )}
+      </Link>
+    );
+  };
 
   return (
     <aside className="hidden lg:flex w-64 bg-[var(--surface-sidebar)] border-r border-border-default flex-col shrink-0">
@@ -627,33 +728,31 @@ function DesktopSidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {visibleItems.map((item) => {
-          const isActive = item.href === '/dashboard'
-            ? pathname === '/dashboard'
-            : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 px-3 min-h-[48px] rounded-lg text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-[var(--nav-active-bg)] text-[var(--nav-active-text)] border-l-3 border-[var(--nav-active-border)]'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-[var(--surface-raised)]'
+        {/* Main nav items (non-CRM) — up through Clients */}
+        {mainItems.filter(i => ['Home', 'Events', 'POS', 'Clients'].includes(i.label)).map(item => renderNavItem(item))}
+
+        {/* CRM Group */}
+        {crmItems.length > 0 && (
+          <div className="pt-3">
+            <div className="flex items-center justify-between px-3 mb-1">
+              <span className="text-[10px] uppercase tracking-wider text-text-tertiary font-semibold">CRM</span>
+              {crmStatus.reason === 'trial' && crmStatus.daysLeft != null && crmStatus.daysLeft <= 14 && (
+                <span className="text-[10px] font-medium text-warning-600">
+                  {crmStatus.daysLeft}d left
+                </span>
               )}
-            >
-              <span className="relative shrink-0">
-                <item.icon className="w-5 h-5" />
-                {item.label === 'Messages' && unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1.5 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
-                )}
-              </span>
-              {item.label}
-            </Link>
-          );
-        })}
+              {!crmStatus.active && (
+                <Link href="/dashboard/settings?tab=subscription" className="text-[10px] font-medium text-[var(--accent-600)] hover:underline">
+                  Activate
+                </Link>
+              )}
+            </div>
+            {crmItems.map(item => renderNavItem(item, !crmStatus.active))}
+          </div>
+        )}
+
+        {/* Remaining main nav items (Inventory, Gift Cards, Reports, Settings) */}
+        {mainItems.filter(i => !['Home', 'Events', 'POS', 'Clients'].includes(i.label)).map(item => renderNavItem(item))}
       </nav>
 
       {/* Footer */}
@@ -944,6 +1043,14 @@ function BroadcastsIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 010 3.46" />
+    </svg>
+  );
+}
+
+function WorkflowsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
     </svg>
   );
 }

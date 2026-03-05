@@ -392,7 +392,7 @@ const SUBSECTIONS: Subsection[] = [
     id: 'app-messaging',
     label: 'Messages & Dedicated Phone Number',
     data: PJOS_PLATFORM_GUIDE.subscriptionAndBilling.crmAddOn,
-    keywords: ['message', 'messages', 'text', 'sms', 'reply', 'conversation', 'dedicated number', 'phone number', 'business number', 'two way', 'inbox', 'unread', 'text back', 'reply to client', 'messaging', 'chat', 'two-way sms', 'call', 'calls', 'calling', 'voicemail', 'forward', 'ring', 'incoming call', 'phone call', 'mute calls', 'greeting', 'custom greeting'],
+    keywords: ['message', 'messages', 'text', 'sms', 'reply', 'conversation', 'dedicated number', 'phone number', 'business number', 'two way', 'inbox', 'unread', 'text back', 'reply to client', 'messaging', 'chat', 'two-way sms', 'call', 'calls', 'calling', 'voicemail', 'forward', 'ring', 'incoming call', 'phone call', 'mute calls', 'greeting', 'custom greeting', 'broadcast', 'broadcasts', 'workflow', 'workflows', 'automation', 'automate', 'sequence', 'aftercare', 'auto reply', 'auto-reply', 'sunny text', 'ai text', 'crm trial', 'crm add-on', 'crm addon'],
     priority: 2,
   },
   {

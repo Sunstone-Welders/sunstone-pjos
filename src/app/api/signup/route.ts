@@ -58,6 +58,11 @@ export async function POST(request: NextRequest) {
         subscription_status: 'trialing',
         trial_ends_at: trialEndsAt.toISOString(),
         platform_fee_percent: 1.5,
+        // CRM: enabled during trial
+        crm_enabled: true,
+        crm_activated_at: new Date().toISOString(),
+        crm_trial_start: new Date().toISOString(),
+        crm_trial_end: trialEndsAt.toISOString(),
         // Onboarding
         onboarding_completed: false,
         onboarding_step: 0,

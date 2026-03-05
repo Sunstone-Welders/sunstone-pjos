@@ -134,6 +134,7 @@ function EventModePageInner() {
   const [showCart, setShowCart] = useState(false);
   const [showGiftCardModal, setShowGiftCardModal] = useState(false);
   const [giftCardData, setGiftCardData] = useState<GiftCardData | null>(null);
+  const [autoReplyOn, setAutoReplyOn] = useState(false);
 
   // Receipt / confirmation
   const [completedSale, setCompletedSale] = useState<CompletedSaleData | null>(null);
@@ -170,6 +171,21 @@ function EventModePageInner() {
   useEffect(() => {
     fetch('/api/receipts/config').then((r) => r.json()).then((cfg) => setReceiptConfig(cfg)).catch(() => {});
   }, []);
+
+  // Init auto-reply from tenant setting
+  useEffect(() => {
+    if (tenant?.auto_reply_enabled) setAutoReplyOn(true);
+  }, [tenant]);
+
+  const toggleAutoReply = async () => {
+    const next = !autoReplyOn;
+    setAutoReplyOn(next);
+    try {
+      await supabase.from('tenants').update({ auto_reply_enabled: next }).eq('id', tenant!.id);
+    } catch {
+      setAutoReplyOn(!next); // revert on failure
+    }
+  };
 
   // ── Load event + data ──
 
@@ -680,6 +696,23 @@ function EventModePageInner() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm14 3h.01M17 17h.01M14 14h3v3h-3v-3zm0 4h.01M17 20h.01M20 14h.01M20 17h.01M20 20h.01" />
             </svg>
           </button>
+          {/* Auto-reply toggle */}
+          {tenant?.dedicated_phone_number && (
+            <button
+              onClick={toggleAutoReply}
+              className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-colors ${
+                autoReplyOn
+                  ? 'border-[var(--accent-500)] bg-[var(--accent-50)] text-[var(--accent-600)]'
+                  : 'border-[var(--border-default)] bg-[var(--surface-raised)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
+              }`}
+              aria-label={autoReplyOn ? 'Auto-reply on' : 'Auto-reply off'}
+              title={autoReplyOn ? 'Auto-reply ON — clients get an instant response' : 'Auto-reply OFF — tap to enable'}
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+              </svg>
+            </button>
+          )}
           <div className="hidden sm:flex items-center gap-5 text-sm">
             <div className="text-center">
               <div className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-[0.05em] font-semibold">Sales</div>

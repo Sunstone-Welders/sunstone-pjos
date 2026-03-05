@@ -77,6 +77,13 @@ export interface Tenant {
   dedicated_phone_sid: string | null;
   crm_activated_at: string | null;
   crm_deactivated_at: string | null;
+  crm_trial_start: string | null;
+  crm_trial_end: string | null;
+  crm_subscription_id: string | null;
+  // Auto-reply + Sunny text
+  auto_reply_enabled: boolean;
+  auto_reply_message: string | null;
+  sunny_text_mode: 'off' | 'suggest' | 'auto';
   // Receipts
   auto_email_receipt: boolean;
   auto_sms_receipt: boolean;
@@ -761,5 +768,6 @@ export interface ConversationMessage {
   twilio_sid: string | null;
   status: 'delivered' | 'failed' | 'pending';
   read: boolean;
+  ai_suggested_response: string | null;
   created_at: string;
 }

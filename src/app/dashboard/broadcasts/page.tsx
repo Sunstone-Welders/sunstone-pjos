@@ -99,7 +99,7 @@ function BroadcastsContent() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-[var(--text-primary)]">CRM</h1>
-          <p className="text-[var(--text-tertiary)] mt-1">Manage campaigns, templates, and automated workflows</p>
+          <p className="text-[var(--text-tertiary)] mt-1">Send targeted broadcasts, manage templates, and set up automations</p>
         </div>
         <UpgradePrompt
           feature="CRM"
@@ -118,7 +118,7 @@ function BroadcastsContent() {
         <div className="flex gap-1 mt-4 bg-[var(--surface-subtle)] rounded-xl p-1 max-w-xl overflow-x-auto">
           {([
             { key: 'activity' as Tab, label: 'Activity' },
-            { key: 'new' as Tab, label: 'Campaigns' },
+            { key: 'new' as Tab, label: 'Broadcasts' },
             { key: 'templates' as Tab, label: 'Templates' },
             { key: 'workflows' as Tab, label: 'Workflows' },
           ]).map(({ key, label }) => (
@@ -194,7 +194,7 @@ function ActivityTab({ tenantId }: { tenantId: string }) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 010 3.46" />
               </svg>
             </div>
-            <p className="text-[var(--text-secondary)] font-medium mb-1">No campaigns yet</p>
+            <p className="text-[var(--text-secondary)] font-medium mb-1">No broadcasts yet</p>
             <p className="text-[var(--text-tertiary)] text-sm">Send your first message blast to clients</p>
           </div>
         </CardContent>
@@ -368,7 +368,7 @@ function NewBroadcastTab({
     setSending(false);
     if (res.ok) {
       const result = await res.json();
-      toast.success(`Campaign sent! ${result.sent} delivered, ${result.skipped} skipped, ${result.failed} failed`);
+      toast.success(`Broadcast sent! ${result.sent} delivered, ${result.skipped} skipped, ${result.failed} failed`);
       onCreated();
     } else {
       const err = await res.json();
@@ -391,7 +391,7 @@ function NewBroadcastTab({
         {/* Step indicator */}
         <div className="flex items-center gap-3 mb-6">
           <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-            {step === 'setup' ? 'New Campaign' : step === 'preview' ? 'Preview & Confirm' : 'Sending...'}
+            {step === 'setup' ? 'New Broadcast' : step === 'preview' ? 'Preview & Confirm' : 'Sending...'}
           </h2>
           <div className="flex items-center gap-1 ml-auto">
             {(['setup', 'preview', 'confirm'] as Step[]).map((s) => (
@@ -402,7 +402,7 @@ function NewBroadcastTab({
 
         {step === 'setup' && (
           <div className="space-y-4">
-            <Input label="Campaign Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. January Promo Blast" />
+            <Input label="Broadcast Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. January Promo Blast" />
 
             <div>
               <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Channel</label>
@@ -583,7 +583,7 @@ function NewBroadcastTab({
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
                   </svg>
                 </div>
-                <p className="text-[var(--text-primary)] font-medium">Sending campaign...</p>
+                <p className="text-[var(--text-primary)] font-medium">Sending broadcast...</p>
                 <p className="text-[var(--text-tertiary)] text-sm mt-1">This may take a moment</p>
               </>
             ) : (
@@ -593,7 +593,7 @@ function NewBroadcastTab({
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                   </svg>
                 </div>
-                <p className="text-[var(--text-primary)] font-medium">Campaign complete!</p>
+                <p className="text-[var(--text-primary)] font-medium">Broadcast complete!</p>
                 <div className="mt-4">
                   <Button variant="primary" onClick={onCreated}>Done</Button>
                 </div>

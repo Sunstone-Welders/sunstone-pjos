@@ -123,6 +123,29 @@ export async function POST(request: NextRequest) {
           break;
         }
 
+        // ── CRM add-on checkout completed ──
+        if (session.mode === 'subscription' && session.metadata?.type === 'crm_addon') {
+          const crmTenantId = session.metadata?.tenant_id;
+          const crmSubId = session.subscription as string;
+          const crmCustomerId = session.customer as string;
+
+          if (crmTenantId) {
+            await serviceRole
+              .from('tenants')
+              .update({
+                crm_enabled: true,
+                crm_subscription_id: crmSubId,
+                crm_activated_at: new Date().toISOString(),
+                crm_deactivated_at: null,
+                stripe_customer_id: crmCustomerId,
+              })
+              .eq('id', crmTenantId);
+
+            console.log(`[Webhook] CRM add-on activated — tenant ${crmTenantId}`);
+          }
+          break;
+        }
+
         // ── Subscription checkout completed ──
         if (session.mode !== 'subscription') break;
 
@@ -245,7 +268,7 @@ export async function POST(request: NextRequest) {
       }
 
       // ================================================================
-      // Subscription deleted — downgrade to starter
+      // Subscription deleted — downgrade to starter or deactivate CRM
       // ================================================================
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
@@ -253,7 +276,7 @@ export async function POST(request: NextRequest) {
 
         const { data: tenant } = await serviceRole
           .from('tenants')
-          .select('id')
+          .select('id, crm_subscription_id, stripe_subscription_id')
           .eq('stripe_customer_id', customerId)
           .single();
 
@@ -262,6 +285,22 @@ export async function POST(request: NextRequest) {
           break;
         }
 
+        // Check if this is the CRM add-on subscription being canceled
+        if (tenant.crm_subscription_id === subscription.id) {
+          await serviceRole
+            .from('tenants')
+            .update({
+              crm_enabled: false,
+              crm_subscription_id: null,
+              crm_deactivated_at: new Date().toISOString(),
+            })
+            .eq('id', tenant.id);
+
+          console.log(`[Webhook] CRM subscription.deleted — tenant ${tenant.id} → CRM deactivated`);
+          break;
+        }
+
+        // Main platform subscription canceled
         await serviceRole
           .from('tenants')
           .update({

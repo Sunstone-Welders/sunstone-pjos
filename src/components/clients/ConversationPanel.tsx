@@ -209,6 +209,8 @@ export default function ConversationPanel({
             const showTimestamp =
               i === 0 ||
               new Date(msg.created_at).getTime() - new Date(messages[i - 1].created_at).getTime() > 300000;
+            const isLast = i === messages.length - 1;
+            const hasSuggestion = !isOutbound && isLast && msg.ai_suggested_response;
 
             return (
               <div key={msg.id}>
@@ -228,6 +230,21 @@ export default function ConversationPanel({
                     {msg.body}
                   </div>
                 </div>
+                {/* Sunny AI suggestion */}
+                {hasSuggestion && (
+                  <div className="flex justify-end mt-2">
+                    <button
+                      onClick={() => setInput(msg.ai_suggested_response!)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-[var(--accent-300)] bg-[var(--accent-50)] text-[var(--accent-700)] text-xs hover:bg-[var(--accent-100)] transition-colors max-w-[80%] text-left"
+                      title="Use Sunny's suggestion"
+                    >
+                      <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2L14.09 8.26L20 9.27L15.55 13.97L16.91 20L12 16.9L7.09 20L8.45 13.97L4 9.27L9.91 8.26L12 2Z" />
+                      </svg>
+                      <span className="truncate">{msg.ai_suggested_response}</span>
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })

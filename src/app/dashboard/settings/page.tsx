@@ -970,6 +970,9 @@ function SettingsPage() {
           {/* Call Handling */}
           <CallHandlingSection tenant={tenant} onSaved={refetch} />
 
+          {/* Messaging AI & Auto-Reply */}
+          <MessagingAISection tenant={tenant} onSaved={refetch} />
+
           {/* Divider */}
           <div className="border-t border-[var(--border-subtle)]" />
 
@@ -2175,6 +2178,135 @@ function CallHandlingSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
       <div className="flex justify-end">
         <Button variant="primary" onClick={handleSave} loading={saving}>
           Save Call Settings
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Messaging AI & Auto-Reply Section
+// ============================================================================
+
+function MessagingAISection({ tenant, onSaved }: { tenant: any; onSaved: () => void }) {
+  const [sunnyMode, setSunnyMode] = useState<string>(tenant?.sunny_text_mode || 'off');
+  const [autoReplyEnabled, setAutoReplyEnabled] = useState<boolean>(tenant?.auto_reply_enabled || false);
+  const [autoReplyMsg, setAutoReplyMsg] = useState<string>(
+    tenant?.auto_reply_message || "Thanks for your message! I'm currently with a client but will get back to you as soon as I can."
+  );
+  const [saving, setSaving] = useState(false);
+
+  // Don't show if no dedicated number
+  if (!tenant?.dedicated_phone_number) return null;
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('tenants')
+        .update({
+          sunny_text_mode: sunnyMode,
+          auto_reply_enabled: autoReplyEnabled,
+          auto_reply_message: autoReplyMsg.trim() || null,
+        })
+        .eq('id', tenant.id);
+
+      if (error) throw error;
+      toast.success('Messaging settings saved');
+      onSaved();
+    } catch (err: any) {
+      console.error('Failed to save messaging settings:', err);
+      toast.error('Failed to save messaging settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-[var(--text-primary)] mb-3">
+        <span className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-[var(--text-secondary)]" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2L14.09 8.26L20 9.27L15.55 13.97L16.91 20L12 16.9L7.09 20L8.45 13.97L4 9.27L9.91 8.26L12 2Z" />
+          </svg>
+          Sunny AI Text Responder
+        </span>
+      </label>
+      <p className="text-xs text-[var(--text-tertiary)] mb-4">
+        Let Sunny draft or auto-send replies when clients text your business number.
+      </p>
+
+      <div className="space-y-3 mb-5">
+        {/* Off */}
+        <label
+          className="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors hover:bg-[var(--surface-subtle)] border-[var(--border-default)]"
+          style={sunnyMode === 'off' ? { borderColor: 'var(--accent-500)', background: 'var(--surface-subtle)' } : {}}
+        >
+          <input type="radio" name="sunny_mode" value="off" checked={sunnyMode === 'off'} onChange={() => setSunnyMode('off')} className="mt-0.5 accent-[var(--accent-500)]" />
+          <div>
+            <p className="text-sm font-medium text-[var(--text-primary)]">Off</p>
+            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">You reply to all messages yourself.</p>
+          </div>
+        </label>
+
+        {/* Suggest */}
+        <label
+          className="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors hover:bg-[var(--surface-subtle)] border-[var(--border-default)]"
+          style={sunnyMode === 'suggest' ? { borderColor: 'var(--accent-500)', background: 'var(--surface-subtle)' } : {}}
+        >
+          <input type="radio" name="sunny_mode" value="suggest" checked={sunnyMode === 'suggest'} onChange={() => setSunnyMode('suggest')} className="mt-0.5 accent-[var(--accent-500)]" />
+          <div>
+            <p className="text-sm font-medium text-[var(--text-primary)]">Suggest <span className="text-xs font-normal text-[var(--text-tertiary)]">(recommended)</span></p>
+            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Sunny drafts a response you can use, edit, or ignore. You always review before sending.</p>
+          </div>
+        </label>
+
+        {/* Auto */}
+        <label
+          className="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors hover:bg-[var(--surface-subtle)] border-[var(--border-default)]"
+          style={sunnyMode === 'auto' ? { borderColor: 'var(--accent-500)', background: 'var(--surface-subtle)' } : {}}
+        >
+          <input type="radio" name="sunny_mode" value="auto" checked={sunnyMode === 'auto'} onChange={() => setSunnyMode('auto')} className="mt-0.5 accent-[var(--accent-500)]" />
+          <div>
+            <p className="text-sm font-medium text-[var(--text-primary)]">Auto-Send</p>
+            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Sunny automatically replies to client messages. Great for when you are busy welding.</p>
+          </div>
+        </label>
+      </div>
+
+      {/* Auto-Reply (event mode) */}
+      <div className="border-t border-[var(--border-subtle)] pt-4 mb-4">
+        <label className="flex items-center gap-3 mb-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={autoReplyEnabled}
+            onChange={(e) => setAutoReplyEnabled(e.target.checked)}
+            className="w-4 h-4 rounded accent-[var(--accent-500)]"
+          />
+          <div>
+            <p className="text-sm text-[var(--text-primary)]">Event mode auto-reply</p>
+            <p className="text-xs text-[var(--text-tertiary)]">Send an instant response when you toggle auto-reply in event mode.</p>
+          </div>
+        </label>
+
+        {autoReplyEnabled && (
+          <div>
+            <Textarea
+              label="Auto-reply message"
+              value={autoReplyMsg}
+              onChange={(e) => setAutoReplyMsg(e.target.value.slice(0, 300))}
+              placeholder="Thanks for your message! I'm with a client but will get back to you soon."
+              rows={2}
+            />
+            <p className="text-xs text-[var(--text-tertiary)] mt-1">{autoReplyMsg.length}/300 characters</p>
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-end">
+        <Button variant="primary" onClick={handleSave} loading={saving}>
+          Save Messaging Settings
         </Button>
       </div>
     </div>
