@@ -439,7 +439,7 @@ const SUBSECTIONS: Subsection[] = [
     id: 'app-subscription',
     label: 'Subscription & Billing',
     data: PJOS_PLATFORM_GUIDE.subscriptionAndBilling,
-    keywords: ['subscription', 'plan', 'tier', 'starter', 'pro plan', 'business plan', 'upgrade', 'pricing', 'how much is', 'trial', 'free trial', 'trial expire', 'trial ending', 'billing', 'monthly', 'platform fee', 'cancel', 'downgrade', 'what plan am i on', 'cost of app', 'app price'],
+    keywords: ['subscription', 'plan', 'tier', 'starter', 'pro plan', 'business plan', 'upgrade', 'pricing', 'how much is', 'trial', 'free trial', 'trial expire', 'trial ending', 'trial warning', 'locked', 'lockout', 'billing', 'deferred', 'monthly', 'platform fee', 'cancel', 'downgrade', 'what plan am i on', 'cost of app', 'app price', 'choose a plan', 'pick a plan', 'when charged', 'credit card'],
     priority: 1,
   },
   {

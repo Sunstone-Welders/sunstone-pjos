@@ -1176,15 +1176,27 @@ function SettingsPage() {
                 </div>
                 <div>
                   <h3 className="text-base font-semibold text-[var(--text-primary)]">
-                    You&apos;re on your 60-day Pro trial
+                    Pro Trial &mdash; {trialDays} day{trialDays !== 1 ? 's' : ''} remaining
                   </h3>
-                  <p className="text-sm text-[var(--text-secondary)] mt-1">
-                    <span className="font-semibold text-[var(--accent-primary)]">{trialDays} day{trialDays !== 1 ? 's' : ''}</span> remaining.
-                    You have full access to all Pro features. Subscribe before your trial ends to keep them.
-                  </p>
-                  <p className="text-xs text-[var(--text-tertiary)] mt-2">
-                    After your trial, you&apos;ll drop to the Starter plan (3% fee, limited AI, no reports).
-                  </p>
+                  {tenant.stripe_subscription_id ? (
+                    <>
+                      <p className="text-sm text-[var(--text-secondary)] mt-1">
+                        <span className="text-success-600 font-semibold">{tier.charAt(0).toUpperCase() + tier.slice(1)} plan selected</span> &mdash; billing starts {tenant.trial_ends_at ? new Date(tenant.trial_ends_at).toLocaleDateString() : 'when trial ends'}.
+                      </p>
+                      <p className="text-xs text-[var(--text-tertiary)] mt-2">
+                        ${SUBSCRIPTION_PRICES[tier]}/mo will be charged to your card on file.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-[var(--text-secondary)] mt-1">
+                        You have full access to all Pro features. Choose a plan before your trial ends to keep them.
+                      </p>
+                      <p className="text-xs text-[var(--text-tertiary)] mt-2">
+                        Your card won&apos;t be charged until {tenant.trial_ends_at ? new Date(tenant.trial_ends_at).toLocaleDateString() : 'your trial ends'}.
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1228,77 +1240,101 @@ function SettingsPage() {
             </div>
           )}
 
-          {/* Starter plan notice */}
-          {!trialActive && !hasActiveSubscription && !isPastDue && effectiveTier === 'starter' && (
-            <div className="bg-warning-50 border border-warning-200 rounded-2xl p-5">
-              <h3 className="text-base font-semibold text-warning-600">You&apos;re on the Starter plan</h3>
-              <p className="text-sm text-warning-600 mt-1">
-                Upgrade to Pro or Business to unlock lower fees, unlimited AI, reports, and more.
+          {/* No active plan notice */}
+          {!trialActive && !hasActiveSubscription && !isPastDue && (
+            <div className="bg-error-50 border border-error-200 rounded-2xl p-5">
+              <h3 className="text-base font-semibold text-error-600">No Active Plan</h3>
+              <p className="text-sm text-error-600 mt-1">
+                Your trial has ended. Choose a plan below to unlock your POS, CRM, reports, and all features. Your data is safe and waiting.
               </p>
             </div>
           )}
 
-          {/* Plan cards */}
-          {(!hasActiveSubscription || trialActive) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Pro card */}
-              <div className="border border-[var(--border-default)] rounded-2xl p-5 space-y-4 bg-[var(--surface-base)]">
-                <div>
-                  <h3 className="text-lg font-bold text-[var(--text-primary)]">Pro</h3>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-3xl font-bold text-[var(--text-primary)]">${SUBSCRIPTION_PRICES.pro}</span>
-                    <span className="text-sm text-[var(--text-tertiary)]">/mo</span>
+          {/* Plan cards — show when no active subscription, OR trialing without a plan selected */}
+          {(!hasActiveSubscription || (trialActive && !tenant.stripe_subscription_id)) && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Pro card */}
+                <div className="border border-[var(--border-default)] rounded-2xl p-5 space-y-4 bg-[var(--surface-base)]">
+                  <div>
+                    <h3 className="text-lg font-bold text-[var(--text-primary)]">Pro</h3>
+                    <div className="flex items-baseline gap-1 mt-1">
+                      <span className="text-3xl font-bold text-[var(--text-primary)]">${SUBSCRIPTION_PRICES.pro}</span>
+                      <span className="text-sm text-[var(--text-tertiary)]">/mo</span>
+                    </div>
                   </div>
+                  <ul className="space-y-2">
+                    {PLAN_FEATURES.pro.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
+                        <svg className="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    variant="primary"
+                    className="w-full"
+                    onClick={() => handleSubscribe('pro')}
+                    loading={subscribing}
+                  >
+                    {trialActive ? 'Select Pro' : 'Upgrade to Pro'}
+                  </Button>
                 </div>
-                <ul className="space-y-2">
-                  {PLAN_FEATURES.pro.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
-                      <svg className="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  variant="primary"
-                  className="w-full"
-                  onClick={() => handleSubscribe('pro')}
-                  loading={subscribing}
-                >
-                  {trialActive ? 'Subscribe to Pro' : 'Upgrade to Pro'}
-                </Button>
-              </div>
 
-              {/* Business card */}
-              <div className="border-2 border-[var(--accent-primary)] rounded-2xl p-5 space-y-4 bg-[var(--surface-base)] relative">
-                <div className="absolute -top-3 right-4">
-                  <Badge variant="accent" size="sm">Best Value</Badge>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-[var(--text-primary)]">Business</h3>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-3xl font-bold text-[var(--text-primary)]">$279</span>
-                    <span className="text-sm text-[var(--text-tertiary)]">/mo</span>
+                {/* Business card */}
+                <div className="border-2 border-[var(--accent-primary)] rounded-2xl p-5 space-y-4 bg-[var(--surface-base)] relative">
+                  <div className="absolute -top-3 right-4">
+                    <Badge variant="accent" size="sm">Best Value</Badge>
                   </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-[var(--text-primary)]">Business</h3>
+                    <div className="flex items-baseline gap-1 mt-1">
+                      <span className="text-3xl font-bold text-[var(--text-primary)]">$279</span>
+                      <span className="text-sm text-[var(--text-tertiary)]">/mo</span>
+                    </div>
+                  </div>
+                  <ul className="space-y-2">
+                    {PLAN_FEATURES.business.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
+                        <svg className="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    variant="primary"
+                    className="w-full"
+                    onClick={() => handleSubscribe('business')}
+                    loading={subscribing}
+                  >
+                    {trialActive ? 'Select Business' : 'Upgrade to Business'}
+                  </Button>
                 </div>
-                <ul className="space-y-2">
-                  {PLAN_FEATURES.business.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
-                      <svg className="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  variant="primary"
-                  className="w-full"
-                  onClick={() => handleSubscribe('business')}
-                  loading={subscribing}
-                >
-                  {trialActive ? 'Subscribe to Business' : 'Upgrade to Business'}
+              </div>
+              {trialActive && (
+                <p className="text-xs text-[var(--text-tertiary)] text-center">
+                  Your card won&apos;t be charged until your trial ends on {tenant.trial_ends_at ? new Date(tenant.trial_ends_at).toLocaleDateString() : 'your trial end date'}.
+                </p>
+              )}
+            </>
+          )}
+
+          {/* Plan selected during trial — show manage options */}
+          {trialActive && tenant.stripe_subscription_id && (
+            <div className="flex items-center justify-between p-4 rounded-xl border border-success-200 bg-success-50">
+              <div className="flex items-center gap-3">
+                <Badge variant="accent" size="md">
+                  {tier.charAt(0).toUpperCase() + tier.slice(1)} Plan
+                </Badge>
+                <span className="text-sm text-[var(--text-secondary)]">Selected &mdash; starts after trial</span>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="secondary" size="sm" onClick={handleManageSubscription}>
+                  Change Plan
                 </Button>
               </div>
             </div>
@@ -1321,7 +1357,7 @@ function SettingsPage() {
                 </div>
               </div>
             </div>
-          ) : tier === 'starter' && !hasActiveSubscription ? (
+          ) : hasActiveSubscription ? (
             <div className="border border-[var(--border-default)] rounded-2xl p-5 bg-[var(--surface-base)]">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -1335,6 +1371,19 @@ function SettingsPage() {
                 <Button variant="secondary" className="shrink-0" onClick={handleCrmCheckout} loading={crmCheckingOut}>
                   Add CRM
                 </Button>
+              </div>
+            </div>
+          ) : !hasActiveSubscription && !trialActive ? (
+            <div className="border border-[var(--border-default)] rounded-2xl p-5 bg-[var(--surface-subtle)]">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-[var(--text-tertiary)] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+                <div>
+                  <p className="text-sm text-[var(--text-tertiary)]">
+                    CRM is a $69/mo add-on. Choose a base plan above to unlock the CRM add-on.
+                  </p>
+                </div>
               </div>
             </div>
           ) : null}

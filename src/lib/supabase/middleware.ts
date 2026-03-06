@@ -38,6 +38,9 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/auth') ||
     request.nextUrl.pathname.startsWith('/waiver') ||
     request.nextUrl.pathname.startsWith('/api/') ||
+    request.nextUrl.pathname.startsWith('/crm') ||
+    request.nextUrl.pathname.startsWith('/privacy') ||
+    request.nextUrl.pathname.startsWith('/terms') ||
     request.nextUrl.pathname === '/';
 
   if (!user && !isPublicRoute) {

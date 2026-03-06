@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     // ── Tenant data ──
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
-      .select('id, name, stripe_customer_id, crm_subscription_id, trial_ends_at')
+      .select('id, name, stripe_customer_id, crm_subscription_id, trial_ends_at, subscription_status, stripe_subscription_id')
       .eq('id', member.tenant_id)
       .single();
 
@@ -74,6 +74,20 @@ export async function POST(request: NextRequest) {
     // Already subscribed
     if (tenant.crm_subscription_id) {
       return NextResponse.json({ error: 'CRM is already active' }, { status: 400 });
+    }
+
+    // ── CRM requires base subscription (post-trial) ──
+    const now = new Date();
+    const trialEnd = tenant.trial_ends_at ? new Date(tenant.trial_ends_at) : null;
+    const inTrial = tenant.subscription_status === 'trialing' && trialEnd && trialEnd > now;
+    const hasBaseSub = tenant.subscription_status === 'active' || tenant.subscription_status === 'past_due';
+
+    if (!inTrial && !hasBaseSub) {
+      console.log('[CRM Checkout] Rejected — no base subscription and trial expired. Tenant:', tenant.id);
+      return NextResponse.json(
+        { error: 'CRM is an add-on that requires a base plan. Please choose a plan first.' },
+        { status: 400 }
+      );
     }
 
     // ── Ensure Stripe customer exists ──

@@ -18,5 +18,46 @@ export default async function CRMPage() {
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
 
-  return <CRMPageClient isLoggedIn={!!user} />
+  let authState: 'anonymous' | 'trial' | 'has_base_no_crm' | 'has_crm' | 'expired_no_base' = 'anonymous'
+  let trialEndDate: string | null = null
+
+  if (user) {
+    // Get tenant membership
+    const { data: member } = await supabase
+      .from('tenant_members')
+      .select('tenant_id')
+      .eq('user_id', user.id)
+      .not('accepted_at', 'is', null)
+      .limit(1)
+      .single()
+
+    if (member) {
+      const { data: tenant } = await supabase
+        .from('tenants')
+        .select('trial_ends_at, subscription_status, stripe_subscription_id, crm_subscription_id, crm_enabled')
+        .eq('id', member.tenant_id)
+        .single()
+
+      if (tenant) {
+        const now = new Date()
+        const trialEnd = tenant.trial_ends_at ? new Date(tenant.trial_ends_at) : null
+        const inTrial = tenant.subscription_status === 'trialing' && trialEnd && trialEnd > now
+        const hasBaseSub = tenant.subscription_status === 'active' || tenant.subscription_status === 'past_due'
+        const hasCrm = !!tenant.crm_subscription_id || (tenant.crm_enabled && inTrial)
+
+        if (hasCrm) {
+          authState = 'has_crm'
+        } else if (inTrial) {
+          authState = 'trial'
+          trialEndDate = tenant.trial_ends_at
+        } else if (hasBaseSub) {
+          authState = 'has_base_no_crm'
+        } else {
+          authState = 'expired_no_base'
+        }
+      }
+    }
+  }
+
+  return <CRMPageClient authState={authState} trialEndDate={trialEndDate} />
 }

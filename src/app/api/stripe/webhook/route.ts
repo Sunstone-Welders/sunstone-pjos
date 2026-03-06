@@ -154,6 +154,17 @@ export async function POST(request: NextRequest) {
         const tenantId = session.metadata?.tenant_id;
         const tier = (session.metadata?.tier as SubscriptionTier) || 'pro';
 
+        // Determine actual subscription status (may be 'trialing' if deferred billing)
+        let subStatus: string = 'active';
+        if (subscriptionId) {
+          try {
+            const sub = await stripe.subscriptions.retrieve(subscriptionId);
+            subStatus = mapSubscriptionStatus(sub.status);
+          } catch {
+            // Fall back to 'active' if we can't retrieve
+          }
+        }
+
         if (!tenantId) {
           // Fallback: look up tenant by stripe_customer_id
           const { data: tenant } = await serviceRole
@@ -172,7 +183,7 @@ export async function POST(request: NextRequest) {
             .update({
               subscription_tier: tier,
               stripe_subscription_id: subscriptionId,
-              subscription_status: 'active',
+              subscription_status: subStatus,
               platform_fee_percent: getPlatformFeePercent(tier),
             })
             .eq('id', tenant.id);
@@ -183,13 +194,13 @@ export async function POST(request: NextRequest) {
               stripe_customer_id: customerId,
               subscription_tier: tier,
               stripe_subscription_id: subscriptionId,
-              subscription_status: 'active',
+              subscription_status: subStatus,
               platform_fee_percent: getPlatformFeePercent(tier),
             })
             .eq('id', tenantId);
         }
 
-        console.log(`[Webhook] checkout.session.completed — tenant ${tenantId}, tier ${tier}`);
+        console.log(`[Webhook] checkout.session.completed — tenant ${tenantId}, tier ${tier}, status ${subStatus}`);
         break;
       }
 

@@ -236,6 +236,9 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
 
       {/* Quick Reply Toast — polls for new inbound messages */}
       <QuickReplyToast />
+
+      {/* Trial expired lockout — blocks all dashboard pages except settings */}
+      <TrialExpiredOverlay />
     </div>
   );
 }
@@ -806,98 +809,201 @@ function DesktopSidebar() {
 
 function TrialBanner() {
   const { tenant } = useTenant();
-  const [dismissed, setDismissed] = useState(false);
 
-  if (!tenant || dismissed) return null;
+  if (!tenant) return null;
 
-  const effectiveTier = getSubscriptionTier(tenant);
   const trialActive = isTrialActive(tenant);
-  const hasActiveSubscription =
-    tenant.subscription_status === 'active' || tenant.subscription_status === 'trialing';
+  const hasActiveSubscription = tenant.subscription_status === 'active';
 
-  if (hasActiveSubscription && tenant.subscription_status !== 'trialing') return null;
+  // No banner if they have an active paid subscription
+  if (hasActiveSubscription) return null;
 
-  // Case 1: Trial still active but running out
+  // Trial active — show tiered warnings
   if (trialActive && tenant.trial_ends_at) {
     const trialEnd = new Date(tenant.trial_ends_at);
     const now = new Date();
-    const daysRemaining = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-    if (daysRemaining > 7) return null;
+    // Already chose a plan (deferred billing) — no warning needed
+    if (tenant.stripe_subscription_id) return null;
+
+    // No banner if more than 14 days left
+    if (daysLeft > 14) return null;
+
+    // Determine urgency level
+    let bgClass: string;
+    let textClass: string;
+    let message: string;
+    let buttonLabel: string;
+
+    if (daysLeft <= 3) {
+      // Urgent (red)
+      bgClass = 'bg-error-50 border-b border-error-200';
+      textClass = 'text-error-600';
+      message = `Your trial ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}! Your POS, client data, and CRM will be locked until you choose a plan.`;
+      buttonLabel = 'Choose a Plan Now';
+    } else if (daysLeft <= 7) {
+      // Warning (amber)
+      bgClass = 'bg-warning-50 border-b border-warning-200';
+      textClass = 'text-warning-600';
+      message = `Your trial ends in ${daysLeft} days. Choose a plan so there's no interruption to your business.`;
+      buttonLabel = 'Choose a Plan';
+    } else {
+      // Info (subtle blue/neutral)
+      bgClass = 'bg-[var(--accent-50,#eff6ff)] border-b border-[var(--accent-200,#bfdbfe)]';
+      textClass = 'text-[var(--accent-700,#1d4ed8)]';
+      message = `Your Pro trial ends in ${daysLeft} days. Choose a plan to keep all your features.`;
+      buttonLabel = 'Choose a Plan';
+    }
 
     return (
-      <div className="bg-warning-50 border-b border-warning-200 px-4 py-2.5 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2 text-sm text-warning-600">
+      <div className={`${bgClass} px-4 py-2.5 flex items-center justify-between shrink-0`}>
+        <div className={`flex items-center gap-2 text-sm ${textClass}`}>
           <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span>
-            <span className="font-medium">Your Pro trial ends in {daysRemaining} day{daysRemaining !== 1 ? 's' : ''}.</span>{' '}
-            Upgrade to keep full access to reports, AI insights, and team features.
-          </span>
+          <span className="font-medium">{message}</span>
         </div>
-        <div className="flex items-center gap-2 shrink-0 ml-4">
-          <Link
-            href="/dashboard/settings?tab=subscription"
-            className="text-sm font-medium text-warning-600 hover:text-warning-600 underline underline-offset-2"
-          >
-            View Plans
-          </Link>
-          <button
-            onClick={() => setDismissed(true)}
-            className="text-warning-400 hover:text-warning-600 p-1"
-            aria-label="Dismiss"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Case 2: Trial has expired and they're on Starter
-  if (!trialActive && effectiveTier === 'starter' && tenant.trial_ends_at) {
-    const trialEnd = new Date(tenant.trial_ends_at);
-    const now = new Date();
-    const daysSinceExpiry = Math.floor((now.getTime() - trialEnd.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (daysSinceExpiry > 30) return null;
-
-    return (
-      <div className="bg-[var(--surface-raised)] border-b border-border-default px-4 py-2.5 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2 text-sm text-text-secondary">
-          <svg className="w-4 h-4 shrink-0 text-text-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-          </svg>
-          <span>
-            <span className="font-medium text-text-primary">Your Pro trial has ended.</span>{' '}
-            Upgrade anytime to unlock reports, AI insights, and more.
-          </span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0 ml-4">
-          <Link
-            href="/dashboard/settings?tab=subscription"
-            className="text-sm font-medium text-[var(--accent-600)] hover:text-[var(--accent-700)] underline underline-offset-2"
-          >
-            View Plans
-          </Link>
-          <button
-            onClick={() => setDismissed(true)}
-            className="text-text-tertiary hover:text-text-secondary p-1"
-            aria-label="Dismiss"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+        <Link
+          href="/dashboard/settings?tab=subscription"
+          className={`shrink-0 ml-4 text-sm font-semibold ${textClass} hover:underline underline-offset-2`}
+        >
+          {buttonLabel}
+        </Link>
       </div>
     );
   }
 
   return null;
+}
+
+// ============================================================================
+// Trial Expired Overlay — blocks dashboard when trial expired + no subscription
+// ============================================================================
+
+function TrialExpiredOverlay() {
+  const { tenant } = useTenant();
+  const pathname = usePathname();
+  const [subscribing, setSubscribing] = useState(false);
+
+  if (!tenant) return null;
+
+  // Check if lockout applies
+  const trialEnd = tenant.trial_ends_at ? new Date(tenant.trial_ends_at) : null;
+  const isTrialExpired = !trialEnd || trialEnd <= new Date();
+  const hasSubscription = !!tenant.stripe_subscription_id;
+  const isTrialing = tenant.subscription_status === 'trialing' && trialEnd && trialEnd > new Date();
+
+  // Don't lock out if still in trial, has subscription, or is on settings page
+  if (isTrialing || hasSubscription || !isTrialExpired) return null;
+  if (tenant.subscription_status === 'active' || tenant.subscription_status === 'past_due') return null;
+
+  // Allow settings page through (so they can manage account/select plan)
+  if (pathname === '/dashboard/settings') return null;
+
+  const handleSubscribe = async (planTier: 'starter' | 'pro' | 'business') => {
+    setSubscribing(true);
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier: planTier }),
+      });
+      const data = await res.json();
+      if (!res.ok) return;
+      if (data.url) window.location.href = data.url;
+    } catch {
+      // Silent
+    } finally {
+      setSubscribing(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = '/auth/login';
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-[var(--surface-base)]/95 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="max-w-lg w-full text-center space-y-6">
+        {/* Lock icon */}
+        <div className="w-16 h-16 rounded-full bg-[var(--accent-50)] flex items-center justify-center mx-auto">
+          <svg className="w-8 h-8 text-[var(--accent-500)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+          </svg>
+        </div>
+
+        <div>
+          <h2 className="text-2xl font-bold text-[var(--text-primary)]" style={{ fontFamily: 'var(--font-display)' }}>
+            Your Free Trial Has Ended
+          </h2>
+          <p className="text-[var(--text-secondary)] mt-2">
+            Your data is safe and waiting for you. Choose a plan to pick up right where you left off.
+          </p>
+        </div>
+
+        {/* Plan cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
+          {/* Starter */}
+          <button
+            onClick={() => handleSubscribe('starter')}
+            disabled={subscribing}
+            className="border border-[var(--border-default)] rounded-xl p-4 bg-[var(--surface-base)] hover:border-[var(--accent-300)] transition-colors text-left disabled:opacity-60"
+          >
+            <p className="font-semibold text-[var(--text-primary)]">Starter</p>
+            <p className="text-lg font-bold text-[var(--text-primary)]">$99<span className="text-sm font-normal text-[var(--text-tertiary)]">/mo</span></p>
+            <p className="text-xs text-[var(--text-tertiary)] mt-1">3% fee</p>
+          </button>
+
+          {/* Pro — recommended */}
+          <button
+            onClick={() => handleSubscribe('pro')}
+            disabled={subscribing}
+            className="border-2 border-[var(--accent-primary)] rounded-xl p-4 bg-[var(--surface-base)] hover:bg-[var(--accent-50)] transition-colors text-left relative disabled:opacity-60"
+          >
+            <span className="absolute -top-2.5 right-3 text-[10px] font-bold uppercase tracking-wider bg-[var(--accent-primary)] text-white px-2 py-0.5 rounded-full">
+              Recommended
+            </span>
+            <p className="font-semibold text-[var(--text-primary)]">Pro</p>
+            <p className="text-lg font-bold text-[var(--text-primary)]">$169<span className="text-sm font-normal text-[var(--text-tertiary)]">/mo</span></p>
+            <p className="text-xs text-[var(--text-tertiary)] mt-1">1.5% fee, unlimited AI</p>
+          </button>
+
+          {/* Business */}
+          <button
+            onClick={() => handleSubscribe('business')}
+            disabled={subscribing}
+            className="border border-[var(--border-default)] rounded-xl p-4 bg-[var(--surface-base)] hover:border-[var(--accent-300)] transition-colors text-left disabled:opacity-60"
+          >
+            <p className="font-semibold text-[var(--text-primary)]">Business</p>
+            <p className="text-lg font-bold text-[var(--text-primary)]">$279<span className="text-sm font-normal text-[var(--text-tertiary)]">/mo</span></p>
+            <p className="text-xs text-[var(--text-tertiary)] mt-1">0% fee, unlimited team</p>
+          </button>
+        </div>
+
+        <p className="text-xs text-[var(--text-tertiary)]">
+          All plans include your existing data, inventory, and client records. Add CRM for $69/mo.
+        </p>
+
+        <div className="flex items-center justify-center gap-4 text-sm">
+          <Link
+            href="/dashboard/settings?tab=subscription"
+            className="text-[var(--accent-600)] hover:underline font-medium"
+          >
+            Compare Plans
+          </Link>
+          <button
+            onClick={handleSignOut}
+            className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ============================================================================
