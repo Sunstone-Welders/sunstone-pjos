@@ -139,6 +139,13 @@ export async function GET(request: NextRequest) {
           // Bust cache if version mismatch (code was updated since last cache write)
           const cachedVersion = (cached as any).cache_version ?? 0;
           if (cachedVersion === CARD_CACHE_VERSION && new Date(cached.expires_at) > new Date()) {
+            // Always regenerate the getting_started card so checklist stays fresh
+            const hasGettingStarted = cached.cards.some((c: any) => c.type === 'getting_started');
+            if (hasGettingStarted) {
+              // Re-check getting_started conditions live
+              const freshCards = await refreshGettingStarted(db, tenantId, cached.cards as DashboardCard[]);
+              return NextResponse.json({ cards: freshCards, cached: true });
+            }
             return NextResponse.json({ cards: cached.cards, cached: true });
           }
         }
@@ -179,6 +186,60 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error('Dashboard cards error:', err);
     return NextResponse.json({ cards: fallbackCards(), cached: false, fallback: true });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Getting Started — live refresh (never stale from cache)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function refreshGettingStarted(
+  db: Awaited<ReturnType<typeof createServiceRoleClient>>,
+  tenantId: string,
+  cachedCards: DashboardCard[]
+): Promise<DashboardCard[]> {
+  try {
+    const { data: tenant } = await db
+      .from('tenants')
+      .select('square_merchant_id, stripe_account_id, theme_id, onboarding_data')
+      .eq('id', tenantId)
+      .single();
+
+    const [eventsCount, inventoryCount, taxCount] = await Promise.all([
+      db.from('events').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
+      db.from('inventory_items').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('is_active', true),
+      db.from('tax_profiles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
+    ]);
+
+    const hasEvents = (eventsCount.count || 0) > 0;
+    const hasInventory = (inventoryCount.count || 0) > 0;
+    const hasPayment = !!(tenant?.square_merchant_id || tenant?.stripe_account_id);
+    const hasTheme = tenant?.theme_id && tenant.theme_id !== 'rose-gold';
+    const hasTaxRate = (taxCount.count || 0) > 0;
+
+    const steps = [
+      { label: 'Create your first event', done: hasEvents, href: '/dashboard/events' },
+      { label: 'Add inventory items', done: hasInventory, href: '/dashboard/inventory' },
+      { label: 'Connect a payment processor', done: hasPayment, href: '/dashboard/settings' },
+      { label: 'Customize your theme', done: hasTheme, href: '/dashboard/settings' },
+      { label: 'Set your tax rate', done: hasTaxRate, href: '/dashboard/settings' },
+    ];
+
+    const completedCount = steps.filter((s) => s.done).length;
+    const otherCards = cachedCards.filter((c) => c.type !== 'getting_started');
+
+    // All done or dismissed — remove the card
+    const onboardingData = (tenant?.onboarding_data as Record<string, any>) || {};
+    if (completedCount >= steps.length || onboardingData.getting_started_dismissed === true) {
+      return otherCards;
+    }
+
+    return [
+      { type: 'getting_started', priority: 0, data: { steps, completedCount, totalCount: steps.length } } as DashboardCard,
+      ...otherCards,
+    ];
+  } catch {
+    return cachedCards; // On error, return cached as-is
   }
 }
 

@@ -9,6 +9,23 @@ import { renderTemplate } from '@/lib/templates';
 import { sendSMS as twilioSendSMS } from '@/lib/twilio';
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/** Normalize fancy Unicode characters to safe ASCII equivalents */
+function sanitizeText(text: string): string {
+  return text
+    .replace(/[\u2018\u2019\u201A]/g, "'")   // curly single quotes → '
+    .replace(/[\u201C\u201D\u201E]/g, '"')   // curly double quotes → "
+    .replace(/[\u2013]/g, '-')               // en dash → -
+    .replace(/[\u2014]/g, '--')              // em dash → --
+    .replace(/[\u2026]/g, '...')             // ellipsis → ...
+    .replace(/[\u00A0]/g, ' ')              // non-breaking space → space
+    .replace(/[\u00C2\u00E2][\u0080-\u00BF]{1,2}/g, '') // strip mojibake sequences
+    .trim();
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -701,14 +718,14 @@ export async function executeSunnyTool(
 
         const insertPayload: Record<string, any> = {
           tenant_id: tenantId,
-          name: input.name,
+          name: sanitizeText(input.name),
           type: effectiveType,
-          material: input.material || null,
+          material: input.material ? sanitizeText(input.material) : null,
           quantity_on_hand: effectiveQty,
           unit: effectiveUnit,
           cost_per_unit: effectiveCost,
           sell_price: input.sell_price || 0,
-          supplier: input.supplier || null,
+          supplier: input.supplier ? sanitizeText(input.supplier) : null,
           reorder_threshold: input.reorder_point ?? null,
           is_active: true,
         };
@@ -725,7 +742,29 @@ export async function executeSunnyTool(
           .select('id, name, type')
           .single();
 
-        if (error) return { result: { error: error.message }, isError: true };
+        if (error) return { result: { error: `Failed to add inventory item: ${error.message}. Try adding it manually in the Inventory page.` }, isError: true };
+
+        // Ensure supplier record exists in suppliers table
+        if (input.supplier && data) {
+          try {
+            const { data: existingSupplier } = await serviceClient
+              .from('suppliers')
+              .select('id')
+              .eq('tenant_id', tenantId)
+              .ilike('name', input.supplier.trim())
+              .limit(1)
+              .single();
+            if (!existingSupplier) {
+              await serviceClient.from('suppliers').insert({
+                tenant_id: tenantId,
+                name: input.supplier.trim(),
+                is_sunstone: input.supplier.trim().toLowerCase().includes('sunstone'),
+              });
+            }
+          } catch {
+            // Non-critical — supplier record is supplementary
+          }
+        }
 
         // Calculate and upsert chain product prices
         const chainPriceResult: Record<string, number> = {};
@@ -1573,14 +1612,14 @@ export async function executeSunnyTool(
 
         const dbUpdates: Record<string, any> = {};
 
-        if (input.updates.name !== undefined) dbUpdates.name = input.updates.name;
+        if (input.updates.name !== undefined) dbUpdates.name = sanitizeText(input.updates.name);
         if (input.updates.cost_per_inch !== undefined) dbUpdates.cost_per_unit = input.updates.cost_per_inch;
         if (input.updates.sell_price !== undefined) dbUpdates.sell_price = input.updates.sell_price;
         if (input.updates.current_length_inches !== undefined) dbUpdates.quantity_on_hand = input.updates.current_length_inches;
         if (input.updates.quantity_on_hand !== undefined) dbUpdates.quantity_on_hand = input.updates.quantity_on_hand;
         if (input.updates.reorder_point !== undefined) dbUpdates.reorder_threshold = input.updates.reorder_point;
-        if (input.updates.material !== undefined) dbUpdates.material = input.updates.material;
-        if (input.updates.supplier !== undefined) dbUpdates.supplier = input.updates.supplier;
+        if (input.updates.material !== undefined) dbUpdates.material = sanitizeText(input.updates.material);
+        if (input.updates.supplier !== undefined) dbUpdates.supplier = sanitizeText(input.updates.supplier);
         if (input.updates.is_active !== undefined) dbUpdates.is_active = input.updates.is_active;
 
         const hasPriceUpdates = input.updates.bracelet_price !== undefined ||

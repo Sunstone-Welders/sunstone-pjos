@@ -492,18 +492,24 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
             />
           </div>
         ) : (
-          <div className="p-3 border-t border-border-default shrink-0 bg-[var(--surface-base)] safe-area-bottom">
+          <div className="p-3 pb-4 border-t border-border-default shrink-0 bg-[var(--surface-base)] safe-area-bottom">
             <div className="flex items-end gap-2">
               <textarea
                 ref={inputRef}
                 value={input}
-                onChange={e => setInput(e.target.value)}
+                onChange={e => {
+                  setInput(e.target.value);
+                  // Auto-expand: reset height then set to scrollHeight (up to max-h)
+                  const el = e.target;
+                  el.style.height = 'auto';
+                  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask me anything about PJ..."
-                className="flex-1 resize-none rounded-xl border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500 transition-all max-h-28"
-                rows={1}
+                className="flex-1 resize-none rounded-xl border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500 transition-all"
+                rows={2}
                 disabled={isLoading}
-                style={{ minHeight: 42 }}
+                style={{ minHeight: 48, maxHeight: 120 }}
               />
               <button
                 onClick={() => sendMessage(input)}

@@ -75,11 +75,11 @@ export default function SunnyTutorial({ pageKey, tips }: SunnyTutorialProps) {
 
   return (
     <>
-      {/* Floating pill */}
+      {/* Floating pill — z-20 to avoid overlaying checkout/action buttons */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full bg-[var(--accent-primary)] text-[var(--text-on-accent)] shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
+          className="fixed top-20 right-4 md:top-auto md:bottom-6 md:right-6 z-20 flex items-center gap-2 px-4 py-2.5 rounded-full bg-[var(--accent-primary)] text-[var(--text-on-accent)] shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
         >
           <SparkleIcon className="w-4 h-4" />
           <span className="text-sm font-medium">Sunny&apos;s Tips</span>
@@ -94,12 +94,12 @@ export default function SunnyTutorial({ pageKey, tips }: SunnyTutorialProps) {
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black/20 z-40"
+            className="fixed inset-0 bg-black/20 z-30"
             onClick={() => setIsOpen(false)}
           />
 
-          {/* Card */}
-          <div className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-50 w-[340px] max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--border-default)] bg-[var(--surface-raised)] shadow-xl animate-slide-up">
+          {/* Card — positioned at top on mobile to avoid checkout overlap */}
+          <div className="fixed top-20 right-4 md:top-auto md:bottom-6 md:right-6 z-30 w-[340px] max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--border-default)] bg-[var(--surface-raised)] shadow-xl animate-slide-up">
             {/* Header */}
             <div className="flex items-center justify-between px-4 pt-4 pb-2">
               <div className="flex items-center gap-2">

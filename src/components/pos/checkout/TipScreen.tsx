@@ -3,7 +3,7 @@
 // src/components/pos/checkout/TipScreen.tsx
 // ============================================================================
 // Full-screen, customer-facing tip screen. Handed to the customer.
-// Flat dollar presets with custom input option.
+// Percentage presets with custom input and clear No Tip option.
 // No back/cancel buttons. Theme-safe tokens only.
 // ============================================================================
 
@@ -11,7 +11,7 @@
 
 import { useState } from 'react';
 
-const TIP_PRESETS = [0, 3, 5, 10, 15, 20];
+const TIP_PERCENTAGES = [15, 20, 25];
 
 interface TipScreenProps {
   tenantName: string;
@@ -32,21 +32,31 @@ export function TipScreen({
   onSetTip,
   onContinue,
 }: TipScreenProps) {
-  const [selectedPreset, setSelectedPreset] = useState<number | null>(
-    tipAmount === 0 ? 0 : TIP_PRESETS.includes(tipAmount) ? tipAmount : null
-  );
+  const [selectedPct, setSelectedPct] = useState<number | null>(null);
+  const [noTip, setNoTip] = useState(tipAmount === 0);
   const [showCustom, setShowCustom] = useState(false);
   const [customValue, setCustomValue] = useState('');
 
-  const handlePresetSelect = (amount: number) => {
-    setSelectedPreset(amount);
+  const handlePctSelect = (pct: number) => {
+    setSelectedPct(pct);
+    setNoTip(false);
     setShowCustom(false);
     setCustomValue('');
+    const amount = Math.round(subtotal * (pct / 100) * 100) / 100;
     onSetTip(amount);
   };
 
+  const handleNoTip = () => {
+    setSelectedPct(null);
+    setNoTip(true);
+    setShowCustom(false);
+    setCustomValue('');
+    onSetTip(0);
+  };
+
   const handleCustomSelect = () => {
-    setSelectedPreset(null);
+    setSelectedPct(null);
+    setNoTip(false);
     setShowCustom(true);
   };
 
@@ -66,37 +76,42 @@ export function TipScreen({
           {tenantName}
         </p>
 
-        {/* Thank you heading */}
-        <h2 className="text-[32px] font-bold text-[var(--text-primary)] tracking-tight leading-tight text-center">
-          Thank you!
+        {/* Clear tip prompt */}
+        <h2 className="text-[28px] font-bold text-[var(--text-primary)] tracking-tight leading-tight text-center">
+          Would you like to add a tip?
         </h2>
 
-        {/* Item count + subtotal */}
+        {/* Subtotal context */}
         <p className="text-[var(--text-secondary)] text-center text-base">
           {itemCount} item{itemCount !== 1 ? 's' : ''} &mdash; ${subtotal.toFixed(2)}
         </p>
 
-        {/* Flat dollar tip grid — 2x3 + Custom */}
+        {/* Percentage tip buttons */}
         <div className="grid grid-cols-3 gap-3">
-          {TIP_PRESETS.map((amount) => {
-            const isSelected = selectedPreset === amount && !showCustom;
+          {TIP_PERCENTAGES.map((pct) => {
+            const isSelected = selectedPct === pct && !showCustom && !noTip;
+            const amount = Math.round(subtotal * (pct / 100) * 100) / 100;
             return (
               <button
-                key={amount}
-                onClick={() => handlePresetSelect(amount)}
-                className={`py-4 rounded-2xl text-center transition-all min-h-[60px] flex flex-col items-center justify-center ${
+                key={pct}
+                onClick={() => handlePctSelect(pct)}
+                className={`py-4 rounded-2xl text-center transition-all min-h-[60px] flex flex-col items-center justify-center gap-0.5 ${
                   isSelected
                     ? 'bg-[var(--text-primary)] text-[var(--surface-base)] shadow-md'
                     : 'bg-[var(--surface-raised)] border border-[var(--border-default)] text-[var(--text-primary)] hover:border-[var(--border-strong)] hover:shadow-sm'
                 }`}
               >
-                <span className="text-xl font-bold">
-                  {amount === 0 ? 'None' : `$${amount}`}
+                <span className="text-xl font-bold">{pct}%</span>
+                <span className={`text-xs ${isSelected ? 'text-[var(--surface-base)]/70' : 'text-[var(--text-tertiary)]'}`}>
+                  ${amount.toFixed(2)}
                 </span>
               </button>
             );
           })}
+        </div>
 
+        {/* Custom + No Tip row */}
+        <div className="grid grid-cols-2 gap-3">
           {/* Custom button */}
           <button
             onClick={handleCustomSelect}
@@ -106,7 +121,19 @@ export function TipScreen({
                 : 'bg-[var(--surface-raised)] border border-[var(--border-default)] text-[var(--text-primary)] hover:border-[var(--border-strong)] hover:shadow-sm'
             }`}
           >
-            <span className="text-xl font-bold">Custom</span>
+            <span className="text-lg font-bold">Custom</span>
+          </button>
+
+          {/* No Tip button — clear and non-judgmental */}
+          <button
+            onClick={handleNoTip}
+            className={`py-4 rounded-2xl text-center transition-all min-h-[60px] flex flex-col items-center justify-center ${
+              noTip && !showCustom
+                ? 'bg-[var(--text-primary)] text-[var(--surface-base)] shadow-md'
+                : 'bg-[var(--surface-raised)] border border-[var(--border-default)] text-[var(--text-primary)] hover:border-[var(--border-strong)] hover:shadow-sm'
+            }`}
+          >
+            <span className="text-lg font-bold">No Tip</span>
           </button>
         </div>
 

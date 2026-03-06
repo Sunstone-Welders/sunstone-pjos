@@ -1669,8 +1669,10 @@ export const PJOS_PLATFORM_GUIDE = {
     addingOtherItems: 'Jump rings, charms, connectors, and other items appear as quick-add buttons. Just tap them to add to the cart.',
     customItems: 'Need to add something special? Use the Custom Item form — type a name and price, and it goes right into the cart.',
     discounts: {
-      perItem: 'You can apply a discount to individual items in the cart.',
-      cartLevel: 'You can also apply a discount to the entire cart total.',
+      perItem: 'To discount a specific item: tap on it in the cart to expand it, then choose a percentage or dollar amount discount. Great for promotions like "$10 off any anklet today."',
+      cartLevel: 'To discount the entire order: look for the discount option near the cart subtotal area. Apply a percentage or dollar amount to the whole cart. Great for event specials or VIP customers like "15% off your whole order."',
+      receiptVisibility: 'Discounts show on the receipt so the customer can see exactly what they saved.',
+      tips: 'Use per-item discounts for targeted promotions on specific products. Use cart-level discounts for broader offers across the entire order.',
     },
     tips: 'During checkout, your customer can add a tip. You will see preset amounts (like $3, $5, $10, $15, $20) or they can enter a custom amount.',
     paymentMethods: 'Choose how they are paying: Card, Cash, Venmo, or Other. For card payments, you will need your payment processor (Square or Stripe) connected in Settings.',

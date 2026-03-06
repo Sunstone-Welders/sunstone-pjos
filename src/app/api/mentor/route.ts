@@ -373,7 +373,7 @@ const SUBSECTIONS: Subsection[] = [
     id: 'app-store-pos',
     label: 'Store Mode POS',
     data: PJOS_PLATFORM_GUIDE.storeModePOS,
-    keywords: ['store mode', 'walk in', 'walk-in', 'walkin', 'not at event', 'everyday sale', 'salon sale', 'studio sale', 'shop sale', 'store sale'],
+    keywords: ['store mode', 'walk in', 'walk-in', 'walkin', 'not at event', 'everyday sale', 'salon sale', 'studio sale', 'shop sale', 'store sale', 'discount', 'coupon', 'promo'],
   },
   {
     id: 'app-inventory',
@@ -863,6 +863,7 @@ RESPONSE LENGTH:
 - Never give a numbered list when a sentence will do.
 - Never repeat back what the user just said.
 - Never add "bonus tips" or "also keep in mind" or "one more thing" unless asked.
+- When a user sends numbered points or a numbered list, address each point by its ORIGINAL number. Do not continue their numbering sequence. If they send points 1-6, respond to point 1, point 2, etc. — not 7, 8, 9. Keep each answer brief — 1-2 sentences per point.
 
 FORMATTING:
 - Use plain conversational text, not formatted reports.

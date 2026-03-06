@@ -737,16 +737,18 @@ function SettingsPage() {
     if (!tenant) return;
     setSavingReceipts(true);
     try {
-      const { error } = await supabase.from('tenants').update({
+      const { data, error } = await supabase.from('tenants').update({
         auto_email_receipt: autoEmailReceipt,
         auto_sms_receipt: autoSmsReceipt,
-        receipt_footer: receiptFooter,
-        receipt_tagline: receiptTagline,
-      }).eq('id', tenant.id);
+        receipt_footer: receiptFooter.trim(),
+        receipt_tagline: receiptTagline.trim(),
+      }).eq('id', tenant.id).select('id').single();
       if (error) throw error;
+      if (!data) throw new Error('Update returned no data — you may not have permission to edit settings');
       toast.success('Receipt settings saved');
       refetch();
     } catch (err: any) {
+      console.error('[Settings] Receipt save failed:', err);
       toast.error(err?.message || 'Failed to save receipt settings');
     } finally {
       setSavingReceipts(false);
