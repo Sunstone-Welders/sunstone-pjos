@@ -416,9 +416,14 @@ function WaiverPageInner() {
                 variant="primary"
                 className="w-full"
                 onClick={() => {
-                  if (isPreview) return setError('This is a preview. Scan a QR code at a participating business to check in.');
                   if (!form.name) return setError('Please enter your name');
+                  if (!form.phone) return setError('Please enter your phone number');
                   setError('');
+                  if (isPreview) {
+                    // Demo mode — skip signature, go straight to done
+                    setStep('done');
+                    return;
+                  }
                   setStep('sign');
                 }}
               >
@@ -499,17 +504,28 @@ function WaiverPageInner() {
                   />
                 </svg>
               </div>
-              <h2 className="text-2xl font-bold text-[var(--text-primary)]">All Set!</h2>
-              <p className="text-[var(--text-secondary)]">
-                Your waiver has been signed.
-                {hasEvent && form.phone && smsConsent && " We'll text you when it's your turn."}
-                {hasEvent && form.phone && !smsConsent && " You've been added to the queue. Listen for your name to be called."}
-                {hasEvent && !form.phone && " You've been added to the queue."}
-                {!hasEvent && " You're all checked in! Your artist will be with you shortly."}
-              </p>
+              <h2 className="text-2xl font-bold text-[var(--text-primary)]">Check-in Complete!</h2>
+              {smsConsent && form.phone ? (
+                <p className="text-[var(--text-secondary)]">
+                  SMS notifications enabled. You&apos;ll receive queue updates at <strong>{form.phone}</strong>.
+                </p>
+              ) : form.phone && !smsConsent ? (
+                <p className="text-[var(--text-secondary)]">
+                  You&apos;ve been added to the queue. Listen for your name to be called.
+                </p>
+              ) : (
+                <p className="text-[var(--text-secondary)]">
+                  You&apos;re all checked in! Your artist will be with you shortly.
+                </p>
+              )}
               <p className="text-xs text-[var(--text-tertiary)]">
                 You can close this page now.
               </p>
+              {isPreview && (
+                <p className="text-[10px] text-[var(--text-tertiary)] mt-4 opacity-60">
+                  Demo mode — scan a QR code at a participating business for the real experience.
+                </p>
+              )}
             </CardContent>
           </Card>
         )}
