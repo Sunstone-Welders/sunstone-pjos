@@ -360,36 +360,32 @@ function WaiverPageInner() {
                 placeholder="(555) 123-4567"
               />
 
-              {/* SMS Consent — separate from waiver, A2P 10DLC compliant */}
-              {form.phone && (
-                <div className="border border-[var(--border-default)] rounded-lg p-4 bg-[var(--surface-base)]">
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <span className="flex-shrink-0 pt-0.5">
-                      <input
-                        type="checkbox"
-                        checked={smsConsent}
-                        onChange={(e) => setSmsConsent(e.target.checked)}
-                        className="w-6 h-6 rounded border-2 border-[var(--border-default)] accent-[var(--accent-primary)] cursor-pointer"
-                      />
-                    </span>
-                    <span style={{ fontSize: 12, lineHeight: 1.7 }} className="text-[var(--text-secondary)]">
-                      I agree to receive text messages from <strong className="text-[var(--text-primary)]">{displayName}</strong> including
-                      queue updates, service notifications, receipts, and aftercare
-                      instructions. Message frequency varies. Msg &amp; data rates
-                      may apply. Reply STOP to unsubscribe at any time. Reply HELP for help.
-                      View our{' '}
-                      <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline text-[var(--accent-primary)]">Privacy Policy</a>
-                      {' '}and{' '}
-                      <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline text-[var(--accent-primary)]">Terms</a>.
-                    </span>
-                  </label>
-                  {!smsConsent && (
-                    <p style={{ fontSize: 11, marginTop: 6, marginLeft: 36 }} className="text-[var(--text-tertiary)]">
-                      Optional — if unchecked, we won&apos;t text you (listen for your name instead).
-                    </p>
-                  )}
+              {/* SMS Consent — separate from waiver, NOT required, A2P 10DLC compliant */}
+              <div className="border border-[var(--border-default)] rounded-lg p-4 bg-[var(--surface-base)]">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <span className="flex-shrink-0 pt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={smsConsent}
+                      onChange={(e) => setSmsConsent(e.target.checked)}
+                      className="w-6 h-6 rounded border-2 border-[var(--border-default)] accent-[var(--accent-primary)] cursor-pointer"
+                    />
+                  </span>
+                  <span style={{ fontSize: 12, lineHeight: 1.7 }} className="text-[var(--text-secondary)]">
+                    By providing my phone number, I consent to receive text messages from
+                    this business via Sunstone Studio. Messages may include queue position
+                    updates, service notifications, appointment reminders, receipts, and
+                    aftercare instructions. Message frequency varies, typically 1–3 messages
+                    per visit. Message and data rates may apply. Reply STOP to unsubscribe
+                    at any time. Reply HELP for help.
+                  </span>
+                </label>
+                <div style={{ fontSize: 11, marginTop: 8, marginLeft: 36 }} className="text-[var(--text-tertiary)]">
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-[var(--text-secondary)]">Privacy Policy</a>
+                  <span className="mx-1.5">·</span>
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-[var(--text-secondary)]">Terms of Service</a>
                 </div>
-              )}
+              </div>
 
               {/* Event selector — only show when no event param and events exist */}
               {!eventId && events.length > 0 && (
