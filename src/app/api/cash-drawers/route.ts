@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
   // Check for existing open drawer for this tenant (+ event if provided)
   const existingQuery = db
-    .from('cash_drawer_sessions')
+    .from('cash_drawers')
     .select('id')
     .eq('tenant_id', member.tenant_id)
     .eq('status', 'open');
@@ -49,8 +49,8 @@ export async function POST(request: NextRequest) {
   const { data: existing, error: existingError } = await existingQuery.limit(1);
 
   if (existingError) {
-    console.error('[CashDrawer POST] Error checking existing drawers:', JSON.stringify(existingError));
-    return NextResponse.json({ error: existingError.message }, { status: 500 });
+    console.error('[CashDrawer POST] existing check error:', existingError.message);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 
   if (existing && existing.length > 0) {
@@ -68,24 +68,14 @@ export async function POST(request: NextRequest) {
   };
 
   const { data: drawer, error } = await db
-    .from('cash_drawer_sessions')
+    .from('cash_drawers')
     .insert(insertPayload)
     .select()
     .single();
 
   if (error) {
-    console.error('[CashDrawer POST] Insert error:', JSON.stringify({
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
-    }));
-    return NextResponse.json({
-      error: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
-    }, { status: 500 });
+    console.error('[CashDrawer POST] insert error:', error.message);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
   return NextResponse.json(drawer, { status: 201 });
 }
@@ -114,7 +104,7 @@ export async function GET(request: NextRequest) {
   const eventId = url.searchParams.get('event_id');
 
   let query = db
-    .from('cash_drawer_sessions')
+    .from('cash_drawers')
     .select('*')
     .eq('tenant_id', member.tenant_id)
     .order('opened_at', { ascending: false })
@@ -125,18 +115,8 @@ export async function GET(request: NextRequest) {
 
   const { data: drawers, error } = await query;
   if (error) {
-    console.error('[CashDrawer GET] List error:', JSON.stringify({
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
-    }));
-    return NextResponse.json({
-      error: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
-    }, { status: 500 });
+    console.error('[CashDrawer GET] list error:', error.message);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
   return NextResponse.json(drawers || []);
 }

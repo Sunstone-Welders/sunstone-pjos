@@ -31,15 +31,15 @@ export async function GET(
   const db = await createServiceRoleClient();
 
   const { data: drawer, error } = await db
-    .from('cash_drawer_sessions')
+    .from('cash_drawers')
     .select('*')
     .eq('id', id)
     .eq('tenant_id', member.tenant_id)
     .single();
 
   if (error || !drawer) {
-    if (error) console.error('[CashDrawer GET detail] Error:', JSON.stringify({ message: error.message, code: error.code, details: error.details, hint: error.hint }));
-    return NextResponse.json({ error: 'Cash drawer not found', dbError: error?.message }, { status: 404 });
+    if (error) console.error('[CashDrawer GET detail] error:', error.message);
+    return NextResponse.json({ error: 'Cash drawer not found' }, { status: 404 });
   }
 
   // Fetch transactions
@@ -75,7 +75,7 @@ export async function PATCH(
   const db = await createServiceRoleClient();
 
   const { data: drawer } = await db
-    .from('cash_drawer_sessions')
+    .from('cash_drawers')
     .select('*')
     .eq('id', id)
     .eq('tenant_id', member.tenant_id)
@@ -117,7 +117,7 @@ export async function PATCH(
   const overShort = Math.round((closingBalance - expectedBalance) * 100) / 100;
 
   const { data: closed, error } = await db
-    .from('cash_drawer_sessions')
+    .from('cash_drawers')
     .update({
       status: 'closed',
       closed_at: new Date().toISOString(),
@@ -132,8 +132,8 @@ export async function PATCH(
     .single();
 
   if (error) {
-    console.error('[CashDrawer PATCH close] Error:', JSON.stringify({ message: error.message, code: error.code, details: error.details, hint: error.hint }));
-    return NextResponse.json({ error: error.message, code: error.code, details: error.details, hint: error.hint }, { status: 500 });
+    console.error('[CashDrawer PATCH close] error:', error.message);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
   return NextResponse.json(closed);
 }

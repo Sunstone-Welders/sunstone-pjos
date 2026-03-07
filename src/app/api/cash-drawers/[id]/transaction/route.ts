@@ -30,7 +30,7 @@ export async function POST(
 
   // Verify drawer exists, belongs to tenant, and is open
   const { data: drawer } = await db
-    .from('cash_drawer_sessions')
+    .from('cash_drawers')
     .select('id, status')
     .eq('id', id)
     .eq('tenant_id', member.tenant_id)
@@ -64,8 +64,8 @@ export async function POST(
     .single();
 
   if (error) {
-    console.error('[CashDrawer Transaction POST] Error:', JSON.stringify({ message: error.message, code: error.code, details: error.details, hint: error.hint }));
-    return NextResponse.json({ error: error.message, code: error.code, details: error.details, hint: error.hint }, { status: 500 });
+    console.error('[CashDrawer Transaction POST] error:', error.message);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
   return NextResponse.json(txn, { status: 201 });
 }
