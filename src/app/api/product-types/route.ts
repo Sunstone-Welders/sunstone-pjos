@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
       tenant_id,
       name: name.trim(),
       default_inches: Number(default_inches),
+      jump_rings_required: body.jump_rings_required ?? 1,
       sort_order: nextSort,
       is_default: false,
     })

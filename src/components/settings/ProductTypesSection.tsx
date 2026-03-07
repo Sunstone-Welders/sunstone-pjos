@@ -24,9 +24,11 @@ export default function ProductTypesSection({ tenantId }: ProductTypesSectionPro
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editInches, setEditInches] = useState('');
+  const [editJumpRings, setEditJumpRings] = useState('1');
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [newInches, setNewInches] = useState('');
+  const [newJumpRings, setNewJumpRings] = useState('1');
   const [saving, setSaving] = useState(false);
 
   // ── Load ────────────────────────────────────────────────────────────
@@ -60,6 +62,7 @@ export default function ProductTypesSection({ tenantId }: ProductTypesSectionPro
           tenant_id: tenantId,
           name: newName.trim(),
           default_inches: Number(newInches),
+          jump_rings_required: Number(newJumpRings) || 1,
         }),
       });
       if (!res.ok) {
@@ -71,6 +74,7 @@ export default function ProductTypesSection({ tenantId }: ProductTypesSectionPro
       setShowAdd(false);
       setNewName('');
       setNewInches('');
+      setNewJumpRings('1');
       await loadProductTypes();
     } catch {
       toast.error('Failed to add product type');
@@ -85,6 +89,7 @@ export default function ProductTypesSection({ tenantId }: ProductTypesSectionPro
     setEditingId(pt.id);
     setEditName(pt.name);
     setEditInches(String(pt.default_inches));
+    setEditJumpRings(String(pt.jump_rings_required ?? 1));
   };
 
   const handleEdit = async () => {
@@ -97,6 +102,7 @@ export default function ProductTypesSection({ tenantId }: ProductTypesSectionPro
         body: JSON.stringify({
           name: editName.trim(),
           default_inches: Number(editInches),
+          jump_rings_required: Number(editJumpRings) || 1,
         }),
       });
       if (!res.ok) {
@@ -209,9 +215,20 @@ export default function ProductTypesSection({ tenantId }: ProductTypesSectionPro
                       min="0.25"
                       value={editInches}
                       onChange={(e) => setEditInches(e.target.value)}
-                      className="w-full h-9 px-3 pr-8 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm  text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                      className="w-full h-9 px-3 pr-8 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-tertiary)]">in</span>
+                  </div>
+                  <div className="relative w-20">
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={editJumpRings}
+                      onChange={(e) => setEditJumpRings(e.target.value)}
+                      className="w-full h-9 px-3 pr-8 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-tertiary)]">JR</span>
                   </div>
                 </div>
                 <div className="flex gap-2 justify-end">
@@ -248,11 +265,11 @@ export default function ProductTypesSection({ tenantId }: ProductTypesSectionPro
                   </button>
                 </div>
 
-                {/* Name + inches */}
+                {/* Name + inches + jump rings */}
                 <div className="flex-1 min-w-0">
                   <span className="text-sm text-[var(--text-primary)] font-medium">{pt.name}</span>
-                  <span className="text-xs text-[var(--text-tertiary)] ml-2 ">
-                    {Number(pt.default_inches).toFixed(2)} in
+                  <span className="text-xs text-[var(--text-tertiary)] ml-2">
+                    {Number(pt.default_inches).toFixed(2)} in &middot; {pt.jump_rings_required ?? 1} JR
                   </span>
                 </div>
 
@@ -302,14 +319,26 @@ export default function ProductTypesSection({ tenantId }: ProductTypesSectionPro
                 min="0.25"
                 value={newInches}
                 onChange={(e) => setNewInches(e.target.value)}
-                className="w-full h-9 px-3 pr-8 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm  text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                className="w-full h-9 px-3 pr-8 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
                 placeholder="0.00"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-tertiary)]">in</span>
             </div>
+            <div className="relative w-20">
+              <input
+                type="number"
+                step="1"
+                min="0"
+                value={newJumpRings}
+                onChange={(e) => setNewJumpRings(e.target.value)}
+                className="w-full h-9 px-3 pr-8 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                placeholder="1"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-tertiary)]">JR</span>
+            </div>
           </div>
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" size="sm" onClick={() => { setShowAdd(false); setNewName(''); setNewInches(''); }}>
+            <Button variant="ghost" size="sm" onClick={() => { setShowAdd(false); setNewName(''); setNewInches(''); setNewJumpRings('1'); }}>
               Cancel
             </Button>
             <Button variant="primary" size="sm" onClick={handleAdd} disabled={saving || !newName.trim() || !newInches}>

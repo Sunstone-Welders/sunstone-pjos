@@ -97,6 +97,7 @@ export function ProductSelector({
         product_type_name: pt.name,
         inches_used: inches,
         pricing_mode: 'per_product',
+        _jump_rings_required: pt.jump_rings_required ?? 1,
       });
       resetSelection();
     },
@@ -127,6 +128,7 @@ export function ProductSelector({
         product_type_name: pt.name,
         inches_used: inches,
         pricing_mode: 'per_inch',
+        _jump_rings_required: pt.jump_rings_required ?? 1,
       });
       resetSelection();
     },

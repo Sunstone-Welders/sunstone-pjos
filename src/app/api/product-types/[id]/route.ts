@@ -24,6 +24,7 @@ export async function PATCH(
   if (body.default_inches !== undefined) updates.default_inches = Number(body.default_inches);
   if (body.sort_order !== undefined) updates.sort_order = body.sort_order;
   if (body.is_active !== undefined) updates.is_active = body.is_active;
+  if (body.jump_rings_required !== undefined) updates.jump_rings_required = body.jump_rings_required;
   updates.updated_at = new Date().toISOString();
 
   const { data, error } = await supabase
