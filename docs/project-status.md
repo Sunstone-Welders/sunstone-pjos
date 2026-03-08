@@ -46,7 +46,7 @@ This is the single source of truth for the Sunstone Studio project. It contains 
 - Jump ring auto-deduction with confirmation step
 - Discounts (per-item and cart-level)
 - Auto-scroll to product type selector on product tap
-- Cash drawer (open/close/track — currently has a 500 error being debugged)
+- Cash drawer (open/close/track)
 
 ### Stripe Payment Links
 - QR code payment — customer scans and pays on their phone
@@ -139,12 +139,10 @@ This is the single source of truth for the Sunstone Studio project. It contains 
 
 ## 3. KNOWN BUGS & ACTIVE ISSUES
 
-### Cash Drawer 500 Error (ACTIVE)
-- GET /api/cash-drawers?status=open returns 500
-- Column names were fixed but it still fails
-- The component retries 3 times then stops, but React re-renders loop excessively
-- Need to check Vercel server logs for the actual Supabase error
-- Also need to fix the React render loop (likely a useEffect dependency issue)
+### Cash Drawer 500 Error ✅ RESOLVED
+- Root cause: PATCH handler referenced 'actual_amount' column instead of 'closing_amount'. One-line fix deployed March 7, 2026.
+- Also fixed 'variance' → 'difference' and removed nonexistent 'closed_by' column
+- React render loop and retry logic fixed in prior commits
 
 ### Duplicate Sunstone Supplier
 - Default suppliers list sometimes shows "Sunstone" twice
@@ -256,8 +254,7 @@ This is the single source of truth for the Sunstone Studio project. It contains 
 
 ## 8. QUEUED FEATURES (Priority Order)
 
-1. **Fix cash drawer 500 error** — debug the Supabase error, fix React render loop
-2. **Referral tracking** — unique codes per client, revenue attribution, configurable rewards
+1. **Referral tracking** — unique codes per client, revenue attribution, configurable rewards
 3. **Phone/SMS authentication** — Supabase phone OTP (after Twilio A2P approved)
 4. **Capacitor shell + app stores** — wrap Next.js in native iOS/Android shell (after Apple/Google accounts + Mac)
 5. **Stripe Terminal + Tap to Pay** — native SDK via Capacitor plugin (after Capacitor shell)
