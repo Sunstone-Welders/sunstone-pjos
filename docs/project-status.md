@@ -1,5 +1,5 @@
 # Sunstone Studio — Project Status & Context Document
-## Last Updated: March 7, 2026
+## Last Updated: March 7, 2026 (Evening)
 
 ---
 
@@ -32,10 +32,11 @@ This is the single source of truth for the Sunstone Studio project. It contains 
 
 ### Core Platform
 - Multi-tenant architecture with RLS, UUID primary keys, tenant_id isolation
-- Auth: signup, login, password reset, email confirmation (Supabase Auth)
+- Auth: signup, login (server-side rate limited), password reset (rate limited, no email enumeration), email confirmation (Supabase Auth)
 - Onboarding: kit selection, pricing wizard (flat rate or per-product), product type setup
 - 9 theme variations (5 light, 4 dark), custom design system with CSS custom properties
 - Staff permissions: Admin/Manager/Staff roles
+- tenant_members RLS uses SECURITY DEFINER functions (no recursion)
 
 ### POS (Event Mode + Store Mode)
 - Full-screen tablet-optimized product grid
@@ -46,13 +47,14 @@ This is the single source of truth for the Sunstone Studio project. It contains 
 - Jump ring auto-deduction with confirmation step
 - Discounts (per-item and cart-level)
 - Auto-scroll to product type selector on product tap
-- Cash drawer (open/close/track)
+- Cash drawer (open/close/track) — working
 
 ### Stripe Payment Links
 - QR code payment — customer scans and pays on their phone
 - Text-to-pay — send payment link via SMS
 - Stripe Connect: artist connects their own Stripe account, payments flow to them
 - application_fee_amount: platform fee deducted from artist's payout automatically
+- Payment link route authenticated, line items fetched from DB (not client-supplied)
 - Pending sales excluded from reports until payment confirmed
 - Inventory only deducted after payment webhook confirms
 
@@ -60,50 +62,24 @@ This is the single source of truth for the Sunstone Studio project. It contains 
 - Purchase via POS (preset or custom amounts)
 - Deliver via SMS, email, or print
 - Redemption at POS with code lookup
-- Partial redemptions supported (remaining balance tracked)
-- Full coverage auto-completes sale with payment_method 'gift_card'
-- Management page with status, balance, redemption history
+- Partial redemptions supported, balance tracking
 
-### CRM & Messaging
-- Dedicated phone numbers via Twilio (auto-provisioned on signup)
-- Two-way SMS conversations stored in conversations table
-- Inbound SMS webhook routes to correct tenant by phone number
-- Sunny AI text responder: Auto/Suggest/Off modes
-- Event mode auto-reply toggle
-- Voice call handling: text-only greeting, call forwarding, custom greeting, mute during events
-- Broadcast messaging to client segments
-- Automated workflows with tag-based enrollment
-- Client tags (auto-tagged from events)
-- Quick reply toast notifications
-- Messages page with inbox, compose new message, unknown number handling
-
-### AI Features
-- Sunny (AI Mentor): subsection-level keyword matching, 43+ knowledge chunks
-- Sunny tools: add/edit inventory, send messages, look up clients
-- Sunny text responder: answers client texts based on tenant's actual data
-- Atlas (Admin AI): platform-level intelligence chat
-- AI business insights on dashboard
-- Landing page Sunny demo with rate limiting
-
-### Inventory
-- Chain management (inches-based tracking, sold as finished products)
-- Product types with configurable defaults (inches, jump rings per type)
-- Jump ring tracking with auto-deduction
-- Material/supplier fields, inventory movements
-- Low stock alerts
-- Product type defaults configurable via gear icon on inventory page
+### Clients & CRM
+- Client management with activity timeline, notes, tags, segments
+- Conversation history (two-way SMS)
+- Unread message badges on client cards
+- Message templates with variable support ({{first_name}}, {{business_name}})
+- SMS/email broadcasts with recipient targeting and tenant ownership checks
+- Automated workflows with step builder (trigger → delay → send template)
+- Workflow enrollment from client profiles (mobile-friendly)
+- Follow-up queuing
 
 ### Events & Queue
-- Event CRUD with QR code generation
+- Event CRUD with booth fee, tax profiles
+- QR codes for public waiver access
 - Digital waiver with signature capture, PDF generation, SMS consent checkbox
 - Queue management with position notifications
 - Store Mode queue (waiver check-in gate)
-
-### Clients
-- Client management with activity timeline
-- Notes, tags, segments
-- Conversation history (two-way SMS)
-- Unread message badges on client cards
 
 ### Reports & Financial
 - Event P&L with COGS breakdown (chain costs + jump ring costs)
@@ -121,77 +97,75 @@ This is the single source of truth for the Sunstone Studio project. It contains 
 - Post-trial lockout overlay (can see data, can't use features)
 - CRM gating: features lock when trial expires without CRM subscription
 
+### AI — Sunny (Mentor)
+- 1,457+ line knowledge base from 45+ official Sunstone documents
+- Streaming chat with subsection-level keyword matching (43 chunks)
+- Agentic tool execution (27+ tools)
+- Prompt caching for ~70% cost reduction
+- Dedicated --mentor-bubble-* CSS variables for readable contrast on all 9 themes
+- Rate limited (5 questions/month on Starter to protect PJ University content)
+
+### AI — Atlas (Admin)
+- 11 tools for platform management
+- Tenant management, platform stats, revenue queries, knowledge gap review
+
 ### Admin Portal
 - Platform admin at /admin
 - Tenant management, revenue dashboard
 - Admin cost tracker (Anthropic API, Twilio SMS, Resend email costs per tenant)
 - Admin AI (Atlas)
 - CRM toggle per tenant
+- Tenant detail returns explicit safe column list (no payment credentials exposed)
 
 ### Marketing & Public Pages
 - Landing page at sunstonepj.app (Playfair Display headlines, Inter body)
+- Screenshots converted to WebP, analytics tracking added
 - CRM dedicated marketing page at /crm with Sunny text responder demos
 - Privacy policy at /privacy (SMS-specific sections for A2P compliance)
 - Terms of service at /terms
-- Waiver demo at /waiver (with SMS consent checkbox for Twilio reviewer)
+- Waiver demo at /waiver (with SMS consent checkbox)
+- Sunny demo widget on landing page
 
 ---
 
-## 3. RECENTLY RESOLVED ISSUES
+## 3. KNOWN BUGS & ACTIVE ISSUES
 
-### Cash Drawer 500 Error ✅ RESOLVED
-- Root cause: PATCH handler referenced 'actual_amount' column instead of 'closing_amount'. One-line fix deployed March 7, 2026.
-- Also fixed 'variance' → 'difference' and removed nonexistent 'closed_by' column
-- React render loop and retry logic fixed in prior commits
+### All Previously Known Bugs — RESOLVED
+- Cash drawer 500 error — ✅ Column name mismatch fixed (actual_amount → closing_amount). March 7.
+- Sunny contrast on light themes — ✅ Dedicated CSS variables, 12:1+ contrast all themes. March 7.
+- Platform fee misleading copy — ✅ Removed "$98.50" example, added standard processing fee language. March 7.
+- Workflow enrollment mobile — ✅ Fixed in prior session.
+- SMS consent on waiver — ✅ Checkbox with carrier language, sms_consent column.
+- Duplicate Sunstone supplier — ✅ Data cleanup complete.
+- Getting Started cards disappearing — ✅ Caching issue fixed.
 
-### Sunny Assistant Bubble Contrast ✅ RESOLVED
-- Dedicated CSS variables (--mentor-bubble-*) per theme. All 9 themes pass with 12:1+ contrast ratios. March 7, 2026.
-
-### Platform Fee Copy ✅ RESOLVED
-- Removed misleading "$100 sale → you receive $98.50" example. Updated settings page to note standard processing fees apply separately. March 7, 2026.
-
-### SMS Consent Checkbox on Waiver ✅ RESOLVED
-- Waiver page has explicit SMS opt-in checkbox with required carrier language. sms_consent stored in waivers table.
-
-### Duplicate Sunstone Supplier ✅ RESOLVED
-- Cleanup complete.
-
-### Getting Started Cards ✅ RESOLVED
-- Caching issue fixed.
-
-### Landing Page Polish ✅ RESOLVED
-- Screenshots converted to WebP, placeholder logo replaced, analytics added. Testimonials still pending (need real user quotes post-launch).
-
-### Workflow Enrollment Mobile ✅ RESOLVED
-- Was already fixed before this session.
+### No Active Bugs as of March 7, 2026
+Manual QA testing (180 tests) pending — may surface new issues.
 
 ---
 
 ## 4. EXTERNAL BLOCKERS
 
-### Stripe Account ✅ RESOLVED
-- **Status:** Identity verification complete. Payouts unblocked. All systems operational.
-- **History:** API keys rotated after leaked key incident. Connect OAuth, payment links, subscription checkout, CRM checkout all working.
+### Stripe Account — ✅ RESOLVED
+- Identity verification complete. API keys working. Connect OAuth working. CRM checkout working.
+- Payouts should now be unblocked.
 
-### Twilio A2P 10DLC
-- **Status:** Resubmitted with corrected opt-in information
-- **Issue:** Previously rejected 3 times for CTA verification issues
-- **What was fixed:** Privacy/terms pages created on sunstonepj.app, waiver demo with SMS consent checkbox, opt-in description rewritten
-- **Impact:** Until approved, SMS messages may be filtered/blocked by carriers. Phone number provisioning may fail.
+### Shopify Catalog — ✅ PARTIALLY RESOLVED
+- Read-only Storefront API sync working. Products syncing.
+- **Next step:** Upgrade to API with write access for one-touch reorder feature (not launch-blocking).
+
+### Twilio A2P 10DLC — STILL WAITING
+- Resubmitted with corrected opt-in information and waiver demo with SMS consent checkbox.
+- Impact: Until approved, SMS messages may be filtered/blocked by carriers. Not launch-blocking — app works without SMS, just less reliable delivery.
 
 ### Apple Developer Account
-- **Status:** Signup in progress
-- **Cost:** $99/year
-- **Needed for:** Capacitor iOS app, App Store submission, Tap to Pay entitlement
+- Signup in progress. $99/year. Needed for Capacitor iOS app.
 
 ### Google Play Developer Account
-- **Status:** Signup in progress
-- **Cost:** $25 one-time
-- **Needed for:** Capacitor Android app, Play Store submission
+- Signup in progress. $25 one-time. Needed for Capacitor Android app.
 
 ### Mac Computer
-- **Status:** Tony getting access to one
-- **Needed for:** Xcode, iOS builds (hard Apple requirement)
+- Tony getting access to one. Needed for Xcode/iOS builds.
 
 ---
 
@@ -207,14 +181,11 @@ This is the single source of truth for the Sunstone Studio project. It contains 
 | AI Insights | No | Yes | Yes |
 | Full Reports | Basic | Full + CSV | Full + CSV |
 
-**CRM Add-On:** $69/month, single tier (no Essentials/Pro split)
+**CRM Add-On:** $69/month, single tier
 - Included free during 60-day Pro trial
 - Dedicated phone number, two-way SMS, workflows, broadcasts, Sunny text responder, voice call handling
 
 **Trial:** 60 days Pro + CRM, no credit card required
-- Can select a plan during trial (deferred billing)
-- Warnings at 14/7/3/1 days
-- Post-trial: features locked, data preserved, overlay prompts plan selection
 
 ---
 
@@ -225,25 +196,59 @@ This is the single source of truth for the Sunstone Studio project. It contains 
 - **Platform fee:** Deducted from artist's Stripe payout via application_fee_amount. Customer never sees a fee. Called "platform fee" internally, never "credit card fee" or "surcharge."
 - **Payment recording:** "Charge Customer" = Stripe processes payment. "Record External Payment" = just bookkeeping, no charge processed.
 - **Pending sales:** Sales created when payment link is generated have payment_status='pending'. They don't appear in reports and inventory isn't deducted until webhook confirms payment.
-- **Sunny rules:** Only 3 Sunstone welders exist (Zapp, Zapp Plus 2, mPulse). Never hallucinate products. Answer only what was asked. 2-3 sentences by default. Brevity is respect.
+- **Sunny rules:** Only 3 Sunstone welders exist (Zapp, Zapp Plus 2, mPulse). Never hallucinate products. Answer only what was asked. 2-3 sentences by default.
 - **CRM requires base plan:** Can't purchase CRM standalone after trial.
 
 ---
 
-## 7. TECHNICAL ARCHITECTURE
+## 7. SECURITY AUDIT — COMPLETED MARCH 7, 2026
+
+Full pre-launch security audit performed. All Critical and High issues fixed.
+
+### Critical Fixes (7/7 — ALL RESOLVED)
+- C1: Payment link route — added auth, line items fetched from DB not client body
+- C2: Send payment SMS — added auth + session-derived tenant
+- C3: Receipt SMS — added auth (matching email receipt pattern)
+- C4: Signup route — getUser() verification, caller must match userId
+- C5: platform_costs — dropped blanket USING(true) RLS policy
+- C6: Deleted debug-tools endpoint (exposed stack traces)
+- C7: Enabled RLS on platform_config, sunstone_product_catalog, sunstone_catalog_cache
+
+### High Fixes (6/6 — ALL RESOLVED)
+- H1: 15 routes (22 handlers) — tenant_id now derived from session, not client input
+- H2: Broadcast routes — added tenant_id ownership checks to detail/send/preview
+- H3: Login rate limiting — server-side API, 5 attempts/5 min/IP. Password reset: 3/15 min. No email enumeration.
+- H4: tenant_members RLS recursion — replaced with SECURITY DEFINER function (get_user_tenant_role)
+- H5: RLS enabled on 6 untracked tables via migration 038
+- H6: Admin tenant detail — explicit safe column list (no payment credentials)
+
+### Remaining (not launch-blocking)
+- 11 Medium issues (error message sanitization, OAuth state signing, gift card rate limiting, etc.)
+- 8 Low issues (input validation library, missing DELETE policies on append-only tables, etc.)
+- Will address in first 2 weeks post-launch.
+
+### Migrations Applied
+- 036: Fix platform_costs RLS
+- 037: Enable RLS on platform_config, sunstone_product_catalog, sunstone_catalog_cache
+- 038: Enable RLS on product_types, suppliers, chain_product_prices, materials, event_product_types, platform_admins
+- 039: Fix tenant_members recursion with SECURITY DEFINER functions
+
+---
+
+## 8. TECHNICAL ARCHITECTURE
 
 ### Database (Supabase/Postgres)
-- RLS on all tables, verified by Supabase Security Advisor
-- Key enums: payment_method (stripe_link, cash, venmo, card_external, gift_card), sale_status, payment_status, fee_handling
+- RLS on ALL tables, verified via security audit
+- SECURITY DEFINER functions: get_user_tenant_ids(), get_user_tenant_role()
 - Custom function: create_sale_transaction (handles sale creation, sale items, inventory deduction, queue updates)
-- Migrations numbered 001-035 in supabase/migrations/
+- Migrations numbered 001-039 in supabase/migrations/
 
 ### API Routes (Next.js App Router)
 - All at src/app/api/
-- Key patterns: createServerSupabase() for user-session queries, createServiceRoleClient() for admin/webhook operations
-- Stripe webhooks at /api/stripe/webhook
-- Twilio inbound SMS at /api/twilio/inbound
-- Twilio voice at /api/voice/inbound
+- ALL routes authenticated (verified in security audit)
+- ALL routes derive tenant_id from session via tenant_members lookup (verified in security audit)
+- Stripe webhooks: signature-verified, public endpoint
+- Login/password reset: server-side rate limiting
 
 ### Key Libraries
 - Stripe (payments, subscriptions, Connect)
@@ -263,15 +268,16 @@ This is the single source of truth for the Sunstone Studio project. It contains 
 
 ---
 
-## 8. QUEUED FEATURES (Priority Order)
+## 9. QUEUED FEATURES (Priority Order)
 
-1. **Referral tracking** — unique codes per client, revenue attribution, configurable rewards
+1. **Manual QA Gauntlet** — 180-test checklist across 15 categories. LAST GATE BEFORE LAUNCH.
+2. **Referral tracking** — unique codes per client, revenue attribution, configurable rewards
 3. **Phone/SMS authentication** — Supabase phone OTP (after Twilio A2P approved)
 4. **Capacitor shell + app stores** — wrap Next.js in native iOS/Android shell (after Apple/Google accounts + Mac)
 5. **Stripe Terminal + Tap to Pay** — native SDK via Capacitor plugin (after Capacitor shell)
 6. **Push notifications** — queue alerts, low stock, event reminders (after Capacitor)
-7. **Shopify catalog integration** — ✅ Read-only sync working (Storefront API). Next: upgrade to API with write access for one-touch reorder feature
-8. **Ambassador Program** — paid affiliate program (20% / 8 months). Two ambassador types (artist + external influencer). Stripe Connect Express payouts. See AMBASSADOR_PROGRAM_ROADMAP.md in project knowledge for full spec.
+7. **Shopify catalog write access** — upgrade from read-only to support one-touch reorder
+8. **Ambassador Program** — paid affiliate program (20% / 8 months). Two ambassador types (artist + external influencer). Stripe Connect Express payouts. See AMBASSADOR_PROGRAM_ROADMAP.md for full spec.
 9. **Predictive reorder intelligence** — sales velocity modeling, depletion forecasts
 10. **Number porting** — Twilio port-in with LOA for artists with existing business numbers
 11. **Multi-location phone numbers** — multiple numbers per tenant for salons
@@ -282,53 +288,26 @@ This is the single source of truth for the Sunstone Studio project. It contains 
 
 ---
 
-## 9. DOCUMENT CLEANUP RECOMMENDATIONS
+## 10. KEY PROJECT DOCUMENTS
 
-### KEEP (Still relevant)
-- **SUNSTONE_STUDIO_ROADMAP.md** — Master roadmap, update with current status
-- **STRIPE_TERMINAL_ARCHITECTURE.md** — Capacitor + Terminal research, still the plan
-- **DESIGN_SYSTEM.md** — Design philosophy and tokens, still accurate
-- **README.md** — Update with current setup instructions
+**In Project Knowledge:**
+- CONTROL_THREAD_PROMPT_V4.md — control thread instructions and full task list
+- SUNSTONE_STUDIO_ROADMAP.md — master roadmap with all tasks detailed
+- AMBASSADOR_PROGRAM_ROADMAP.md — affiliate program spec (20%/8mo, two types, Stripe Connect)
+- STRIPE_TERMINAL_ARCHITECTURE.md — Capacitor + Terminal research and plan
+- DESIGN_SYSTEM.md — design philosophy and tokens
+- DEPLOYMENT_GUIDE.md — deployment instructions
+- KB_DOCUMENT_*.docx — Sunny's knowledge base (critical, do not remove)
+- PJUniversity_Courses_and_segment_names.docx
+- The_Permanent_Jewelry_Customer_Experience.docx
 
-### ARCHIVE (Move to docs/archive/)
-These are historical completion reports. Useful for reference but clutter the root:
-- All TASK_*_COMPLETION_REPORT.md files (13 files)
-- WORKER_THREAD_*.md files (2 files)
-- CONTROL_THREAD_PROMPT.md, V2, V3 (keep V4 only)
-- POST_DEPLOY_FIXES_COMPLETION_REPORT_v2.md
-- DEPLOYMENT_COMPLETION_REPORT.md
-- ADMIN_INSIGHTS_COMPLETION_REPORT.md
-- TASK_SUNNY_PERFORMANCE_COMPLETION_REPORT.md
-- TASK_CHAIN_PRODUCTS.md, v2, v3 (superseded)
-- TASK_CHAIN_QUEUE_POS_INTEGRATION.md, V2 (superseded)
-- TASK_GROUP_B_INVENTORY_FORM_UX.md (completed)
-- TASK_FINANCIAL_ACCURACY.md, COMPLETION.md (completed)
-- TASK_C_WORKER_PROMPT.md (completed)
+**In Repo:**
+- docs/PROJECT_STATUS.md — this document (also update the repo copy)
+- CLAUDE.md — project-level instructions for Claude Code
 
-### DELETE or MERGE
-- **GAP_ANALYSIS.md** — Outdated, references free tier, old pricing. Delete.
-- **IMPLEMENTATION_SUMMARY.md** — Phase 0 summary, very old. Delete.
-- **REFACTORING_GUIDE.md** — Old refactoring plan, completed. Delete.
-- **INTEGRATION_GUIDE.md** — Old integration notes. Delete.
-- **CHAIN_PRODUCTS_INTEGRATION_GUIDE.md** — Completed, merged into codebase. Delete.
-- **QUICK_START.md** — May be outdated. Review and update or delete.
-- **SQUARE_DEBUG_CHECKLIST.md** — Square removed from product. Delete.
-- **CONTROL_THREAD_FEEDBACK_TWILIO_QUEUE.md** — Outdated feedback. Delete.
-- **PJOS_DESIGN_SPEC_V2.md** — Old design spec. Review, merge useful parts into DESIGN_SYSTEM.md, delete.
-- **PROJECT_STATUS_REPORT.md** — February 2026 version, superseded by this document. Delete.
+---
 
-### UPDATE
-- **CONTROL_THREAD_PROMPT_V4.md** — Update pricing ($49→$69 CRM, fee model change), add new features
-- **SUNSTONE_STUDIO_ROADMAP.md** — Update completed items, reorder priorities
-
-### Recommended Final Structure:
-```
-docs/
-  PROJECT_STATUS.md          ← This document (single source of truth)
-  SUNSTONE_STUDIO_ROADMAP.md ← Feature roadmap
-  DESIGN_SYSTEM.md           ← Design tokens and philosophy
-  STRIPE_TERMINAL_ARCHITECTURE.md ← Capacitor + Terminal plan
-  archive/                   ← All old completion reports
+*This document was last updated March 7, 2026 after a full security audit, 7 critical + 6 high vulnerability fixes, multiple bug fixes, and Ambassador Program planning. The platform is ready for manual QA testing — the final step before launch.*
 README.md                    ← Repo setup instructions
 ```
 
