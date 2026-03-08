@@ -1,5 +1,5 @@
 # Sunstone Studio — Project Status & Context Document
-## Last Updated: March 7, 2026 (Evening)
+## Last Updated: March 7, 2026 (Late Evening)
 
 ---
 
@@ -104,16 +104,21 @@ This is the single source of truth for the Sunstone Studio project. It contains 
 - Prompt caching for ~70% cost reduction
 - Dedicated --mentor-bubble-* CSS variables for readable contrast on all 9 themes
 - Rate limited (5 questions/month on Starter to protect PJ University content)
+- Knowledge gap detection: logs questions Sunny can't answer to mentor_knowledge_gaps table
+- Learning system: Admin reviews gaps → approves/dismisses → approved answers stored in mentor_knowledge_additions
 
 ### AI — Atlas (Admin)
 - 11 tools for platform management
-- Tenant management, platform stats, revenue queries, knowledge gap review
+- Tenant management, platform stats, revenue queries
+- Knowledge gap tools: list pending gaps, approve/dismiss — status value fixed ('resolved' → 'approved')
+- Streaming chat with slate/amber styling
 
 ### Admin Portal
 - Platform admin at /admin
 - Tenant management, revenue dashboard
 - Admin cost tracker (Anthropic API, Twilio SMS, Resend email costs per tenant)
 - Admin AI (Atlas)
+- Sunny's Learning tab: review pending knowledge gaps, approve/dismiss, manual additions — fixed March 7
 - CRM toggle per tenant
 - Tenant detail returns explicit safe column list (no payment credentials exposed)
 
@@ -232,6 +237,7 @@ Full pre-launch security audit performed. All Critical and High issues fixed.
 - 037: Enable RLS on platform_config, sunstone_product_catalog, sunstone_catalog_cache
 - 038: Enable RLS on product_types, suppliers, chain_product_prices, materials, event_product_types, platform_admins
 - 039: Fix tenant_members recursion with SECURITY DEFINER functions
+- 040: Knowledge gap system — created mentor_knowledge_gaps and mentor_knowledge_additions tables with RLS
 
 ---
 
@@ -241,7 +247,7 @@ Full pre-launch security audit performed. All Critical and High issues fixed.
 - RLS on ALL tables, verified via security audit
 - SECURITY DEFINER functions: get_user_tenant_ids(), get_user_tenant_role()
 - Custom function: create_sale_transaction (handles sale creation, sale items, inventory deduction, queue updates)
-- Migrations numbered 001-039 in supabase/migrations/
+- Migrations numbered 001-040 in supabase/migrations/
 
 ### API Routes (Next.js App Router)
 - All at src/app/api/
@@ -307,33 +313,4 @@ Full pre-launch security audit performed. All Critical and High issues fixed.
 
 ---
 
-*This document was last updated March 7, 2026 after a full security audit, 7 critical + 6 high vulnerability fixes, multiple bug fixes, and Ambassador Program planning. The platform is ready for manual QA testing — the final step before launch.*
-README.md                    ← Repo setup instructions
-```
-
----
-
-## 10. HOW TO START A NEW THREAD
-
-Paste this at the beginning of a new Claude conversation:
-
-"I'm Tony Price, founder of Sunstone Studio (sunstonepj.app). This is a vertical SaaS platform for permanent jewelry artists built with Next.js 15, TypeScript, Supabase, and deployed on Vercel. Please read the PROJECT_STATUS.md file in the project knowledge base for full context on what's built, what's in progress, and what's next. I use Claude Code for implementation — give me prompts to paste, not direct file edits."
-
----
-
-## 11. WORKFLOW PATTERN
-
-Tony's development workflow:
-1. **Plan in Claude chat** (this conversation) — discuss strategy, make decisions
-2. **Claude writes the prompt** — detailed, specific instructions for Claude Code
-3. **Tony pastes prompt into Claude Code** (VS Code terminal) — Claude Code executes
-4. **Tony reports results** — completion report, errors, screenshots
-5. **Debug in Claude chat** — fix issues, iterate
-6. **Push to Vercel** — git push triggers automatic deployment
-
-Key rules:
-- Always output complete Claude Code prompts, not raw code to paste into files
-- Run `npm run build` before pushing to catch errors locally
-- Run SQL migrations in Supabase SQL Editor manually
-- Check Vercel logs for production-specific errors
-- Fire-and-forget for non-critical operations (cost logging, analytics)
+*This document was last updated March 7, 2026 after a full security audit, 7 critical + 6 high vulnerability fixes, knowledge gap learning system repair, login rate limiting, multiple bug fixes, and Ambassador Program planning. The platform is ready for manual QA testing — the final step before launch.*

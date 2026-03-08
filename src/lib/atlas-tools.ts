@@ -648,7 +648,7 @@ export async function executeAtlasTool(
         // Update gap status
         await serviceClient
           .from('mentor_knowledge_gaps')
-          .update({ status: 'resolved' })
+          .update({ status: 'approved' })
           .eq('id', input.gap_id);
 
         return { result: { success: true, gap_id: input.gap_id, question: gap.user_message } };
