@@ -7,7 +7,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabase, createServiceRoleClient } from '@/lib/supabase/server';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
 import { provisionPhoneNumber } from '@/lib/twilio';
 
@@ -29,6 +29,13 @@ export async function POST(request: NextRequest) {
         { error: 'Missing userId or businessName' },
         { status: 400 }
       );
+    }
+
+    // ── Verify caller identity — userId must match the authenticated user ──
+    const authClient = await createServerSupabase();
+    const { data: { user } } = await authClient.auth.getUser();
+    if (!user || user.id !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Use service role client — bypasses RLS entirely

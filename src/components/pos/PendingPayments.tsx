@@ -133,16 +133,12 @@ export function PendingPayments({ tenantId, eventId, onPaymentCompleted }: Pendi
     }
     setResending(sale.id);
     try {
-      // Create a new checkout session
+      // Create a new checkout session — amounts verified server-side from DB
       const res = await fetch('/api/stripe/payment-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           saleId: sale.id,
-          tenantId,
-          lineItems: [{ name: 'Payment', unit_price: Number(sale.total), quantity: 1 }],
-          tipAmount: 0,
-          taxAmount: 0,
         }),
       });
       const data = await res.json();
@@ -156,7 +152,6 @@ export function PendingPayments({ tenantId, eventId, onPaymentCompleted }: Pendi
           phone: sale.receipt_phone,
           url: data.url,
           total: sale.total,
-          tenantId,
         }),
       });
 

@@ -1,11 +1,16 @@
-// src/app/api/receipts/sms/route.ts
+// ============================================================================
+// Receipt SMS — POST /api/receipts/sms
+// ============================================================================
+// SECURITY: Auth required. Tenant derived from session (matches email route).
+// ============================================================================
+
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerSupabase, createServiceRoleClient } from '@/lib/supabase/server';
 import { sendSMS } from '@/lib/twilio';
 
 interface ReceiptSmsBody {
   to: string;
   tenantName: string;
-  tenantId?: string;
   clientId?: string;
   total: number;
   itemCount: number;
@@ -15,6 +20,28 @@ interface ReceiptSmsBody {
 
 export async function POST(request: NextRequest) {
   try {
+    // ── Auth check ──────────────────────────────────────────────────────
+    const supabase = await createServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ sent: false, error: 'Not authenticated' }, { status: 401 });
+    }
+
+    // Derive tenant from user's membership — don't trust tenantId from body
+    const { data: member } = await supabase
+      .from('tenant_members')
+      .select('tenant_id')
+      .eq('user_id', user.id)
+      .limit(1)
+      .single();
+
+    if (!member) {
+      return NextResponse.json({ sent: false, error: 'No tenant membership' }, { status: 403 });
+    }
+
+    const tenantId = member.tenant_id;
+
     const body: ReceiptSmsBody = await request.json();
 
     if (!body.to || !body.tenantName || body.total == null) {
@@ -38,35 +65,34 @@ export async function POST(request: NextRequest) {
       smsBody += `\n${body.footer}`;
     }
 
-    const sid = await sendSMS({ to: body.to, body: smsBody, tenantId: body.tenantId || undefined });
+    const sid = await sendSMS({ to: body.to, body: smsBody, tenantId });
 
     if (!sid) {
       return NextResponse.json({ sent: false, error: 'SMS service not configured' }, { status: 503 });
     }
 
-    // Log to message_log (fire-and-forget)
-    if (body.tenantId) {
-      import('@/lib/supabase/server').then(({ createServiceRoleClient }) =>
-        createServiceRoleClient().then(svc =>
-          svc.from('message_log').insert({
-            tenant_id: body.tenantId,
-            client_id: body.clientId || null,
-            direction: 'outbound',
-            channel: 'sms',
-            recipient_phone: body.to,
-            body: smsBody,
-            source: 'receipt',
-            status: 'sent',
-          })
-        )
-      ).catch(() => {});
+    // Log to message_log (fire-and-forget) — use server-derived tenantId
+    try {
+      const svc = await createServiceRoleClient();
+      await svc.from('message_log').insert({
+        tenant_id: tenantId,
+        client_id: body.clientId || null,
+        direction: 'outbound',
+        channel: 'sms',
+        recipient_phone: body.to,
+        body: smsBody,
+        source: 'receipt',
+        status: 'sent',
+      });
+    } catch {
+      // Non-critical — don't fail the receipt send
     }
 
     return NextResponse.json({ sent: true, sid });
   } catch (err: any) {
     console.error('[Receipt SMS Error]', err);
     return NextResponse.json(
-      { sent: false, error: err?.message || 'Failed to send SMS' },
+      { sent: false, error: 'Failed to send SMS' },
       { status: 500 }
     );
   }

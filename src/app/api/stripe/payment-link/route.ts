@@ -2,46 +2,79 @@
 // Stripe Payment Link API — POST /api/stripe/payment-link
 // ============================================================================
 // Creates a Stripe Checkout Session on the artist's connected account.
-// Platform fee is silently deducted from the artist's Stripe payout via
+// Platform fee is silently deducted from the artist's payout via
 // application_fee_amount — the customer never sees a processing fee.
+//
+// SECURITY: Auth required. Line items + amounts are fetched from the DB —
+// the client only supplies saleId and mode. Prices are never trusted from
+// the request body.
 // ============================================================================
 
 export const runtime = 'nodejs';
 
 import Stripe from 'stripe';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerSupabase, createServiceRoleClient } from '@/lib/supabase/server';
 import { PLATFORM_FEE_RATES } from '@/types';
-import { NextResponse } from 'next/server';
 import type { SubscriptionTier } from '@/types';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-02-24.acacia' as any,
 });
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const {
-      saleId,
-      tenantId,
-      lineItems,
-      tipAmount,
-      taxAmount,
-      customerEmail,
-      customerPhone,
-      mode,
-    } = await request.json();
+    // ── Auth check ──────────────────────────────────────────────────────
+    const supabase = await createServerSupabase();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!saleId || !tenantId || !lineItems?.length) {
-      return NextResponse.json(
-        { error: 'Missing required fields: saleId, tenantId, lineItems' },
-        { status: 400 }
-      );
+    const { data: member } = await supabase
+      .from('tenant_members')
+      .select('tenant_id')
+      .eq('user_id', user.id)
+      .limit(1)
+      .single();
+    if (!member) return NextResponse.json({ error: 'No tenant membership' }, { status: 403 });
+
+    const tenantId = member.tenant_id;
+
+    // ── Parse request — only saleId and mode come from client ───────────
+    const { saleId, mode } = await request.json();
+
+    if (!saleId) {
+      return NextResponse.json({ error: 'Missing required field: saleId' }, { status: 400 });
     }
 
-    const supabase = await createServiceRoleClient();
+    // ── Fetch sale + items from DB (server-side truth) ──────────────────
+    const db = await createServiceRoleClient();
 
-    // Get tenant's Stripe account and subscription tier
-    const { data: tenant } = await supabase
+    const { data: sale, error: saleError } = await db
+      .from('sales')
+      .select('id, tenant_id, subtotal, tax_amount, tip_amount, total, payment_status')
+      .eq('id', saleId)
+      .eq('tenant_id', tenantId)
+      .single();
+
+    if (saleError || !sale) {
+      return NextResponse.json({ error: 'Sale not found' }, { status: 404 });
+    }
+
+    if (sale.payment_status === 'completed') {
+      return NextResponse.json({ error: 'Sale is already paid' }, { status: 400 });
+    }
+
+    const { data: saleItems, error: itemsError } = await db
+      .from('sale_items')
+      .select('name, unit_price, quantity, line_total')
+      .eq('sale_id', saleId);
+
+    if (itemsError || !saleItems || saleItems.length === 0) {
+      return NextResponse.json({ error: 'No items found for this sale' }, { status: 400 });
+    }
+
+    // ── Get tenant's Stripe account and subscription tier ───────────────
+    const { data: tenant } = await db
       .from('tenants')
       .select('stripe_account_id, subscription_tier, name')
       .eq('id', tenantId)
@@ -54,28 +87,27 @@ export async function POST(request: Request) {
       );
     }
 
-    // Calculate platform fee based on tier
-    const feeRate = PLATFORM_FEE_RATES[(tenant.subscription_tier as SubscriptionTier)] || 0.03;
-
-    // Build line items for Stripe Checkout
+    // ── Build line items from DB data ───────────────────────────────────
     const stripeLineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
 
     let subtotalCents = 0;
-    for (const item of lineItems) {
-      const unitCents = Math.round(item.unit_price * 100);
-      subtotalCents += unitCents * item.quantity;
+    for (const item of saleItems) {
+      const unitCents = Math.round(Number(item.unit_price) * 100);
+      const qty = Math.round(Number(item.quantity));
+      subtotalCents += unitCents * qty;
       stripeLineItems.push({
         price_data: {
           currency: 'usd',
           product_data: { name: item.name },
           unit_amount: unitCents,
         },
-        quantity: item.quantity,
+        quantity: qty,
       });
     }
 
     // Add tax as a line item if applicable
-    if (taxAmount && taxAmount > 0) {
+    const taxAmount = Number(sale.tax_amount) || 0;
+    if (taxAmount > 0) {
       stripeLineItems.push({
         price_data: {
           currency: 'usd',
@@ -87,7 +119,8 @@ export async function POST(request: Request) {
     }
 
     // Add tip as a line item if applicable
-    if (tipAmount && tipAmount > 0) {
+    const tipAmount = Number(sale.tip_amount) || 0;
+    if (tipAmount > 0) {
       stripeLineItems.push({
         price_data: {
           currency: 'usd',
@@ -98,53 +131,51 @@ export async function POST(request: Request) {
       });
     }
 
-    // Calculate platform fee on the subtotal (not on tax/tip)
+    // ── Calculate platform fee on the subtotal (not on tax/tip) ─────────
+    const feeRate = PLATFORM_FEE_RATES[(tenant.subscription_tier as SubscriptionTier)] || 0.03;
     const platformFeeCents = Math.round(subtotalCents * feeRate);
 
-    // Platform fee is collected via application_fee_amount (deducted from artist payout)
-    // Customer sees a clean checkout with no extra fees
-
-    // Determine success/cancel URLs based on POS mode
+    // ── Determine success/cancel URLs based on POS mode ─────────────────
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sunstonepj.app';
     const returnPath = mode === 'store'
       ? '/dashboard/pos'
       : '/dashboard/events/event-mode';
 
-    // Create Checkout Session on the connected account
-    const session = await stripe.checkout.sessions.create(
-      {
-        mode: 'payment',
-        payment_method_types: ['card'],
-        line_items: stripeLineItems,
-        payment_intent_data: {
-          application_fee_amount: platformFeeCents,
-          metadata: {
-            sale_id: saleId,
-            tenant_id: tenantId,
-          },
-        },
-        success_url: `${baseUrl}${returnPath}?payment_success=${saleId}`,
-        cancel_url: `${baseUrl}${returnPath}?payment_cancelled=${saleId}`,
-        expires_after: 1800, // 30 minutes
+    // ── Create Checkout Session on the connected account ────────────────
+    const sessionParams: Record<string, unknown> = {
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: stripeLineItems,
+      payment_intent_data: {
+        application_fee_amount: platformFeeCents,
         metadata: {
           sale_id: saleId,
           tenant_id: tenantId,
         },
-        ...(customerEmail && { customer_email: customerEmail }),
       },
-      {
-        stripeAccount: tenant.stripe_account_id,
-      }
+      success_url: `${baseUrl}${returnPath}?payment_success=${saleId}`,
+      cancel_url: `${baseUrl}${returnPath}?payment_cancelled=${saleId}`,
+      expires_after: 1800, // 30 minutes
+      metadata: {
+        sale_id: saleId,
+        tenant_id: tenantId,
+      },
+    };
+
+    const session = await stripe.checkout.sessions.create(
+      sessionParams as Stripe.Checkout.SessionCreateParams,
+      { stripeAccount: tenant.stripe_account_id }
     );
 
-    // Update sale with checkout session ID and pending status
-    await supabase
+    // ── Update sale with checkout session ID and pending status ──────────
+    await db
       .from('sales')
       .update({
         stripe_checkout_session_id: session.id,
         payment_status: 'pending',
       })
-      .eq('id', saleId);
+      .eq('id', saleId)
+      .eq('tenant_id', tenantId);
 
     return NextResponse.json({
       url: session.url,
@@ -153,7 +184,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('[Payment Link] Error creating checkout session:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to create payment link' },
+      { error: 'Failed to create payment link' },
       { status: 500 }
     );
   }

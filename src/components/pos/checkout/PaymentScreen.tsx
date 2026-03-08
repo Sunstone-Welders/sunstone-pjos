@@ -154,22 +154,12 @@ export function PaymentScreen({
         setPendingSaleId(saleId);
       }
 
-      // Create Stripe Checkout session
-      // When a gift card is partially applied, send a single line item for the remainder
-      const stripeLineItems = appliedGiftCard
-        ? [{ name: `Balance due (gift card ${formatGiftCardCode(appliedGiftCard.code)} applied)`, unit_price: appliedGiftCard.remainingDue, quantity: 1 }]
-        : items.map((i) => ({ name: i.name, unit_price: i.unitPrice, quantity: i.quantity }));
-
+      // Create Stripe Checkout session — amounts are verified server-side from DB
       const res = await fetch('/api/stripe/payment-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           saleId,
-          tenantId,
-          lineItems: stripeLineItems,
-          // When gift card is applied, tax/tip are already baked into the single line item
-          tipAmount: appliedGiftCard ? 0 : tipAmount,
-          taxAmount: appliedGiftCard ? 0 : taxAmount,
           mode: mode || 'event',
         }),
       });
@@ -197,7 +187,7 @@ export function PaymentScreen({
     } finally {
       setCreating(false);
     }
-  }, [pendingSaleId, tenantId, items, tipAmount, taxAmount, mode]);
+  }, [pendingSaleId, mode]);
 
   // ── Poll for payment status ──
 
@@ -235,7 +225,6 @@ export function PaymentScreen({
           url: checkoutUrl,
           tenantName,
           total,
-          tenantId,
         }),
       });
       const data = await res.json();
