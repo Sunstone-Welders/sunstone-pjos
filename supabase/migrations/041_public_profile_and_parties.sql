@@ -2,7 +2,7 @@
 -- Migration 041: Public Artist Profile & Party Booking
 -- ============================================================================
 -- Adds profile columns to tenants, party_requests table, party_rsvps table.
--- Profile defaults to enabled: false — no tenant is exposed until they opt in.
+-- Profile defaults to enabled: true — every artist gets a storefront automatically.
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -15,7 +15,7 @@ ALTER TABLE tenants ADD COLUMN IF NOT EXISTS state text;
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS instagram_url text;
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS facebook_url text;
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS tiktok_url text;
-ALTER TABLE tenants ADD COLUMN IF NOT EXISTS profile_settings jsonb NOT NULL DEFAULT '{"enabled": false, "show_pricing": true, "show_events": true, "show_party_booking": true, "show_contact": true}'::jsonb;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS profile_settings jsonb NOT NULL DEFAULT '{"enabled": true, "show_pricing": true, "show_events": true, "show_party_booking": true, "show_contact": true}'::jsonb;
 
 -- ---------------------------------------------------------------------------
 -- 2. party_requests table

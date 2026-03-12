@@ -475,6 +475,10 @@ export default function CRMPageClient({ authState, trialEndDate }: { authState: 
               'Event mode auto-reply',
               'Client insights & tagging',
               'Message templates',
+              'Advanced party booking & deposits',
+              'Automated party reminders',
+              'RSVP tracking & guest management',
+              'Host rewards program',
             ].map((feature, i) => (
               <Reveal key={i} delay={i * 0.03}>
                 <div style={{
@@ -518,6 +522,7 @@ export default function CRMPageClient({ authState, trialEndDate }: { authState: 
                     ['SMS marketing (SimpleTexting, SlickText)', '$39–249/mo'],
                     ['CRM (HubSpot, Podium)', '$50–399/mo'],
                     ['Marketing automation (GoHighLevel)', '$97–297/mo'],
+                    ['Party booking & RSVP tools', '$30–100/mo'],
                     ['AI assistant', '$$'],
                   ].map(([tool, cost], i) => (
                     <tr key={i} style={{ borderTop: `1px solid ${C.borderLight}` }}>
@@ -528,7 +533,7 @@ export default function CRMPageClient({ authState, trialEndDate }: { authState: 
                   ))}
                   <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bgDeep }}>
                     <td style={{ padding: '14px 20px', fontWeight: 700, color: C.text }}>Total if bought separately</td>
-                    <td style={{ padding: '14px 20px', textAlign: 'center', fontWeight: 700, color: C.textSec }}>$200–900/mo</td>
+                    <td style={{ padding: '14px 20px', textAlign: 'center', fontWeight: 700, color: C.textSec }}>$230–1,000/mo</td>
                     <td style={{ padding: '14px 20px', textAlign: 'center' }}>
                       <span className="serif" style={{ fontSize: 22, fontWeight: 600, color: C.wine }}>$69</span>
                       <span style={{ color: C.textSec, fontSize: 14 }}>/mo</span>

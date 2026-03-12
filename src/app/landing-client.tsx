@@ -49,6 +49,8 @@ const PRICING = [
       'Smart Inventory management',
       'Client database',
       'Digital waivers & QR check-in',
+      'Artist Storefront (public booking page)',
+      'Private party booking requests',
       'Basic reports',
       'Sunny AI — 5 questions/mo',
       '60-day Pro trial with full CRM',
@@ -67,6 +69,7 @@ const PRICING = [
       'Advanced reports & insights',
       'Up to 3 team members',
       'Custom brand themes',
+      'Artist Storefront & party booking',
       'Priority support',
       '60-day Pro trial with full CRM',
     ],
@@ -82,6 +85,7 @@ const PRICING = [
       'Everything in Pro, plus:',
       'Zero platform fee — you keep 100% of every sale',
       'Unlimited team members',
+      'Artist Storefront & party booking',
       'White-glove onboarding',
       'Dedicated support',
       '60-day Pro trial with full CRM',
@@ -132,7 +136,7 @@ const FAQS = [
   },
   {
     q: "What's included in the CRM?",
-    a: 'Your own dedicated business phone number, two-way SMS conversations, automated aftercare sequences, broadcast messaging, client workflows, birthday automations, message templates, private party booking, and client intelligence. $69/mo add-on to any plan — all included free during your 60-day Pro trial.',
+    a: 'Your own dedicated business phone number, two-way SMS conversations, automated aftercare sequences, broadcast messaging, client workflows, birthday automations, message templates, advanced party booking (deposits, RSVP tracking, automated reminders, host rewards), and client intelligence. $69/mo add-on to any plan — all included free during your 60-day Pro trial. Basic party booking and your artist storefront are included free on every plan.',
   },
 ]
 
@@ -192,6 +196,14 @@ const FEATURES = [
     highlight: 'Automatic COGS tracking · Jump ring auto-deduction',
     img: '/landing/inventory.webp',
     imgAlt: 'Inventory management table showing chains with cost, price, stock levels, and material types',
+  },
+  {
+    num: '08',
+    name: 'Your Artist Storefront',
+    desc: "A beautiful, always-updated page your clients can book from. Your services, pricing, upcoming events, and a private party booking form — all in one link. Share it in your Instagram bio, text it to clients, or print it on a card. No website builder. No monthly fee. Just your business, looking polished.",
+    highlight: 'One link for everything · Included free on every plan',
+    img: '/landing/pos-store.webp',
+    imgAlt: 'Public artist storefront page showing services, upcoming events, and party booking form',
   },
 ]
 
@@ -1208,7 +1220,7 @@ export default function LandingPageClient() {
               { icon: '💛', title: 'Automated Aftercare', desc: 'Post-purchase care instructions, re-weld reminders, and birthday messages — all on autopilot.' },
               { icon: '🔄', title: 'Smart Follow-ups', desc: 'Automated sequences that nurture new clients into regulars without you lifting a finger.' },
               { icon: '📣', title: 'Broadcast Messaging', desc: 'One tap to message your VIP list about your next event or promotion.' },
-              { icon: '🎉', title: 'Private Party Booking', desc: 'Shareable booking page with RSVP tracking, deposits, and host rewards.' },
+              { icon: '🎉', title: 'Advanced Party Booking', desc: 'Deposits, RSVP tracking, guest management, automated reminders, and host rewards.' },
               { icon: '📊', title: 'Client Intelligence', desc: "Know who your top spenders are, who hasn't visited in 60 days, and who's referring friends." },
             ].map((item, i) => (
               <Reveal key={i} delay={i * 0.08}>
