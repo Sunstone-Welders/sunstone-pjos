@@ -15,7 +15,7 @@ const DEFAULT_TEMPLATES = [
     channel: 'sms',
     category: 'aftercare',
     is_default: true,
-    body: 'Hi {{client_name}}, quick note from {{business_name}} about your new permanent jewelry:\n\n- It is waterproof. Shower, swim, and sleep in it.\n- Avoid pulling or snagging it on clothing for the first few days.\n- If the area around the weld feels irritated, give it a few days to adjust. That is normal.\n- Sterling silver may tarnish over time. A gentle polish will bring it right back.\n\nQuestions? Just text us back.',
+    body: 'Hi {{client_name}}, quick note from {{business_name}} about your new permanent jewelry:\n\n- Clean often with water, a gentle toothbrush, and dish soap. Pat dry.\n- Avoid harsh chemicals. Limit prolonged time in pools. Be mindful of lotions and perfumes.\n- Showering, exercising, and sleeping in it is totally fine.\n- If it ever breaks at the weld, we will repair it for free as long as you still have the chain.\n- To remove, just snip the jump ring with household scissors.\n\nQuestions? Just text us back.',
   },
   {
     name: 'Social Media Request',
@@ -88,7 +88,7 @@ const DEFAULT_TEMPLATES = [
     category: 'aftercare',
     is_default: true,
     subject: 'Your Permanent Jewelry Care Guide',
-    body: 'Hi {{client_name}},\n\nThank you for getting welded with {{business_name}}! Here is everything you need to know about caring for your new piece:\n\nIt is waterproof. You can shower, swim, and sleep in your permanent jewelry without worry.\n\nAvoid pulling or snagging it on clothing, towels, or bags for the first few days while you get used to wearing it.\n\nIf the area around the weld feels slightly irritated, that is completely normal. Give it a few days and it will settle.\n\nSterling silver pieces may tarnish over time. A gentle polish with a jewelry cloth will bring them right back to life.\n\nGold-filled and 14k pieces are very low-maintenance. Just wear them and enjoy.\n\nIf your piece ever breaks or you need a repair, reach out to us. We are happy to help.\n\nThank you again for trusting us with your jewelry. We hope you love it.\n\n{{business_name}}',
+    body: 'Hi {{client_name}},\n\nThank you for getting welded with {{business_name}}! Here is everything you need to know about caring for your new piece:\n\nClean often. Use water, a gentle toothbrush, and dish soap. Pat dry. Regular cleaning keeps your jewelry looking its best.\n\nAvoid harsh chemicals like bleach and acetone. Limit prolonged time in pools. Be mindful of lotions and perfumes near your jewelry.\n\nShowering, exercising, and sleeping in your permanent jewelry is perfectly fine. Live your life normally.\n\nSterling silver pieces may tarnish over time. A gentle clean will bring them right back to life.\n\nGold-filled and 14k pieces are very low-maintenance. Just wear them and enjoy.\n\nFree repairs for life. If your piece ever breaks at the weld, reach out to us and we will re-weld it free of charge as long as you still have the chain.\n\nTo remove your jewelry, simply snip the jump ring with household scissors or a nail cutter.\n\nThank you again for trusting us with your jewelry. We hope you love it.\n\n{{business_name}}',
   },
   {
     name: 'Private Party Email',

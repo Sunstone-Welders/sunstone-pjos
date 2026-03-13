@@ -575,7 +575,7 @@ export const PRODUCTS_KNOWLEDGE = {
       customerPitch: 'Classic silver look. Beautiful and affordable.',
       pricePosition: 'Entry tier',
       bestFor: 'Budget-conscious customers, silver-preference customers, younger demographic.',
-      careNote: 'May tarnish over time. Clean with polishing cloth or mild jewelry cleaner.',
+      careNote: 'May tarnish over time. Clean with water, a gentle toothbrush, and dish soap. Pat dry.',
     },
     stainlessSteel: {
       customerPitch: 'Extremely durable and affordable.',
@@ -763,7 +763,7 @@ export const BUSINESS_STRATEGY_KNOWLEDGE = {
       },
       necklaces: 'Often sold by the inch: $7–10/inch depending on material.',
       connectorsCharms: '$15–35 each',
-      reWelds: 'First re-weld free (for life). Additional: ~$5–10 for a new jump ring if needed.',
+      reWelds: 'Free re-welds for life as long as the customer still has the chain. No time limit. No fee. This is a powerful selling point.',
     },
     costCalculationExample: {
       description: 'Example for a standard gold-filled bracelet:',
@@ -947,13 +947,11 @@ export const BUSINESS_STRATEGY_KNOWLEDGE = {
   // Re-Weld Policy Recommendation
   // ---------------------------------------------------------------------------
   reWeldPolicy: {
-    recommendation: 'Free re-welds for life if the piece broke at the weld and the customer still has it. This is good policy and simple to honor — just guarantee it.',
+    recommendation: 'Free repairs for life as long as the customer still has the chain. No time limit. No fee. This is a powerful selling point and builds customer trust and loyalty.',
     ifBrokeAtWeld: 'Re-weld the same jump ring for free. No issue welding the same spot multiple times. If the jump ring is mangled or won\'t close properly, use a fresh one.',
-    ifBrokeAtChainLink: 'This means the chain broke, not the weld. Add a new jump ring. Optionally charge ~$5 for the jump ring or do it free — artist preference.',
+    ifBrokeAtChainLink: 'This means the chain broke, not the weld. Add a new jump ring. Do it free — it builds goodwill and takes 30 seconds.',
     ifLostPiece: 'Customer needs to purchase a new piece. Do NOT offer discounts on replacements — this can imply fault and doesn\'t generate goodwill. They lost it; you make them a new one.',
-    variousPolicySamples: {
-      note: 'PJ University includes sample warranty, tarnish replacement, and lost chain policies that artists can customize for their business. These are templates with different timeframes (14-day, 30-day, 60-day, 6-month variations) — artists should choose what works for them.',
-    },
+    nonCustomerRepairs: 'If someone comes in with a piece from another artist, help them out. It builds goodwill and often converts them into a paying customer for future pieces.',
   },
 
   // ---------------------------------------------------------------------------
@@ -1067,20 +1065,18 @@ export const CLIENT_EXPERIENCE_KNOWLEDGE = {
   // Aftercare
   // ---------------------------------------------------------------------------
   aftercare: {
-    careCard: [
-      'Clean with mild jewelry cleaner or polishing cloth.',
-      'Avoid harsh chemicals (bleach, acetone, etc.).',
-      'Rinse after swimming in chlorinated or saltwater.',
-      'Wipe down after applying lotions or sunscreen.',
-      'Jewelry should be snug but comfortable.',
-      'Anklets may stretch slightly over time — this is normal.',
-      'If it breaks or stretches, bring it back for a free re-weld.',
+    officialCareInstructions: [
+      'Clean Often — Use water, a gentle toothbrush, and dish soap. Pat dry. Clean regularly to keep jewelry looking its best.',
+      'Avoid Harsh Chemicals — Limit prolonged time in pools. Be mindful of lotions and perfumes. Normal daily activities (showering, exercising, sleeping) are perfectly fine.',
+      'Free Repairs for Life — If the jewelry breaks at the weld, the artist will re-weld it free of charge as long as the customer still has the chain. No time limit. No fee.',
+      'To Remove — Use household scissors or a nail cutter to cut and remove the jump ring. Quick and easy.',
     ],
+    importantPolicyNote: 'The repair policy is "free for life as long as you still have the chain." Do NOT mention 60-day limits, 14-day limits, or any repair fees. Those are outdated policies. The current standard is free lifetime repairs.',
     aftercareBag: [
       'Care card with business info and a promo discount for next visit',
       'Polishing cloth or lash brush',
-      'Optional: Sunshine jewelry cleaner (upsell opportunity)',
     ],
+    aftercareDelivery: 'Hand them the aftercare card FIRST. Keep verbal aftercare brief unless they ask questions. The card has everything they need.',
   },
 
   // ---------------------------------------------------------------------------
@@ -1106,7 +1102,7 @@ export const CLIENT_EXPERIENCE_KNOWLEDGE = {
     },
     mri: {
       customerConcern: 'Common question — "What if I need an MRI?"',
-      answer: 'Most PJ metals are not ferromagnetic, so technically fine. But the ultimate call belongs to the doctor and MRI clinic. Reassure the customer: if they ever need to remove it, they can cut the jump ring with scissors and bring it back for a free re-weld.',
+      answer: 'Most PJ metals are not ferromagnetic, so technically fine. But the ultimate call belongs to the doctor and MRI clinic. Reassure the customer: if they ever need to remove it, they can cut the jump ring with household scissors and bring it back for a free repair anytime.',
       goal: 'Remove the purchase objection. PJ is NOT a waste if you need an MRI someday.',
     },
     minors: {

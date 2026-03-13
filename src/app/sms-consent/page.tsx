@@ -231,7 +231,8 @@ export default function SmsConsentPage() {
 
             <p style={{ fontSize: 14, color: '#78716c', textAlign: 'center', fontStyle: 'italic' }}>
               The above is a static visual representation of the live form at{' '}
-              <a href="/waiver" style={{ color: '#6b2942' }}>sunstonepj.app/waiver</a>.
+              <span style={{ color: '#6b2942', fontWeight: 500 }}>sunstonepj.app/waiver</span>{' '}
+              (accessed in-person on the service provider&rsquo;s device or via QR code).
               The SMS consent checkbox is separate from the waiver agreement and is not pre-checked.
             </p>
           </Section>
@@ -311,7 +312,7 @@ export default function SmsConsentPage() {
               />
               <SmsBubble
                 label="Aftercare"
-                message="Thank you for your visit! Quick care tip: avoid chlorine or saltwater for the first 24 hours. Reply STOP to opt out."
+                message="Thank you for your visit! Quick care tip: clean with water, a toothbrush, and dish soap. Free repairs for life if it ever breaks. Reply STOP to opt out."
               />
             </div>
           </Section>
@@ -323,7 +324,8 @@ export default function SmsConsentPage() {
               <strong>Website:</strong>{' '}
               <a href="https://sunstonepj.app" style={{ color: '#6b2942' }}>sunstonepj.app</a><br />
               <strong>Opt-in page:</strong>{' '}
-              <a href="/waiver" style={{ color: '#6b2942' }}>sunstonepj.app/waiver</a><br />
+              <span style={{ color: '#6b2942', fontWeight: 500 }}>sunstonepj.app/waiver</span>{' '}
+              (accessed in-person on the service provider&rsquo;s device or via QR code)<br />
               <strong>Privacy policy:</strong>{' '}
               <a href="/privacy" style={{ color: '#6b2942' }}>sunstonepj.app/privacy</a><br />
               <strong>Terms of service:</strong>{' '}

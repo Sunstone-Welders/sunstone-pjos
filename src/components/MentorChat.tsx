@@ -15,6 +15,7 @@ import { useTenant } from '@/hooks/use-tenant';
 import { getSubscriptionTier, getSunnyQuestionLimit } from '@/lib/subscription';
 import UpgradePrompt from '@/components/ui/UpgradePrompt';
 import { toast } from 'sonner';
+import { ThumbsDown } from 'lucide-react';
 
 // Compute luminance from a hex color (0 = black, 1 = white)
 function getLuminance(hex: string): number {
@@ -183,6 +184,14 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Restore focus to input after streaming completes or flag modal closes
+  useEffect(() => {
+    if (!isLoading && !flagModalMsg && isOpen) {
+      // Use requestAnimationFrame to wait for the render cycle to complete
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [isLoading, flagModalMsg, isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -670,7 +679,7 @@ function MessageBubble({ message, userBubbleTextColor, isFlagged, onFlag }: {
   const isUser = message.role === 'user';
 
   return (
-    <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
+    <div className={cn('flex group', isUser ? 'justify-end' : 'justify-start')}>
       <div className="flex flex-col max-w-[85%] gap-1.5">
         {isUser ? (
           <div
@@ -707,16 +716,16 @@ function MessageBubble({ message, userBubbleTextColor, isFlagged, onFlag }: {
               onClick={isFlagged ? undefined : onFlag}
               disabled={isFlagged}
               className={cn(
-                'flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] transition-colors',
+                'flex items-center justify-center rounded-lg transition-all duration-150',
                 isFlagged
-                  ? 'text-error-500 cursor-default'
-                  : 'text-[var(--text-tertiary)] hover:text-error-500 hover:bg-error-50'
+                  ? 'text-[var(--text-tertiary)] cursor-default opacity-100'
+                  : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer'
               )}
-              style={{ minHeight: 28, minWidth: 28 }}
+              style={{ minHeight: 44, minWidth: 44 }}
               aria-label={isFlagged ? 'Flagged as wrong' : 'Flag as wrong'}
+              tabIndex={-1}
             >
-              <ThumbsDownIcon className="w-3.5 h-3.5" filled={isFlagged} />
-              {isFlagged && <span>Flagged</span>}
+              <ThumbsDown size={16} fill={isFlagged ? 'currentColor' : 'none'} />
             </button>
           </div>
         )}
@@ -858,10 +867,3 @@ function ShoppingBagIcon({ className }: { className?: string }) {
   );
 }
 
-function ThumbsDownIcon({ className, filled }: { className?: string; filled?: boolean }) {
-  return (
-    <svg className={className} fill={filled ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 15h2.25m8.024-9.75c.011.05.028.1.052.148.591 1.2.924 2.55.924 3.977a8.96 8.96 0 01-.999 4.125m.023-8.25c-.076-.365.183-.75.575-.75h.908c.889 0 1.713.518 1.972 1.368.339 1.11.521 2.287.521 3.507 0 1.553-.295 3.036-.831 4.398C20.613 14.547 19.833 15 19 15h-1.053c-.472 0-.745-.556-.5-.96a8.95 8.95 0 00.303-.54m.023-8.25H16.48a4.5 4.5 0 01-1.423-.23l-3.114-1.04a4.5 4.5 0 00-1.423-.23H6.504c-.694 0-1.372.198-1.934.57a6.996 6.996 0 00-2.19 2.77c-.592 1.205-.182 2.632.882 3.253A2.999 2.999 0 004.5 13.5v.375c0 .621.504 1.125 1.125 1.125H8.25m0 0H5.625c-.621 0-1.125.504-1.125 1.125v.375c0 .621.504 1.125 1.125 1.125H8.25m0 0h2.25M8.25 15l.001 4.5m0 0h2.24" />
-    </svg>
-  );
-}

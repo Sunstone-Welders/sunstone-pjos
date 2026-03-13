@@ -1217,7 +1217,7 @@ export default function LandingPageClient() {
           <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24, maxWidth: 980, margin: '0 auto 48px' }}>
             {[
               { icon: '📱', title: 'Your Own Phone Number', desc: 'Get a dedicated business number. Clients text you, you respond from the app. Keep your personal number private.' },
-              { icon: '💛', title: 'Automated Aftercare', desc: 'Post-purchase care instructions, re-weld reminders, and birthday messages — all on autopilot.' },
+              { icon: '💛', title: 'Automated Aftercare', desc: 'Post-purchase care instructions, repair reminders, and birthday messages — all on autopilot.' },
               { icon: '🔄', title: 'Smart Follow-ups', desc: 'Automated sequences that nurture new clients into regulars without you lifting a finger.' },
               { icon: '📣', title: 'Broadcast Messaging', desc: 'One tap to message your VIP list about your next event or promotion.' },
               { icon: '🎉', title: 'Advanced Party Booking', desc: 'Deposits, RSVP tracking, guest management, automated reminders, and host rewards.' },

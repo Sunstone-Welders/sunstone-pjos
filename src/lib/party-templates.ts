@@ -56,7 +56,7 @@ export const DEFAULT_PARTY_TEMPLATES = [
     channel: 'sms',
     category: 'party',
     is_default: true,
-    body: '{{host_name}}, thank you SO much for hosting! Your guests were amazing and I had the best time. If anyone wants to book their own party or needs a re-weld, just send them my way! — {{business_name}}',
+    body: '{{host_name}}, thank you SO much for hosting! Your guests were amazing and I had the best time. If anyone wants to book their own party or needs a repair, just send them my way! — {{business_name}}',
   },
   {
     name: 'Host Reward Earned',
@@ -91,7 +91,7 @@ export const DEFAULT_GUEST_TEMPLATES = [
     channel: 'sms',
     category: 'party-guest',
     is_default: true,
-    body: 'Hi {{guest_name}}! Thank you for coming to {{host_name}}\'s party! Here are a few tips to keep your permanent jewelry looking beautiful: avoid pulling or tugging, keep it dry for the first 24 hours, and it\'s totally fine to shower with it daily after that. If you ever need a re-weld, just reach out! — {{business_name}}',
+    body: 'Hi {{guest_name}}! Thank you for coming to {{host_name}}\'s party! Here are a few tips to keep your permanent jewelry looking beautiful: clean with water, a toothbrush, and dish soap. Avoid harsh chemicals and limit time in pools. Showering and exercising in it is totally fine! If it ever breaks, we\'ll repair it for free. — {{business_name}}',
   },
   {
     name: 'Guest Social Share',
