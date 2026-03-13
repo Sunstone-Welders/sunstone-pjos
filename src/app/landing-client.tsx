@@ -202,7 +202,7 @@ const FEATURES = [
     name: 'Your Artist Storefront',
     desc: "A beautiful, always-updated page your clients can book from. Your services, pricing, upcoming events, and a private party booking form — all in one link. Share it in your Instagram bio, text it to clients, or print it on a card. No website builder. No monthly fee. Just your business, looking polished.",
     highlight: 'One link for everything · Included free on every plan',
-    img: '/landing/pos-store.webp',
+    img: '/landing/storefront-mobile.png',
     imgAlt: 'Public artist storefront page showing services, upcoming events, and party booking form',
   },
 ]
