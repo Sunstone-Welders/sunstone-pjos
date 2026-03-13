@@ -245,6 +245,7 @@ export interface Event {
   tax_profile_id: string | null;
   is_active: boolean;
   notes: string | null;
+  selected_chain_ids: string[] | null;
   created_at: string;
   updated_at: string;
   // Joined
@@ -856,6 +857,7 @@ export interface ProfileSettings {
   show_events: boolean;
   show_party_booking: boolean;
   show_contact: boolean;
+  show_tier_pricing?: boolean;
 }
 
 export type PartyRequestStatus = 'new' | 'contacted' | 'confirmed' | 'completed' | 'cancelled';

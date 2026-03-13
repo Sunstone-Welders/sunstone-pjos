@@ -67,6 +67,11 @@ const PRICING_OPTIONS = [
     description: 'Set a margin percentage over your cost',
   },
   {
+    id: 'by_tier',
+    label: 'By tier',
+    description: 'Group chains into tiers (e.g. Sterling, Gold Filled, Premium). Great for menus organized by metal type.',
+  },
+  {
     id: 'individual',
     label: 'Price later',
     description: "I'll set prices individually in inventory",
@@ -784,6 +789,22 @@ function OnboardingFlow() {
                       <p className="text-xs text-text-secondary mt-0.5">{opt.description}</p>
                     </button>
                   ))}
+                </div>
+              ) : pricingMode === 'by_tier' ? (
+                <div className="text-center space-y-4">
+                  <p className="text-sm text-text-secondary">
+                    You can create your pricing tiers in Settings &rarr; Default Pricing after setup.
+                  </p>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      applyPricing();
+                      goTo(6);
+                    }}
+                    className="min-h-[48px] px-8 ob-btn-spring"
+                  >
+                    Continue
+                  </Button>
                 </div>
               ) : pricingMode === 'individual' ? (
                 <div className="text-center space-y-4">

@@ -377,6 +377,7 @@ function SettingsPage() {
   const [showEvents, setShowEvents] = useState(true);
   const [showPartyBooking, setShowPartyBooking] = useState(true);
   const [showContact, setShowContact] = useState(true);
+  const [showTierPricing, setShowTierPricing] = useState(false);
   const [bio, setBio] = useState('');
   const [city, setCity] = useState('');
   const [stateName, setStateName] = useState('');
@@ -497,6 +498,7 @@ function SettingsPage() {
       setShowEvents(ps.show_events ?? true);
       setShowPartyBooking(ps.show_party_booking ?? true);
       setShowContact(ps.show_contact ?? true);
+      setShowTierPricing(ps.show_tier_pricing ?? false);
     }
     setBio((tenant as any).bio || '');
     setCity((tenant as any).city || '');
@@ -2059,6 +2061,7 @@ function SettingsPage() {
                 <p className="text-sm font-medium text-[var(--text-primary)]">Show on Profile</p>
                 {[
                   { label: 'Pricing (services & prices)', value: showPricing, setter: setShowPricing },
+                  ...(tenant?.pricing_mode === 'tier' ? [{ label: 'Pricing by Tier (detailed tier cards)', value: showTierPricing, setter: setShowTierPricing }] : []),
                   { label: 'Upcoming Events', value: showEvents, setter: setShowEvents },
                   { label: 'Party Booking Form', value: showPartyBooking, setter: setShowPartyBooking },
                   { label: 'Contact & Social Links', value: showContact, setter: setShowContact },
@@ -2289,6 +2292,7 @@ function SettingsPage() {
                         show_events: showEvents,
                         show_party_booking: showPartyBooking,
                         show_contact: showContact,
+                        show_tier_pricing: showTierPricing,
                       },
                     })
                     .eq('id', tenant.id);

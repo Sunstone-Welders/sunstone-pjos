@@ -125,6 +125,7 @@ function EventModePageInner() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [chainPrices, setChainPrices] = useState<ChainProductPrice[]>([]);
+  const [pricingTiers, setPricingTiers] = useState<{ id: string; name: string }[]>([]);
   const [step, setStep] = useState<CheckoutStep>('items');
   const [receiptEmail, setReceiptEmail] = useState('');
   const [receiptPhone, setReceiptPhone] = useState('');
@@ -207,7 +208,13 @@ function EventModePageInner() {
 
       const { data: items } = await supabase
         .from('inventory_items').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('type').order('name');
-      setInventory((items || []) as InventoryItem[]);
+      let allItems = (items || []) as InventoryItem[];
+      // Filter chains by event chain selection (if any)
+      if (ev?.selected_chain_ids?.length) {
+        const allowed = new Set(ev.selected_chain_ids as string[]);
+        allItems = allItems.filter((i) => i.type !== 'chain' || allowed.has(i.id));
+      }
+      setInventory(allItems);
 
       // Load product types — filter by event_product_types if any exist
       const { data: pts } = await supabase
@@ -227,6 +234,12 @@ function EventModePageInner() {
       const { data: prices } = await supabase
         .from('chain_product_prices').select('*').eq('tenant_id', tenant.id).eq('is_active', true);
       setChainPrices((prices || []) as ChainProductPrice[]);
+
+      if (tenant.pricing_mode === 'tier') {
+        const { data: tiers } = await supabase
+          .from('pricing_tiers').select('id, name').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order');
+        setPricingTiers(tiers || []);
+      }
 
       cart.setPlatformFeeRate(PLATFORM_FEE_RATES[tenant.subscription_tier]);
       cart.setFeeHandling(tenant.fee_handling);
@@ -811,6 +824,8 @@ function EventModePageInner() {
                 productTypes={productTypes}
                 chainPrices={chainPrices}
                 mode="event"
+                tenantPricingMode={tenant?.pricing_mode}
+                pricingTiers={pricingTiers}
                 onAddToCart={(item) => {
                   // Event Mode enriches with jump ring metadata
                   const enriched = {

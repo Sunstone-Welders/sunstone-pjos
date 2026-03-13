@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
 
-type PricingMode = 'by_type' | 'by_metal' | 'by_markup' | 'individual';
+type PricingMode = 'by_type' | 'by_metal' | 'by_markup' | 'by_tier' | 'individual';
 
 interface PricingPayload {
   mode: PricingMode;
@@ -58,6 +58,23 @@ export async function POST(request: NextRequest) {
     // individual mode: no-op — user prices later
     if (mode === 'individual') {
       return NextResponse.json({ updated: 0, mode: 'individual' });
+    }
+
+    // tier mode: set pricing_mode on tenant, user creates tiers in Settings
+    if (mode === 'by_tier') {
+      await supabase
+        .from('tenants')
+        .update({ pricing_mode: 'tier' })
+        .eq('id', tenantId);
+
+      // Store in onboarding_data
+      const { data: t } = await supabase.from('tenants').select('onboarding_data').eq('id', tenantId).single();
+      const currentData = (t?.onboarding_data as Record<string, any>) || {};
+      await supabase.from('tenants').update({
+        onboarding_data: { ...currentData, pricing_mode: mode, pricing_set_at: new Date().toISOString() },
+      }).eq('id', tenantId);
+
+      return NextResponse.json({ updated: 0, mode: 'by_tier' });
     }
 
     // Fetch all inventory items for the tenant

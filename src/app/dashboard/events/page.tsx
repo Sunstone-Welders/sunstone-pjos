@@ -96,12 +96,13 @@ function EventsContent() {
         limitProducts: boolean;
         selectedProductTypeIds: string[];
       };
+      _chainSelection?: string[];
     }
   ) => {
     if (!tenant) return;
 
-    // Separate product filter data from event data
-    const { _productTypeFilter, ...eventData } = data;
+    // Separate product filter data and chain selection from event data
+    const { _productTypeFilter, _chainSelection, ...eventData } = data;
     let savedEventId: string | null = null;
 
     if (editing) {
@@ -155,6 +156,14 @@ function EventsContent() {
           toast.error('Event saved but product filtering failed: ' + ptError.message);
         }
       }
+    }
+
+    // Save chain selection (tier-based events)
+    if (_chainSelection !== undefined && savedEventId) {
+      await supabase
+        .from('events')
+        .update({ selected_chain_ids: _chainSelection.length > 0 ? _chainSelection : null })
+        .eq('id', savedEventId);
     }
 
     setShowForm(false);
@@ -329,6 +338,7 @@ function EventsContent() {
         prefill={prefill}
         taxProfiles={taxProfiles}
         tenantId={tenant?.id || ''}
+        tenantPricingMode={tenant?.pricing_mode}
         onSave={handleSave}
         onClose={() => {
           setShowForm(false);
@@ -508,6 +518,7 @@ function EventFormModal({
   prefill,
   taxProfiles,
   tenantId,
+  tenantPricingMode,
   onSave,
   onClose,
 }: {
@@ -516,7 +527,8 @@ function EventFormModal({
   prefill?: { name?: string; date?: string } | null;
   taxProfiles: TaxProfile[];
   tenantId: string;
-  onSave: (data: Partial<Event> & { _productTypeFilter?: { limitProducts: boolean; selectedProductTypeIds: string[] } }) => void;
+  tenantPricingMode?: string;
+  onSave: (data: Partial<Event> & { _productTypeFilter?: { limitProducts: boolean; selectedProductTypeIds: string[] }; _chainSelection?: string[] }) => void;
   onClose: () => void;
 }) {
   const [form, setForm] = useState({
@@ -534,6 +546,11 @@ function EventFormModal({
   const [limitProducts, setLimitProducts] = useState(false);
   const [selectedProductTypeIds, setSelectedProductTypeIds] = useState<string[]>([]);
   const [loadingProductTypes, setLoadingProductTypes] = useState(false);
+
+  // ─── Chain selection state (for tier-based events) ───
+  const [eventChains, setEventChains] = useState<{ id: string; name: string; material: string | null; pricing_tier_id: string | null }[]>([]);
+  const [eventTiers, setEventTiers] = useState<{ id: string; name: string }[]>([]);
+  const [selectedChainIds, setSelectedChainIds] = useState<string[]>([]);
 
   // ─── Load form data + product types when modal opens ───
   useEffect(() => {
@@ -593,11 +610,47 @@ function EventFormModal({
         setSelectedProductTypeIds([]);
       }
 
+      // Load chains and tiers for tier-based selection
+      if (tenantPricingMode === 'tier') {
+        const { data: chainData } = await supabase
+          .from('inventory_items')
+          .select('id, name, material, pricing_tier_id')
+          .eq('tenant_id', tenantId)
+          .eq('type', 'chain')
+          .eq('is_active', true)
+          .order('name');
+        setEventChains((chainData || []) as typeof eventChains);
+
+        const { data: tierData } = await supabase
+          .from('pricing_tiers')
+          .select('id, name')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .order('sort_order');
+        setEventTiers(tierData || []);
+
+        // Load existing chain selections
+        if (event?.id) {
+          const { data: ev } = await supabase
+            .from('events')
+            .select('selected_chain_ids')
+            .eq('id', event.id)
+            .single();
+          setSelectedChainIds((ev?.selected_chain_ids as string[]) || []);
+        } else {
+          setSelectedChainIds([]);
+        }
+      } else {
+        setEventChains([]);
+        setEventTiers([]);
+        setSelectedChainIds([]);
+      }
+
       setLoadingProductTypes(false);
     };
 
     loadProductTypes();
-  }, [isOpen, event?.id, tenantId]);
+  }, [isOpen, event?.id, tenantId, tenantPricingMode]);
 
   const set = (key: string, val: string) =>
     setForm((f) => ({ ...f, [key]: val }));
@@ -637,6 +690,7 @@ function EventFormModal({
         limitProducts,
         selectedProductTypeIds,
       },
+      _chainSelection: tenantPricingMode === 'tier' ? selectedChainIds : undefined,
     });
   };
 
@@ -802,6 +856,112 @@ function EventFormModal({
               </div>
             )}
           </div>
+
+          {/* ─── Chain Selection by Tier ─── */}
+          {tenantPricingMode === 'tier' && eventTiers.length > 0 && (
+            <div className="pt-4 border-t border-[var(--border-primary)]">
+              <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">
+                Chain Selection
+              </label>
+              <p className="text-xs text-[var(--text-tertiary)] mb-3">
+                Pre-select chains for this event by tier. Leave empty to offer all chains.
+              </p>
+
+              {/* Tier quick-select buttons */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                {eventTiers.map((tier) => {
+                  const tierChains = eventChains.filter((c) => c.pricing_tier_id === tier.id);
+                  const selectedCount = tierChains.filter((c) => selectedChainIds.includes(c.id)).length;
+                  const allSelected = tierChains.length > 0 && selectedCount === tierChains.length;
+                  return (
+                    <button
+                      key={tier.id}
+                      type="button"
+                      onClick={() => {
+                        const tierChainIds = tierChains.map((c) => c.id);
+                        if (allSelected) {
+                          setSelectedChainIds((prev) => prev.filter((id) => !tierChainIds.includes(id)));
+                        } else {
+                          setSelectedChainIds((prev) => [...new Set([...prev, ...tierChainIds])]);
+                        }
+                      }}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-all min-h-[44px] ${
+                        allSelected
+                          ? 'bg-[var(--accent-primary)] text-white'
+                          : 'bg-[var(--surface-raised)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)]'
+                      }`}
+                    >
+                      {tier.name}
+                      <span className="ml-1.5 text-xs opacity-75">{selectedCount}/{tierChains.length}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Individual chain checkboxes grouped by tier */}
+              <div className="space-y-3 max-h-48 overflow-y-auto rounded-lg border border-[var(--border-default)] p-3">
+                {eventTiers.map((tier) => {
+                  const tierChains = eventChains.filter((c) => c.pricing_tier_id === tier.id);
+                  if (tierChains.length === 0) return null;
+                  return (
+                    <div key={tier.id}>
+                      <p className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-[0.05em] mb-1">{tier.name}</p>
+                      <div className="space-y-0.5">
+                        {tierChains.map((chain) => (
+                          <label key={chain.id} className="flex items-center gap-3 cursor-pointer py-1.5">
+                            <input
+                              type="checkbox"
+                              checked={selectedChainIds.includes(chain.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedChainIds((prev) => [...prev, chain.id]);
+                                } else {
+                                  setSelectedChainIds((prev) => prev.filter((id) => id !== chain.id));
+                                }
+                              }}
+                              className="w-4 h-4 rounded accent-[var(--accent-primary)]"
+                            />
+                            <span className="text-sm text-[var(--text-primary)]">{chain.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Chains without a tier */}
+                {eventChains.filter((c) => !c.pricing_tier_id).length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-[0.05em] mb-1">Unassigned</p>
+                    <div className="space-y-0.5">
+                      {eventChains.filter((c) => !c.pricing_tier_id).map((chain) => (
+                        <label key={chain.id} className="flex items-center gap-3 cursor-pointer py-1.5">
+                          <input
+                            type="checkbox"
+                            checked={selectedChainIds.includes(chain.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedChainIds((prev) => [...prev, chain.id]);
+                              } else {
+                                setSelectedChainIds((prev) => prev.filter((id) => id !== chain.id));
+                              }
+                            }}
+                            className="w-4 h-4 rounded accent-[var(--accent-primary)]"
+                          />
+                          <span className="text-sm text-[var(--text-primary)]">{chain.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {selectedChainIds.length > 0 && (
+                <p className="text-xs text-[var(--text-tertiary)] mt-2">
+                  {selectedChainIds.length} chain{selectedChainIds.length !== 1 ? 's' : ''} selected
+                </p>
+              )}
+            </div>
+          )}
         </ModalBody>
         <ModalFooter>
           <Button variant="secondary" type="button" onClick={onClose}>

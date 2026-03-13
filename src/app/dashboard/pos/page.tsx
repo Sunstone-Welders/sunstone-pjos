@@ -49,6 +49,7 @@ export default function StoreModePage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [chainPrices, setChainPrices] = useState<ChainProductPrice[]>([]);
+  const [pricingTiers, setPricingTiers] = useState<{ id: string; name: string }[]>([]);
   const [step, setStep] = useState<CheckoutStep>('items');
   const [receiptEmail, setReceiptEmail] = useState('');
   const [receiptPhone, setReceiptPhone] = useState('');
@@ -112,6 +113,12 @@ export default function StoreModePage() {
       const { data: prices } = await supabase
         .from('chain_product_prices').select('*').eq('tenant_id', tenant.id).eq('is_active', true);
       setChainPrices((prices || []) as ChainProductPrice[]);
+
+      if (tenant.pricing_mode === 'tier') {
+        const { data: tiers } = await supabase
+          .from('pricing_tiers').select('id, name').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order');
+        setPricingTiers(tiers || []);
+      }
 
       cart.setPlatformFeeRate(PLATFORM_FEE_RATES[tenant.subscription_tier]);
       cart.setFeeHandling(tenant.fee_handling);
@@ -671,6 +678,8 @@ export default function StoreModePage() {
                 productTypes={productTypes}
                 chainPrices={chainPrices}
                 mode="store"
+                tenantPricingMode={tenant.pricing_mode}
+                pricingTiers={pricingTiers}
                 onAddToCart={(item) => {
                   cart.addItem(item);
                   toast.success(`Added ${item.name}`);

@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   // Fetch tenant
   const { data: tenant, error: tenantError } = await supabase
     .from('tenants')
-    .select('id, name, slug, logo_url, bio, city, state, phone, website, instagram_url, facebook_url, tiktok_url, theme_id, profile_settings, dedicated_phone_number, waiver_text, waiver_required')
+    .select('id, name, slug, logo_url, bio, city, state, phone, website, instagram_url, facebook_url, tiktok_url, theme_id, profile_settings, dedicated_phone_number, waiver_text, waiver_required, pricing_mode')
     .eq('slug', slug)
     .single();
 
@@ -56,6 +56,24 @@ export async function GET(request: Request) {
         }
       }
       services = Array.from(byType.entries()).map(([name, min_price]) => ({ name, min_price }));
+    }
+  }
+
+  // Fetch tier pricing data (when tier mode + toggle enabled)
+  let tiers: { name: string; bracelet_price: number | null; anklet_price: number | null; ring_price: number | null; necklace_price_per_inch: number | null; hand_chain_price: number | null }[] = [];
+  if (settings.show_tier_pricing && tenant.pricing_mode === 'tier') {
+    const { data: tierData } = await supabase
+      .from('pricing_tiers')
+      .select('name, bracelet_price, anklet_price, ring_price, necklace_price_per_inch, hand_chain_price')
+      .eq('tenant_id', tenant.id)
+      .eq('is_active', true)
+      .order('sort_order');
+
+    if (tierData) {
+      // Only include tiers that have at least one price set
+      tiers = tierData.filter((t: any) =>
+        t.bracelet_price || t.anklet_price || t.ring_price || t.necklace_price_per_inch || t.hand_chain_price
+      );
     }
   }
 
@@ -95,5 +113,6 @@ export async function GET(request: Request) {
     },
     services,
     events,
+    tiers,
   });
 }

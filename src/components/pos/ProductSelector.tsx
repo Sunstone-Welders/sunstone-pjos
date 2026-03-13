@@ -15,6 +15,8 @@ export interface ProductSelectorProps {
   chainPrices: ChainProductPrice[];
   onAddToCart: (item: Omit<CartItem, 'id' | 'line_total'>) => void;
   mode: 'store' | 'event';
+  tenantPricingMode?: string;
+  pricingTiers?: { id: string; name: string }[];
 }
 
 export function ProductSelector({
@@ -24,12 +26,15 @@ export function ProductSelector({
   chainPrices,
   onAddToCart,
   mode,
+  tenantPricingMode,
+  pricingTiers = [],
 }: ProductSelectorProps) {
   // ── View toggle: chains vs add-ons ──
   const [view, setView] = useState<'chains' | 'addons'>('chains');
 
   // ── Chain selection state ──
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
+  const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [selectedChain, setSelectedChain] = useState<InventoryItem | null>(null);
   const productTypeRef = useRef<HTMLDivElement>(null);
   const [inchAdjuster, setInchAdjuster] = useState<{
@@ -54,13 +59,17 @@ export function ProductSelector({
     return Array.from(mats).sort();
   }, [activeChains]);
 
-  // ── Filtered chains based on selected material ──
+  // ── Filtered chains based on selected tier and material ──
   const filteredChains = useMemo(() => {
-    if (selectedMaterial === null) return activeChains;
-    return activeChains.filter(
-      (c) => (c.material || 'Unspecified') === selectedMaterial
-    );
-  }, [activeChains, selectedMaterial]);
+    let result = activeChains;
+    if (selectedTier !== null) {
+      result = result.filter((c) => c.pricing_tier_id === selectedTier);
+    }
+    if (selectedMaterial !== null) {
+      result = result.filter((c) => (c.material || 'Unspecified') === selectedMaterial);
+    }
+    return result;
+  }, [activeChains, selectedMaterial, selectedTier]);
 
   // ── Reset selection ──
   const resetSelection = useCallback(() => {
@@ -215,6 +224,38 @@ export function ProductSelector({
           {isQuickTap && (
             <div className="text-[11px] text-[var(--text-tertiary)] font-medium mb-3">
               Quick mode &middot; {activeChains.length} chain{activeChains.length !== 1 ? 's' : ''}
+            </div>
+          )}
+
+          {/* Tier filter — show when pricing_mode is 'tier' and tiers exist */}
+          {tenantPricingMode === 'tier' && pricingTiers.length > 0 && (
+            <div className="mb-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)] mb-2">Tier</div>
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1" style={{ WebkitOverflowScrolling: 'touch' }}>
+                <button
+                  onClick={() => { setSelectedTier(null); resetSelection(); }}
+                  className={`shrink-0 rounded-xl px-4 py-2.5 text-[13px] font-semibold transition-all min-h-[44px] ${
+                    selectedTier === null
+                      ? 'bg-[var(--accent-primary)] text-white border-transparent shadow-sm'
+                      : 'bg-[var(--surface-raised)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)]'
+                  }`}
+                >
+                  All Tiers
+                </button>
+                {pricingTiers.map((tier) => (
+                  <button
+                    key={tier.id}
+                    onClick={() => { setSelectedTier(tier.id); resetSelection(); }}
+                    className={`shrink-0 rounded-xl px-4 py-2.5 text-[13px] font-semibold transition-all min-h-[44px] ${
+                      selectedTier === tier.id
+                        ? 'bg-[var(--accent-primary)] text-white border-transparent shadow-sm'
+                        : 'bg-[var(--surface-raised)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)]'
+                    }`}
+                  >
+                    {tier.name}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

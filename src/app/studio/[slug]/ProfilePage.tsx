@@ -36,6 +36,15 @@ interface ServiceItem {
   min_price: number;
 }
 
+interface TierItem {
+  name: string;
+  bracelet_price: number | null;
+  anklet_price: number | null;
+  ring_price: number | null;
+  necklace_price_per_inch: number | null;
+  hand_chain_price: number | null;
+}
+
 interface EventItem {
   id: string;
   name: string;
@@ -66,6 +75,7 @@ const TIME_OPTIONS = [
 export default function ProfilePage({ slug }: { slug: string }) {
   const [tenant, setTenant] = useState<TenantProfile | null>(null);
   const [services, setServices] = useState<ServiceItem[]>([]);
+  const [tiers, setTiers] = useState<TierItem[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -98,6 +108,7 @@ export default function ProfilePage({ slug }: { slug: string }) {
         const data = await res.json();
         setTenant(data.tenant);
         setServices(data.services || []);
+        setTiers(data.tiers || []);
         setEvents(data.events || []);
       } catch {
         setError('error');
@@ -244,6 +255,40 @@ export default function ProfilePage({ slug }: { slug: string }) {
                   <span className="text-sm text-[var(--text-secondary)]">starting at ${s.min_price}</span>
                 </div>
               ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Tier Pricing ────────────────────────────────────── */}
+        {tiers.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]" style={{ fontFamily: 'var(--font-heading)' }}>
+              Pricing
+            </h2>
+            <div className="space-y-3">
+              {tiers.map((tier) => {
+                const prices: { label: string; value: string }[] = [];
+                if (tier.bracelet_price) prices.push({ label: 'Bracelet', value: `$${Number(tier.bracelet_price).toFixed(0)}` });
+                if (tier.anklet_price) prices.push({ label: 'Anklet', value: `$${Number(tier.anklet_price).toFixed(0)}` });
+                if (tier.ring_price) prices.push({ label: 'Ring', value: `$${Number(tier.ring_price).toFixed(0)}` });
+                if (tier.necklace_price_per_inch) prices.push({ label: 'Necklace', value: `$${Number(tier.necklace_price_per_inch).toFixed(0)}/in` });
+                if (tier.hand_chain_price) prices.push({ label: 'Hand Chain', value: `$${Number(tier.hand_chain_price).toFixed(0)}` });
+                return (
+                  <div
+                    key={tier.name}
+                    className="px-4 py-3.5 bg-[var(--surface-raised)] border border-[var(--border-default)] rounded-xl"
+                  >
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{tier.name}</h3>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      {prices.map((p) => (
+                        <span key={p.label} className="text-sm text-[var(--text-secondary)]">
+                          {p.label} <span className="font-medium text-[var(--text-primary)]">{p.value}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </section>
         )}
