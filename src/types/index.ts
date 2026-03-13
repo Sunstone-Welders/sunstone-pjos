@@ -823,6 +823,14 @@ export interface ProfileSettings {
 
 export type PartyRequestStatus = 'new' | 'contacted' | 'confirmed' | 'completed' | 'cancelled';
 
+export type DepositStatus = 'none' | 'pending' | 'paid' | 'waived';
+
+export interface PartyRewardSettings {
+  enabled: boolean;
+  reward_percent: number; // e.g. 10 = host gets 10% of party revenue as store credit
+  minimum_spend: number;  // minimum party revenue before reward kicks in
+}
+
 export interface PartyRequest {
   id: string;
   tenant_id: string;
@@ -839,6 +847,20 @@ export interface PartyRequest {
   message: string | null;
   notes: string | null;
   event_id: string | null;
+  // Deposit
+  deposit_amount: number;
+  deposit_status: DepositStatus;
+  deposit_paid_at: string | null;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  // Revenue & Guarantee
+  minimum_guarantee: number;
+  total_revenue: number;
+  total_sales: number;
+  // Host Rewards
+  host_reward_amount: number;
+  host_reward_redeemed: boolean;
+  host_reward_redeemed_at: string | null;
   created_at: string;
   updated_at: string;
   // Joined

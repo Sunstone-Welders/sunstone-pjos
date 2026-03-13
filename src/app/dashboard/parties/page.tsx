@@ -1,6 +1,9 @@
 // ============================================================================
 // Dashboard Parties Page — /dashboard/parties
 // ============================================================================
+// Basic features available to all tiers. CRM-gated advanced features:
+// deposits, enhanced RSVP, minimum guarantee, host rewards, revenue dashboard.
+// ============================================================================
 
 'use client';
 
@@ -8,7 +11,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useTenant } from '@/hooks/use-tenant';
 import { Button, Input, Textarea, Badge } from '@/components/ui';
 import { toast } from 'sonner';
-import type { PartyRequest, PartyRsvp, PartyRequestStatus } from '@/types';
+import { getCrmStatus } from '@/lib/crm-status';
+import type { PartyRequest, PartyRsvp, PartyRequestStatus, PartyRewardSettings } from '@/types';
 
 const STATUS_CONFIG: Record<PartyRequestStatus, { label: string; color: string }> = {
   new:        { label: 'New',       color: 'bg-blue-100 text-blue-700' },
@@ -27,6 +31,22 @@ const FILTER_TABS = [
 
 type FilterKey = typeof FILTER_TABS[number]['key'];
 
+interface RevenueSummary {
+  total_sales: number;
+  total_revenue: number;
+  total_with_tax: number;
+  total_tips: number;
+  avg_per_sale: number;
+}
+
+interface TopProduct {
+  name: string;
+  quantity: number;
+  revenue: number;
+}
+
+const fmtCurrency = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+
 export default function PartiesPage() {
   const { tenant } = useTenant();
   const [requests, setRequests] = useState<PartyRequest[]>([]);
@@ -38,6 +58,21 @@ export default function PartiesPage() {
   const [notes, setNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  // CRM-gated state
+  const [depositAmount, setDepositAmount] = useState('');
+  const [sendingDeposit, setSendingDeposit] = useState(false);
+  const [minimumGuarantee, setMinimumGuarantee] = useState('');
+  const [savingGuarantee, setSavingGuarantee] = useState(false);
+  const [revenue, setRevenue] = useState<RevenueSummary | null>(null);
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
+  const [revenueLoading, setRevenueLoading] = useState(false);
+  const [redeemingReward, setRedeemingReward] = useState(false);
+  const [detailTab, setDetailTab] = useState<'details' | 'revenue'>('details');
+
+  const crmStatus = getCrmStatus(tenant as any);
+  const crmActive = crmStatus.active;
+  const rewardSettings: PartyRewardSettings | null = (tenant as any)?.party_reward_settings || null;
 
   const fetchRequests = useCallback(async () => {
     try {
@@ -68,13 +103,34 @@ export default function PartiesPage() {
       .finally(() => setRsvpsLoading(false));
   }, [selectedId]);
 
-  // Sync notes when selecting a party
+  // Sync notes + guarantee when selecting a party
   useEffect(() => {
     if (selectedId) {
       const req = requests.find((r) => r.id === selectedId);
       setNotes(req?.notes || '');
+      setMinimumGuarantee(req?.minimum_guarantee ? String(req.minimum_guarantee) : '');
+      setDepositAmount(req?.deposit_amount ? String(req.deposit_amount) : '');
+      setDetailTab('details');
+      setRevenue(null);
+      setTopProducts([]);
     }
   }, [selectedId, requests]);
+
+  // Load revenue when switching to revenue tab
+  useEffect(() => {
+    if (!selectedId || detailTab !== 'revenue' || !crmActive) return;
+    setRevenueLoading(true);
+    fetch(`/api/party-requests/${selectedId}/revenue`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (d) {
+          setRevenue(d.summary);
+          setTopProducts(d.topProducts || []);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setRevenueLoading(false));
+  }, [selectedId, detailTab, crmActive]);
 
   const handleStatusChange = async (id: string, newStatus: PartyRequestStatus) => {
     setUpdatingStatus(true);
@@ -119,6 +175,99 @@ export default function PartiesPage() {
     const url = `${window.location.origin}/studio/${tenant?.slug}/party/${id}`;
     navigator.clipboard.writeText(url);
     toast.success('RSVP link copied!');
+  };
+
+  // ── CRM-gated actions ─────────────────────────────────────────────────
+
+  const handleSendDeposit = async () => {
+    if (!selectedId || !depositAmount) return;
+    const amount = parseFloat(depositAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Enter a valid deposit amount');
+      return;
+    }
+    setSendingDeposit(true);
+    try {
+      const res = await fetch(`/api/party-requests/${selectedId}/deposit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ depositAmount: amount, sendSmsToHost: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setRequests((prev) => prev.map((r) =>
+        r.id === selectedId ? { ...r, deposit_amount: amount, deposit_status: 'pending' as const } : r
+      ));
+      toast.success('Deposit link sent to host!');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to send deposit link');
+    } finally {
+      setSendingDeposit(false);
+    }
+  };
+
+  const handleWaiveDeposit = async () => {
+    if (!selectedId) return;
+    try {
+      const res = await fetch(`/api/party-requests/${selectedId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deposit_status: 'waived' }),
+      });
+      if (res.ok) {
+        setRequests((prev) => prev.map((r) =>
+          r.id === selectedId ? { ...r, deposit_status: 'waived' as const } : r
+        ));
+        toast.success('Deposit waived');
+      }
+    } catch {
+      toast.error('Failed to waive deposit');
+    }
+  };
+
+  const handleSaveGuarantee = async () => {
+    if (!selectedId) return;
+    const amount = parseFloat(minimumGuarantee) || 0;
+    setSavingGuarantee(true);
+    try {
+      const res = await fetch(`/api/party-requests/${selectedId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minimum_guarantee: amount }),
+      });
+      if (res.ok) {
+        setRequests((prev) => prev.map((r) =>
+          r.id === selectedId ? { ...r, minimum_guarantee: amount } : r
+        ));
+        toast.success('Minimum guarantee saved');
+      }
+    } catch {
+      toast.error('Failed to save guarantee');
+    } finally {
+      setSavingGuarantee(false);
+    }
+  };
+
+  const handleRedeemReward = async () => {
+    if (!selectedId) return;
+    setRedeemingReward(true);
+    try {
+      const res = await fetch(`/api/party-requests/${selectedId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ host_reward_redeemed: true }),
+      });
+      if (res.ok) {
+        setRequests((prev) => prev.map((r) =>
+          r.id === selectedId ? { ...r, host_reward_redeemed: true, host_reward_redeemed_at: new Date().toISOString() } : r
+        ));
+        toast.success('Reward marked as redeemed');
+      }
+    } catch {
+      toast.error('Failed to redeem reward');
+    } finally {
+      setRedeemingReward(false);
+    }
   };
 
   // Filter logic
@@ -212,15 +361,29 @@ export default function PartiesPage() {
                         {req.occasion && ` · ${req.occasion}`}
                       </p>
                     </div>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${sc.color}`}>
-                      {sc.label}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {crmActive && req.deposit_status === 'paid' && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-green-100 text-green-700">
+                          $
+                        </span>
+                      )}
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${sc.color}`}>
+                        {sc.label}
+                      </span>
+                    </div>
                   </div>
-                  {req.rsvp_count !== undefined && req.rsvp_count > 0 && (
-                    <p className="text-[10px] text-[var(--text-tertiary)] mt-1">
-                      {req.attending_count} attending · {req.rsvp_count} RSVPs
-                    </p>
-                  )}
+                  <div className="flex items-center gap-3 mt-1">
+                    {req.rsvp_count !== undefined && req.rsvp_count > 0 && (
+                      <span className="text-[10px] text-[var(--text-tertiary)]">
+                        {req.attending_count} attending · {req.rsvp_count} RSVPs
+                      </span>
+                    )}
+                    {crmActive && req.total_revenue > 0 && (
+                      <span className="text-[10px] text-green-600 font-medium">
+                        {fmtCurrency(req.total_revenue)} revenue
+                      </span>
+                    )}
+                  </div>
                 </button>
               );
             })}
@@ -238,153 +401,432 @@ export default function PartiesPage() {
                 </button>
               </div>
 
-              {/* Details grid */}
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <span className="text-[var(--text-tertiary)]">Phone</span>
-                  <p className="text-[var(--text-primary)]">{selected.host_phone}</p>
-                </div>
-                {selected.host_email && (
-                  <div>
-                    <span className="text-[var(--text-tertiary)]">Email</span>
-                    <p className="text-[var(--text-primary)]">{selected.host_email}</p>
-                  </div>
-                )}
-                {selected.preferred_date && (
-                  <div>
-                    <span className="text-[var(--text-tertiary)]">Date</span>
-                    <p className="text-[var(--text-primary)]">
-                      {new Date(selected.preferred_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                    </p>
-                  </div>
-                )}
-                {selected.preferred_time && (
-                  <div>
-                    <span className="text-[var(--text-tertiary)]">Time</span>
-                    <p className="text-[var(--text-primary)]">{selected.preferred_time}</p>
-                  </div>
-                )}
-                {selected.location && (
-                  <div>
-                    <span className="text-[var(--text-tertiary)]">Location</span>
-                    <p className="text-[var(--text-primary)]">{selected.location}</p>
-                  </div>
-                )}
-                {selected.estimated_guests && (
-                  <div>
-                    <span className="text-[var(--text-tertiary)]">Guests</span>
-                    <p className="text-[var(--text-primary)]">{selected.estimated_guests}</p>
-                  </div>
-                )}
-                {selected.occasion && (
-                  <div>
-                    <span className="text-[var(--text-tertiary)]">Occasion</span>
-                    <p className="text-[var(--text-primary)]">{selected.occasion}</p>
-                  </div>
-                )}
-              </div>
-
-              {selected.message && (
-                <div>
-                  <span className="text-xs text-[var(--text-tertiary)]">Message</span>
-                  <p className="text-sm text-[var(--text-primary)] mt-0.5">{selected.message}</p>
+              {/* Detail tabs (CRM-gated revenue tab) */}
+              {crmActive && (
+                <div className="flex gap-1 bg-[var(--surface-subtle)] rounded-lg p-0.5">
+                  <button
+                    onClick={() => setDetailTab('details')}
+                    className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                      detailTab === 'details' ? 'bg-[var(--surface-raised)] text-[var(--text-primary)] shadow-sm' : 'text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    Details
+                  </button>
+                  <button
+                    onClick={() => setDetailTab('revenue')}
+                    className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                      detailTab === 'revenue' ? 'bg-[var(--surface-raised)] text-[var(--text-primary)] shadow-sm' : 'text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    Revenue
+                  </button>
                 </div>
               )}
 
-              {/* Status dropdown */}
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-tertiary)] mb-1">Status</label>
-                <select
-                  className="w-full px-3 py-2 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--surface-base)] text-[var(--text-primary)]"
-                  value={selected.status}
-                  onChange={(e) => handleStatusChange(selected.id, e.target.value as PartyRequestStatus)}
-                  disabled={updatingStatus}
-                >
-                  {Object.entries(STATUS_CONFIG).map(([key, { label }]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
-                </select>
-              </div>
+              {detailTab === 'details' ? (
+                <>
+                  {/* Details grid */}
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <span className="text-[var(--text-tertiary)]">Phone</span>
+                      <p className="text-[var(--text-primary)]">{selected.host_phone}</p>
+                    </div>
+                    {selected.host_email && (
+                      <div>
+                        <span className="text-[var(--text-tertiary)]">Email</span>
+                        <p className="text-[var(--text-primary)]">{selected.host_email}</p>
+                      </div>
+                    )}
+                    {selected.preferred_date && (
+                      <div>
+                        <span className="text-[var(--text-tertiary)]">Date</span>
+                        <p className="text-[var(--text-primary)]">
+                          {new Date(selected.preferred_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                        </p>
+                      </div>
+                    )}
+                    {selected.preferred_time && (
+                      <div>
+                        <span className="text-[var(--text-tertiary)]">Time</span>
+                        <p className="text-[var(--text-primary)]">{selected.preferred_time}</p>
+                      </div>
+                    )}
+                    {selected.location && (
+                      <div>
+                        <span className="text-[var(--text-tertiary)]">Location</span>
+                        <p className="text-[var(--text-primary)]">{selected.location}</p>
+                      </div>
+                    )}
+                    {selected.estimated_guests && (
+                      <div>
+                        <span className="text-[var(--text-tertiary)]">Guests</span>
+                        <p className="text-[var(--text-primary)]">{selected.estimated_guests}</p>
+                      </div>
+                    )}
+                    {selected.occasion && (
+                      <div>
+                        <span className="text-[var(--text-tertiary)]">Occasion</span>
+                        <p className="text-[var(--text-primary)]">{selected.occasion}</p>
+                      </div>
+                    )}
+                  </div>
 
-              {/* Notes */}
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-tertiary)] mb-1">Notes</label>
-                <Textarea
-                  rows={3}
-                  placeholder="Add internal notes..."
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="mt-2"
-                  onClick={handleSaveNotes}
-                  loading={savingNotes}
-                >
-                  Save Notes
-                </Button>
-              </div>
+                  {selected.message && (
+                    <div>
+                      <span className="text-xs text-[var(--text-tertiary)]">Message</span>
+                      <p className="text-sm text-[var(--text-primary)] mt-0.5">{selected.message}</p>
+                    </div>
+                  )}
 
-              {/* RSVP Link */}
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-tertiary)] mb-1">RSVP Link</label>
-                <div className="flex gap-2">
-                  <input
-                    readOnly
-                    className="flex-1 px-3 py-2 text-xs border border-[var(--border-default)] rounded-lg bg-[var(--surface-base)] text-[var(--text-secondary)] truncate"
-                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/studio/${tenant?.slug}/party/${selected.id}`}
-                  />
-                  <Button variant="secondary" size="sm" onClick={() => copyRsvpLink(selected.id)}>
-                    Copy
-                  </Button>
-                </div>
-              </div>
+                  {/* Status dropdown */}
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--text-tertiary)] mb-1">Status</label>
+                    <select
+                      className="w-full px-3 py-2 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--surface-base)] text-[var(--text-primary)]"
+                      value={selected.status}
+                      onChange={(e) => handleStatusChange(selected.id, e.target.value as PartyRequestStatus)}
+                      disabled={updatingStatus}
+                    >
+                      {Object.entries(STATUS_CONFIG).map(([key, { label }]) => (
+                        <option key={key} value={key}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
 
-              {/* RSVPs */}
-              <div>
-                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">
-                  RSVPs ({rsvps.length})
-                </h3>
-                {rsvpsLoading ? (
-                  <p className="text-xs text-[var(--text-tertiary)]">Loading...</p>
-                ) : rsvps.length === 0 ? (
-                  <p className="text-xs text-[var(--text-tertiary)]">No RSVPs yet</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {rsvps.map((rv) => (
-                      <div
-                        key={rv.id}
-                        className="flex items-center justify-between px-3 py-2 text-xs rounded-lg bg-[var(--surface-subtle)]"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${rv.attending ? 'bg-green-500' : 'bg-red-400'}`} />
-                          <span className="text-[var(--text-primary)] font-medium">{rv.name}</span>
-                          {rv.plus_ones > 0 && (
-                            <span className="text-[var(--text-tertiary)]">+{rv.plus_ones}</span>
+                  {/* ── CRM-Gated: Deposit Section ──────────────────────────── */}
+                  {crmActive && (
+                    <div className="border-t border-[var(--border-subtle)] pt-4">
+                      <label className="block text-xs font-semibold text-[var(--text-primary)] mb-2">Deposit</label>
+                      {selected.deposit_status === 'paid' ? (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg">
+                          <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="text-sm font-medium text-green-700">
+                            {fmtCurrency(selected.deposit_amount)} paid
+                          </span>
+                          {selected.deposit_paid_at && (
+                            <span className="text-xs text-green-600 ml-auto">
+                              {new Date(selected.deposit_paid_at).toLocaleDateString()}
+                            </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
-                          {rv.waiver_signed && (
-                            <span className="text-green-600 text-[10px]">Waiver ✓</span>
-                          )}
-                          <span className="text-[var(--text-tertiary)]">
-                            {rv.attending ? 'Attending' : 'Declined'}
+                      ) : selected.deposit_status === 'pending' ? (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 rounded-lg">
+                          <div className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                          <span className="text-sm font-medium text-amber-700">
+                            {fmtCurrency(selected.deposit_amount)} pending
                           </span>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      ) : selected.deposit_status === 'waived' ? (
+                        <div className="px-3 py-2 bg-gray-50 rounded-lg">
+                          <span className="text-sm text-[var(--text-tertiary)]">Deposit waived</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-tertiary)]">$</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="50.00"
+                                value={depositAmount}
+                                onChange={(e) => setDepositAmount(e.target.value)}
+                                className="w-full pl-7 pr-3 py-2 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--surface-base)] text-[var(--text-primary)]"
+                              />
+                            </div>
+                            <Button variant="primary" size="sm" onClick={handleSendDeposit} loading={sendingDeposit}>
+                              Send Link
+                            </Button>
+                          </div>
+                          <button
+                            onClick={handleWaiveDeposit}
+                            className="text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+                          >
+                            Waive deposit
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-              {/* Create Event shortcut */}
-              <a
-                href={`/dashboard/events?prefill_name=${encodeURIComponent(selected.host_name + "'s Party")}&prefill_date=${selected.preferred_date || ''}`}
-                className="block text-center text-sm text-[var(--accent-primary)] hover:underline"
-              >
-                Create Event from this Party →
-              </a>
+                  {/* ── CRM-Gated: Minimum Guarantee ────────────────────────── */}
+                  {crmActive && (
+                    <div className="border-t border-[var(--border-subtle)] pt-4">
+                      <label className="block text-xs font-semibold text-[var(--text-primary)] mb-2">Minimum Guarantee</label>
+                      <div className="flex gap-2 mb-2">
+                        <div className="relative flex-1">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-tertiary)]">$</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="500"
+                            value={minimumGuarantee}
+                            onChange={(e) => setMinimumGuarantee(e.target.value)}
+                            className="w-full pl-7 pr-3 py-2 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--surface-base)] text-[var(--text-primary)]"
+                          />
+                        </div>
+                        <Button variant="secondary" size="sm" onClick={handleSaveGuarantee} loading={savingGuarantee}>
+                          Save
+                        </Button>
+                      </div>
+                      {selected.minimum_guarantee > 0 && (
+                        <div>
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-[var(--text-tertiary)]">
+                              {fmtCurrency(selected.total_revenue)} / {fmtCurrency(selected.minimum_guarantee)}
+                            </span>
+                            <span className={`font-medium ${selected.total_revenue >= selected.minimum_guarantee ? 'text-green-600' : 'text-amber-600'}`}>
+                              {Math.min(Math.round((selected.total_revenue / selected.minimum_guarantee) * 100), 100)}%
+                            </span>
+                          </div>
+                          <div className="h-2 bg-[var(--surface-subtle)] rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                selected.total_revenue >= selected.minimum_guarantee ? 'bg-green-500' : 'bg-amber-400'
+                              }`}
+                              style={{ width: `${Math.min((selected.total_revenue / selected.minimum_guarantee) * 100, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Notes */}
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--text-tertiary)] mb-1">Notes</label>
+                    <Textarea
+                      rows={3}
+                      placeholder="Add internal notes..."
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                    />
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="mt-2"
+                      onClick={handleSaveNotes}
+                      loading={savingNotes}
+                    >
+                      Save Notes
+                    </Button>
+                  </div>
+
+                  {/* RSVP Link */}
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--text-tertiary)] mb-1">RSVP Link</label>
+                    <div className="flex gap-2">
+                      <input
+                        readOnly
+                        className="flex-1 px-3 py-2 text-xs border border-[var(--border-default)] rounded-lg bg-[var(--surface-base)] text-[var(--text-secondary)] truncate"
+                        value={`${typeof window !== 'undefined' ? window.location.origin : ''}/studio/${tenant?.slug}/party/${selected.id}`}
+                      />
+                      <Button variant="secondary" size="sm" onClick={() => copyRsvpLink(selected.id)}>
+                        Copy
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* RSVPs */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">
+                      RSVPs ({rsvps.length})
+                    </h3>
+                    {rsvpsLoading ? (
+                      <p className="text-xs text-[var(--text-tertiary)]">Loading...</p>
+                    ) : rsvps.length === 0 ? (
+                      <p className="text-xs text-[var(--text-tertiary)]">No RSVPs yet</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {rsvps.map((rv) => (
+                          <div
+                            key={rv.id}
+                            className="flex items-center justify-between px-3 py-2 text-xs rounded-lg bg-[var(--surface-subtle)]"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full ${rv.attending ? 'bg-green-500' : 'bg-red-400'}`} />
+                              <span className="text-[var(--text-primary)] font-medium">{rv.name}</span>
+                              {rv.plus_ones > 0 && (
+                                <span className="text-[var(--text-tertiary)]">+{rv.plus_ones}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {rv.waiver_signed && (
+                                <span className="text-green-600 text-[10px]">Waiver</span>
+                              )}
+                              {!rv.waiver_signed && crmActive && rv.attending && (
+                                <span className="text-amber-500 text-[10px]">No waiver</span>
+                              )}
+                              <span className="text-[var(--text-tertiary)]">
+                                {rv.attending ? 'Attending' : 'Declined'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {crmActive && (
+                          <div className="flex items-center justify-between text-xs text-[var(--text-tertiary)] pt-1">
+                            <span>
+                              {rsvps.filter(r => r.attending && r.waiver_signed).length}/{rsvps.filter(r => r.attending).length} waivers signed
+                            </span>
+                            <span>
+                              {rsvps.filter(r => r.attending).reduce((s, r) => s + 1 + r.plus_ones, 0)} total guests
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── CRM-Gated: Host Rewards ─────────────────────────────── */}
+                  {crmActive && rewardSettings?.enabled && selected.status === 'completed' && selected.total_revenue > 0 && (
+                    <div className="border-t border-[var(--border-subtle)] pt-4">
+                      <label className="block text-xs font-semibold text-[var(--text-primary)] mb-2">Host Reward</label>
+                      {(() => {
+                        const rewardPercent = rewardSettings.reward_percent || 10;
+                        const minSpend = rewardSettings.minimum_spend || 0;
+                        const qualifies = selected.total_revenue >= minSpend;
+                        const rewardAmount = qualifies ? Math.round(selected.total_revenue * (rewardPercent / 100) * 100) / 100 : 0;
+
+                        if (!qualifies) {
+                          return (
+                            <p className="text-xs text-[var(--text-tertiary)]">
+                              Revenue below {fmtCurrency(minSpend)} minimum. No reward earned yet.
+                            </p>
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between px-3 py-2 bg-purple-50 rounded-lg">
+                              <div>
+                                <p className="text-sm font-semibold text-purple-700">
+                                  {fmtCurrency(rewardAmount)} store credit
+                                </p>
+                                <p className="text-[10px] text-purple-500">
+                                  {rewardPercent}% of {fmtCurrency(selected.total_revenue)} party revenue
+                                </p>
+                              </div>
+                              {selected.host_reward_redeemed ? (
+                                <span className="text-xs text-green-600 font-medium">Redeemed</span>
+                              ) : (
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={handleRedeemReward}
+                                  loading={redeemingReward}
+                                >
+                                  Mark Redeemed
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Create Event shortcut */}
+                  <a
+                    href={`/dashboard/events?prefill_name=${encodeURIComponent(selected.host_name + "'s Party")}&prefill_date=${selected.preferred_date || ''}`}
+                    className="block text-center text-sm text-[var(--accent-primary)] hover:underline"
+                  >
+                    Create Event from this Party →
+                  </a>
+                </>
+              ) : (
+                /* ── Revenue Tab ──────────────────────────────────────── */
+                <div className="space-y-4">
+                  {revenueLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="w-6 h-6 border-2 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : !revenue || revenue.total_sales === 0 ? (
+                    <div className="text-center py-8 space-y-2">
+                      <p className="text-sm text-[var(--text-secondary)]">No sales linked to this party yet</p>
+                      <p className="text-xs text-[var(--text-tertiary)]">
+                        Tag sales to this party during checkout in POS to track revenue.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Revenue summary cards */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="px-3 py-2.5 bg-[var(--surface-subtle)] rounded-xl">
+                          <p className="text-[10px] uppercase tracking-wider text-[var(--text-tertiary)]">Revenue</p>
+                          <p className="text-lg font-bold text-[var(--text-primary)]">{fmtCurrency(revenue.total_revenue)}</p>
+                        </div>
+                        <div className="px-3 py-2.5 bg-[var(--surface-subtle)] rounded-xl">
+                          <p className="text-[10px] uppercase tracking-wider text-[var(--text-tertiary)]">Sales</p>
+                          <p className="text-lg font-bold text-[var(--text-primary)]">{revenue.total_sales}</p>
+                        </div>
+                        <div className="px-3 py-2.5 bg-[var(--surface-subtle)] rounded-xl">
+                          <p className="text-[10px] uppercase tracking-wider text-[var(--text-tertiary)]">Avg / Sale</p>
+                          <p className="text-lg font-bold text-[var(--text-primary)]">{fmtCurrency(revenue.avg_per_sale)}</p>
+                        </div>
+                        <div className="px-3 py-2.5 bg-[var(--surface-subtle)] rounded-xl">
+                          <p className="text-[10px] uppercase tracking-wider text-[var(--text-tertiary)]">Tips</p>
+                          <p className="text-lg font-bold text-[var(--text-primary)]">{fmtCurrency(revenue.total_tips)}</p>
+                        </div>
+                      </div>
+
+                      {/* Per-guest revenue */}
+                      {selected.estimated_guests && selected.estimated_guests > 0 && (
+                        <div className="px-3 py-2.5 bg-[var(--surface-subtle)] rounded-xl">
+                          <p className="text-[10px] uppercase tracking-wider text-[var(--text-tertiary)]">Revenue / Guest</p>
+                          <p className="text-lg font-bold text-[var(--text-primary)]">
+                            {fmtCurrency(revenue.total_revenue / selected.estimated_guests)}
+                          </p>
+                          <p className="text-[10px] text-[var(--text-tertiary)] mt-0.5">
+                            Based on {selected.estimated_guests} estimated guests
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Minimum guarantee progress */}
+                      {selected.minimum_guarantee > 0 && (
+                        <div>
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-[var(--text-tertiary)] font-medium">Guarantee Progress</span>
+                            <span className={`font-semibold ${revenue.total_revenue >= selected.minimum_guarantee ? 'text-green-600' : 'text-amber-600'}`}>
+                              {fmtCurrency(revenue.total_revenue)} / {fmtCurrency(selected.minimum_guarantee)}
+                            </span>
+                          </div>
+                          <div className="h-3 bg-[var(--surface-subtle)] rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                revenue.total_revenue >= selected.minimum_guarantee ? 'bg-green-500' : 'bg-amber-400'
+                              }`}
+                              style={{ width: `${Math.min((revenue.total_revenue / selected.minimum_guarantee) * 100, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Top products */}
+                      {topProducts.length > 0 && (
+                        <div>
+                          <h4 className="text-xs font-semibold text-[var(--text-primary)] mb-2">Top Products</h4>
+                          <div className="space-y-1.5">
+                            {topProducts.slice(0, 5).map((p) => (
+                              <div key={p.name} className="flex items-center justify-between px-3 py-1.5 text-xs rounded-lg bg-[var(--surface-subtle)]">
+                                <span className="text-[var(--text-primary)]">{p.name}</span>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-[var(--text-tertiary)]">x{p.quantity}</span>
+                                  <span className="font-medium text-[var(--text-primary)]">{fmtCurrency(p.revenue)}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

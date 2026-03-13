@@ -48,6 +48,14 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (body.status !== undefined) updates.status = body.status;
   if (body.notes !== undefined) updates.notes = body.notes;
   if (body.event_id !== undefined) updates.event_id = body.event_id;
+  if (body.deposit_amount !== undefined) updates.deposit_amount = body.deposit_amount;
+  if (body.deposit_status !== undefined) updates.deposit_status = body.deposit_status;
+  if (body.minimum_guarantee !== undefined) updates.minimum_guarantee = body.minimum_guarantee;
+  if (body.host_reward_amount !== undefined) updates.host_reward_amount = body.host_reward_amount;
+  if (body.host_reward_redeemed !== undefined) {
+    updates.host_reward_redeemed = body.host_reward_redeemed;
+    if (body.host_reward_redeemed) updates.host_reward_redeemed_at = new Date().toISOString();
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 });

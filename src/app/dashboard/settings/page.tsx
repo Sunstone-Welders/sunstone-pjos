@@ -35,6 +35,7 @@ import { THEMES, LIGHT_THEMES, DARK_THEMES, getThemeById, DEFAULT_THEME_ID, type
 import type { TaxProfile, SubscriptionTier } from '@/types';
 import { PLATFORM_FEE_RATES, SUBSCRIPTION_PRICES } from '@/types';
 import { getSubscriptionTier } from '@/lib/subscription';
+import { getCrmStatus } from '@/lib/crm-status';
 import SunnyTutorial from '@/components/SunnyTutorial';
 
 // ============================================================================
@@ -372,6 +373,12 @@ function SettingsPage() {
   const [tiktokUrl, setTiktokUrl] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
 
+  // ── Party reward settings state ──
+  const [rewardsEnabled, setRewardsEnabled] = useState(false);
+  const [rewardPercent, setRewardPercent] = useState('10');
+  const [rewardMinSpend, setRewardMinSpend] = useState('0');
+  const [savingRewards, setSavingRewards] = useState(false);
+
   // ============================================================================
   // OAuth redirect handling
   // ============================================================================
@@ -477,6 +484,14 @@ function SettingsPage() {
     setInstagramUrl((tenant as any).instagram_url || '');
     setFacebookUrl((tenant as any).facebook_url || '');
     setTiktokUrl((tenant as any).tiktok_url || '');
+
+    // Load party reward settings
+    const prs = (tenant as any).party_reward_settings;
+    if (prs && typeof prs === 'object') {
+      setRewardsEnabled(prs.enabled ?? false);
+      setRewardPercent(String(prs.reward_percent ?? 10));
+      setRewardMinSpend(String(prs.minimum_spend ?? 0));
+    }
 
     supabase
       .from('tax_profiles')
@@ -2013,6 +2028,94 @@ function SettingsPage() {
                   </div>
                 ))}
               </div>
+
+              {/* Party Rewards (CRM-gated) */}
+              {getCrmStatus(tenant as any).active && (
+                <div className="border-t border-[var(--border-subtle)] pt-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-[var(--text-primary)]">Host Rewards</p>
+                      <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Give party hosts store credit based on total party revenue.</p>
+                    </div>
+                    <button
+                      onClick={() => setRewardsEnabled(!rewardsEnabled)}
+                      className={`relative w-9 h-5 rounded-full transition-colors ${rewardsEnabled ? 'bg-[var(--accent-primary)]' : 'bg-[var(--border-default)]'}`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${rewardsEnabled ? 'translate-x-4' : ''}`} />
+                    </button>
+                  </div>
+                  {rewardsEnabled && (
+                    <div className="space-y-3 pl-1">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-[var(--text-tertiary)] mb-1">Reward %</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="1"
+                              max="50"
+                              value={rewardPercent}
+                              onChange={(e) => setRewardPercent(e.target.value)}
+                              className="w-full px-3 py-2 pr-8 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--surface-base)] text-[var(--text-primary)]"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-tertiary)]">%</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-[var(--text-tertiary)] mb-1">Min. Spend</label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-tertiary)]">$</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={rewardMinSpend}
+                              onChange={(e) => setRewardMinSpend(e.target.value)}
+                              className="w-full pl-7 pr-3 py-2 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--surface-base)] text-[var(--text-primary)]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-xs text-[var(--text-tertiary)]">
+                        Host gets {rewardPercent || 10}% store credit
+                        {Number(rewardMinSpend) > 0 ? ` when party revenue exceeds $${rewardMinSpend}` : ''}.
+                      </p>
+                      <div className="flex justify-end">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          loading={savingRewards}
+                          onClick={async () => {
+                            if (!tenant) return;
+                            setSavingRewards(true);
+                            try {
+                              const { error } = await supabase
+                                .from('tenants')
+                                .update({
+                                  party_reward_settings: {
+                                    enabled: rewardsEnabled,
+                                    reward_percent: parseFloat(rewardPercent) || 10,
+                                    minimum_spend: parseFloat(rewardMinSpend) || 0,
+                                  },
+                                })
+                                .eq('id', tenant.id);
+                              if (error) throw error;
+                              toast.success('Reward settings saved');
+                              refetch();
+                            } catch {
+                              toast.error('Failed to save reward settings');
+                            } finally {
+                              setSavingRewards(false);
+                            }
+                          }}
+                        >
+                          Save Rewards
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
 

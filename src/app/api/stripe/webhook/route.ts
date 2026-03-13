@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { getPlatformFeePercent, type SubscriptionTier } from '@/lib/subscription';
+import { sendSMS } from '@/lib/twilio';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-02-24.acacia' as any,
@@ -157,6 +158,56 @@ export async function POST(request: NextRequest) {
           break;
         }
 
+        // ── Party deposit completed (from connected account) ──
+        if (session.mode === 'payment' && session.metadata?.type === 'party_deposit') {
+          const partyRequestId = session.metadata.party_request_id;
+          const depositTenantId = session.metadata.tenant_id;
+          const paymentIntentId = typeof session.payment_intent === 'string'
+            ? session.payment_intent : null;
+
+          if (partyRequestId) {
+            await serviceRole
+              .from('party_requests')
+              .update({
+                deposit_status: 'paid',
+                deposit_paid_at: new Date().toISOString(),
+                stripe_payment_intent_id: paymentIntentId,
+              })
+              .eq('id', partyRequestId);
+
+            // Notify artist via SMS
+            if (depositTenantId) {
+              try {
+                const { data: partyData } = await serviceRole
+                  .from('party_requests')
+                  .select('host_name, deposit_amount')
+                  .eq('id', partyRequestId)
+                  .single();
+
+                const { data: tenantData } = await serviceRole
+                  .from('tenants')
+                  .select('phone, dedicated_phone_number')
+                  .eq('id', depositTenantId)
+                  .single();
+
+                if (partyData && tenantData?.phone) {
+                  const amt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(partyData.deposit_amount);
+                  sendSMS({
+                    to: tenantData.phone,
+                    body: `Party deposit received! ${partyData.host_name} paid ${amt}. Check your Parties dashboard for details.`,
+                    tenantId: depositTenantId,
+                  }).catch(() => {});
+                }
+              } catch {
+                // Non-critical — don't block webhook
+              }
+            }
+
+            console.log(`[Webhook] Party deposit completed — party ${partyRequestId}`);
+          }
+          break;
+        }
+
         // ── CRM add-on checkout completed ──
         if (session.mode === 'subscription' && session.metadata?.type === 'crm_addon') {
           const crmTenantId = session.metadata?.tenant_id;
@@ -252,6 +303,17 @@ export async function POST(request: NextRequest) {
             .eq('id', saleId);
 
           console.log(`[Webhook] POS payment expired — sale ${saleId} → voided`);
+        }
+
+        // Handle expired party deposit sessions
+        const expiredPartyId = session.metadata?.party_request_id;
+        if (session.metadata?.type === 'party_deposit' && expiredPartyId) {
+          await serviceRole
+            .from('party_requests')
+            .update({ deposit_status: 'none', stripe_checkout_session_id: null })
+            .eq('id', expiredPartyId);
+
+          console.log(`[Webhook] Party deposit expired — party ${expiredPartyId}`);
         }
         break;
       }
