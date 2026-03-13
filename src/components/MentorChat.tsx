@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { useTenant } from '@/hooks/use-tenant';
 import { getSubscriptionTier, getSunnyQuestionLimit } from '@/lib/subscription';
 import UpgradePrompt from '@/components/ui/UpgradePrompt';
+import { toast } from 'sonner';
 
 // Compute luminance from a hex color (0 = black, 1 = white)
 function getLuminance(hex: string): number {
@@ -138,6 +139,8 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
   const [hasBeenOpened, setHasBeenOpened] = useState(false);
   const [limitReached, setLimitReached] = useState(false);
   const [questionsUsed, setQuestionsUsed] = useState(0);
+  const [flaggedMessages, setFlaggedMessages] = useState<Set<string>>(new Set());
+  const [flagModalMsg, setFlagModalMsg] = useState<ChatMessage | null>(null);
 
   const pathname = usePathname();
   const { tenant } = useTenant();
@@ -445,8 +448,14 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
             <EmptyState onSelectPrompt={sendMessage} />
           ) : (
             <>
-              {messages.map(msg => (
-                <MessageBubble key={msg.id} message={msg} userBubbleTextColor={userBubbleTextColor} />
+              {messages.map((msg, idx) => (
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  userBubbleTextColor={userBubbleTextColor}
+                  isFlagged={flaggedMessages.has(msg.id)}
+                  onFlag={msg.role === 'assistant' && !msg.isStreaming && msg.content ? () => setFlagModalMsg(msg) : undefined}
+                />
               ))}
               {isLoading && messages[messages.length - 1]?.content === '' && (
                 messages[messages.length - 1]?.toolStatus
@@ -504,7 +513,113 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
           </div>
         )}
       </div>
+
+      {/* Flag modal */}
+      {flagModalMsg && (
+        <FlagModal
+          message={flagModalMsg}
+          contextMessage={(() => {
+            const idx = messages.findIndex(m => m.id === flagModalMsg.id);
+            for (let i = idx - 1; i >= 0; i--) {
+              if (messages[i].role === 'user') return messages[i].content;
+            }
+            return undefined;
+          })()}
+          onClose={() => setFlagModalMsg(null)}
+          onSubmit={async (note) => {
+            const idx = messages.findIndex(m => m.id === flagModalMsg.id);
+            let context: string | undefined;
+            for (let i = idx - 1; i >= 0; i--) {
+              if (messages[i].role === 'user') { context = messages[i].content; break; }
+            }
+            try {
+              const res = await fetch('/api/mentor/flag', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  flaggedMessage: flagModalMsg.content,
+                  conversationContext: context,
+                  userNote: note || undefined,
+                  source: 'user_thumbs_down',
+                }),
+              });
+              if (res.ok) {
+                setFlaggedMessages(prev => new Set(prev).add(flagModalMsg.id));
+                toast.success('Thanks for the feedback! We\'ll review this.');
+              } else {
+                toast.error('Could not submit feedback — try again.');
+              }
+            } catch {
+              toast.error('Could not submit feedback — try again.');
+            }
+            setFlagModalMsg(null);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+// ============================================================================
+// Flag modal
+// ============================================================================
+
+function FlagModal({
+  message,
+  contextMessage,
+  onClose,
+  onSubmit,
+}: {
+  message: ChatMessage;
+  contextMessage?: string;
+  onClose: () => void;
+  onSubmit: (note: string) => void;
+}) {
+  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end lg:items-center justify-center">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div
+        className="relative bg-[var(--surface-raised)] rounded-t-2xl lg:rounded-2xl w-full lg:w-[360px] max-w-md p-5 shadow-xl border border-[var(--border-default)]"
+        style={{ maxHeight: '80vh' }}
+      >
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
+          Was this answer wrong or unhelpful?
+        </h3>
+        <div className="bg-[var(--surface-subtle)] rounded-lg p-3 mb-3 max-h-24 overflow-y-auto">
+          <p className="text-xs text-[var(--text-secondary)] line-clamp-4">{message.content}</p>
+        </div>
+        <textarea
+          value={note}
+          onChange={e => setNote(e.target.value)}
+          placeholder="What was incorrect? (optional)"
+          rows={3}
+          className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500 transition-all resize-none mb-4"
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              setSubmitting(true);
+              await onSubmit(note);
+            }}
+            disabled={submitting}
+            className="flex-1 px-4 py-2.5 bg-error-500 text-white text-sm font-medium rounded-xl hover:bg-error-600 disabled:opacity-50 transition-colors"
+            style={{ minHeight: 48 }}
+          >
+            {submitting ? 'Submitting…' : 'Submit'}
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] border border-[var(--border-default)] rounded-xl hover:bg-[var(--surface-subtle)] transition-colors"
+            style={{ minHeight: 48 }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -546,7 +661,12 @@ function EmptyState({ onSelectPrompt }: { onSelectPrompt: (text: string) => void
 // Message bubble
 // ============================================================================
 
-function MessageBubble({ message, userBubbleTextColor }: { message: ChatMessage; userBubbleTextColor: string }) {
+function MessageBubble({ message, userBubbleTextColor, isFlagged, onFlag }: {
+  message: ChatMessage;
+  userBubbleTextColor: string;
+  isFlagged?: boolean;
+  onFlag?: () => void;
+}) {
   const isUser = message.role === 'user';
 
   return (
@@ -577,6 +697,27 @@ function MessageBubble({ message, userBubbleTextColor }: { message: ChatMessage;
             {message.isStreaming && message.content && (
               <span className="inline-block w-1.5 h-4 bg-accent-500 ml-0.5 animate-pulse rounded-sm" />
             )}
+          </div>
+        )}
+
+        {/* Thumbs-down flag button on assistant messages */}
+        {onFlag && (
+          <div className="flex justify-start">
+            <button
+              onClick={isFlagged ? undefined : onFlag}
+              disabled={isFlagged}
+              className={cn(
+                'flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] transition-colors',
+                isFlagged
+                  ? 'text-error-500 cursor-default'
+                  : 'text-[var(--text-tertiary)] hover:text-error-500 hover:bg-error-50'
+              )}
+              style={{ minHeight: 28, minWidth: 28 }}
+              aria-label={isFlagged ? 'Flagged as wrong' : 'Flag as wrong'}
+            >
+              <ThumbsDownIcon className="w-3.5 h-3.5" filled={isFlagged} />
+              {isFlagged && <span>Flagged</span>}
+            </button>
           </div>
         )}
 
@@ -713,6 +854,14 @@ function ShoppingBagIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+    </svg>
+  );
+}
+
+function ThumbsDownIcon({ className, filled }: { className?: string; filled?: boolean }) {
+  return (
+    <svg className={className} fill={filled ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 15h2.25m8.024-9.75c.011.05.028.1.052.148.591 1.2.924 2.55.924 3.977a8.96 8.96 0 01-.999 4.125m.023-8.25c-.076-.365.183-.75.575-.75h.908c.889 0 1.713.518 1.972 1.368.339 1.11.521 2.287.521 3.507 0 1.553-.295 3.036-.831 4.398C20.613 14.547 19.833 15 19 15h-1.053c-.472 0-.745-.556-.5-.96a8.95 8.95 0 00.303-.54m.023-8.25H16.48a4.5 4.5 0 01-1.423-.23l-3.114-1.04a4.5 4.5 0 00-1.423-.23H6.504c-.694 0-1.372.198-1.934.57a6.996 6.996 0 00-2.19 2.77c-.592 1.205-.182 2.632.882 3.253A2.999 2.999 0 004.5 13.5v.375c0 .621.504 1.125 1.125 1.125H8.25m0 0H5.625c-.621 0-1.125.504-1.125 1.125v.375c0 .621.504 1.125 1.125 1.125H8.25m0 0h2.25M8.25 15l.001 4.5m0 0h2.24" />
     </svg>
   );
 }

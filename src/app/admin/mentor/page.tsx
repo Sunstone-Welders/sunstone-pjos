@@ -19,6 +19,10 @@ interface KnowledgeGap {
   status: string;
   admin_notes: string | null;
   created_at: string;
+  source: string | null;
+  flagged_message: string | null;
+  user_correction_note: string | null;
+  conversation_context: string | null;
 }
 
 interface KnowledgeAddition {
@@ -179,6 +183,8 @@ function StatCard({ label, value, color, isText }: {
 // Gaps tab
 // ============================================================================
 
+type SourceFilter = 'all' | 'auto_detected' | 'user_flagged';
+
 function GapsTab({
   gaps, loading, onGapAction
 }: {
@@ -189,6 +195,7 @@ function GapsTab({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [approveForm, setApproveForm] = useState<{ gapId: string; question: string; answer: string; category: string } | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
 
   async function dismissGap(id: string, notes?: string) {
     setActionLoading(id);
@@ -219,6 +226,20 @@ function GapsTab({
     finally { setActionLoading(null); }
   }
 
+  // Filter and sort: artist-flagged items first, then by date
+  const filteredGaps = gaps
+    .filter(g => {
+      if (sourceFilter === 'all') return true;
+      if (sourceFilter === 'user_flagged') return g.source === 'user_thumbs_down' || g.source === 'user_text_correction';
+      return !g.source || g.source === 'auto_detected';
+    })
+    .sort((a, b) => {
+      const aFlagged = a.source === 'user_thumbs_down' || a.source === 'user_text_correction' ? 1 : 0;
+      const bFlagged = b.source === 'user_thumbs_down' || b.source === 'user_text_correction' ? 1 : 0;
+      if (bFlagged !== aFlagged) return bFlagged - aFlagged;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
   if (loading) {
     return <div className="text-sm text-[var(--text-secondary)] py-8 text-center">Loading gaps…</div>;
   }
@@ -231,9 +252,24 @@ function GapsTab({
     );
   }
 
+  const flaggedCount = gaps.filter(g => g.source === 'user_thumbs_down' || g.source === 'user_text_correction').length;
+
   return (
     <div className="space-y-3">
-      {gaps.map(gap => (
+      {/* Source filter */}
+      <div className="flex items-center gap-2">
+        <select
+          value={sourceFilter}
+          onChange={e => setSourceFilter(e.target.value as SourceFilter)}
+          className="rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] text-[var(--text-primary)] px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500/30"
+        >
+          <option value="all">All gaps ({gaps.length})</option>
+          <option value="user_flagged">Artist-flagged ({flaggedCount})</option>
+          <option value="auto_detected">Auto-detected ({gaps.length - flaggedCount})</option>
+        </select>
+      </div>
+
+      {filteredGaps.map(gap => (
         <div key={gap.id} className="bg-[var(--surface-raised)] rounded-lg border border-[var(--border-default)] overflow-hidden">
           {/* Summary row */}
           <button
@@ -241,6 +277,7 @@ function GapsTab({
             className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-[var(--surface-subtle)] transition-colors"
           >
             <CategoryBadge category={gap.topic || gap.category || 'other'} />
+            <SourceBadge source={gap.source} />
             <div className="flex-1 min-w-0">
               <p className="text-sm text-[var(--text-primary)] truncate">{gap.user_message}</p>
               <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
@@ -261,6 +298,18 @@ function GapsTab({
                 <div>
                   <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Sunny Responded</p>
                   <p className="text-sm text-[var(--text-secondary)] bg-[var(--surface-subtle)] rounded-lg p-3 whitespace-pre-wrap">{gap.sunny_response}</p>
+                </div>
+              )}
+              {gap.user_correction_note && (
+                <div>
+                  <p className="text-xs font-semibold text-error-500 uppercase tracking-wider mb-1">Artist's Correction</p>
+                  <p className="text-sm text-[var(--text-secondary)] bg-error-50 rounded-lg p-3 border border-error-200">{gap.user_correction_note}</p>
+                </div>
+              )}
+              {gap.conversation_context && gap.conversation_context !== gap.user_message && (
+                <div>
+                  <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Context</p>
+                  <p className="text-sm text-[var(--text-secondary)] bg-[var(--surface-subtle)] rounded-lg p-3">{gap.conversation_context}</p>
                 </div>
               )}
 
@@ -575,6 +624,34 @@ function CategoryBadge({ category }: { category: string }) {
       {category.replace('_', ' ')}
     </span>
   );
+}
+
+function SourceBadge({ source }: { source: string | null }) {
+  if (!source || source === 'auto_detected') return null;
+
+  if (source === 'user_thumbs_down') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-error-100 text-error-600 shrink-0">
+        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M18 9.5a1.5 1.5 0 11-3 0v-6a1.5 1.5 0 013 0v6zM14 9.667V5.09a2 2 0 00-1.001-1.736l-3.47-1.98A2 2 0 007.586 1H4a2 2 0 00-2 2v7.586a2 2 0 00.586 1.414l3 3A2 2 0 007 15.414V18a2 2 0 002 2h.586a1 1 0 00.707-.293l5.414-5.414A1 1 0 0016 13.586V11a2 2 0 00-2-2v.667z" />
+        </svg>
+        Flagged
+      </span>
+    );
+  }
+
+  if (source === 'user_text_correction') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warning-100 text-warning-600 shrink-0">
+        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" />
+        </svg>
+        Corrected
+      </span>
+    );
+  }
+
+  return null;
 }
 
 function ChevronIcon({ className }: { className?: string }) {

@@ -33,6 +33,27 @@ import { logAnthropicCost } from '@/lib/cost-tracker';
 import { SUNNY_TOOL_DEFINITIONS, executeSunnyTool, getSunnyToolStatusLabel } from '@/lib/sunny-tools';
 
 // ============================================================================
+// Text correction detection — catches "that's wrong", "you're incorrect", etc.
+// ============================================================================
+
+const CORRECTION_PATTERNS = [
+  /(?:that'?s|that is|you'?re|you are)\s+(?:wrong|incorrect|not (?:right|correct|accurate|true))/i,
+  /(?:wrong|bad|incorrect)\s+(?:info|information|answer)/i,
+  /(?:no,?\s+)?(?:it'?s|the (?:correct|right|actual)\s+(?:answer|setting|number|power|joule))\s+(?:is|should be)/i,
+  /^no[,.]?\s+(?:it'?s actually|that'?s not|the (?:answer|setting) is)/i,
+  /(?:you(?:'re| are) (?:giving|telling) (?:me )?(?:wrong|bad|incorrect))/i,
+];
+
+function detectUserCorrection(message: string): boolean {
+  const trimmed = message.trim();
+  // Skip questions — "what's wrong with my welder?" is NOT a correction
+  if (trimmed.endsWith('?')) return false;
+  // Must be at least 8 chars to avoid false positives on short messages
+  if (trimmed.length < 8) return false;
+  return CORRECTION_PATTERNS.some(pattern => pattern.test(trimmed));
+}
+
+// ============================================================================
 // Subsection registry — ~43 small chunks with keyword maps
 // ============================================================================
 
@@ -1153,11 +1174,40 @@ After a tool executes, summarize the result naturally. If a tool errors, explain
           sunny_response: cleanResponse,
           category: gapData.category || 'other',
           topic: gapData.topic || 'other',
+          source: 'auto_detected',
           status: 'pending',
         });
       }
     } catch (gapError) {
       console.error('[Mentor] Gap detection error:', gapError);
+    }
+
+    // 9b. Text correction detection — async, does not block response
+    try {
+      if (detectUserCorrection(latestUserMsg)) {
+        // Find the last assistant message from conversation history
+        const prevAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
+        if (prevAssistantMsg) {
+          // Fire-and-forget — don't await
+          serviceClient.from('mentor_knowledge_gaps').insert({
+            tenant_id: tenantId,
+            user_id: user.id,
+            user_message: latestUserMsg,
+            sunny_response: prevAssistantMsg.content,
+            category: 'other',
+            topic: 'other',
+            source: 'user_text_correction',
+            flagged_message: prevAssistantMsg.content,
+            user_correction_note: latestUserMsg,
+            conversation_context: latestUserMsg,
+            status: 'pending',
+          }).then(({ error }) => {
+            if (error) console.error('[Mentor] Text correction log error:', error);
+          });
+        }
+      }
+    } catch (correctionError) {
+      console.error('[Mentor] Text correction detection error:', correctionError);
     }
 
     // 10. Build simulated SSE stream
