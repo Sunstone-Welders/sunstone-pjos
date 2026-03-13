@@ -226,6 +226,20 @@ export async function provisionPhoneNumber(
       friendlyName: `Sunstone PJOS - ${tenantId.slice(0, 8)}`,
     });
 
+    // Add number to Messaging Service sender pool for A2P 10DLC compliance
+    const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
+    if (messagingServiceSid) {
+      try {
+        await client.messaging.v1
+          .services(messagingServiceSid)
+          .phoneNumbers.create({ phoneNumberSid: purchased.sid });
+        console.log(`[Twilio] Added ${purchased.phoneNumber} to Messaging Service ${messagingServiceSid}`);
+      } catch (msErr: any) {
+        console.error('[Twilio] Failed to add number to Messaging Service:', msErr.message);
+        // Non-fatal — number is still usable, just not in the service pool yet
+      }
+    }
+
     // Update tenant record
     const { error: updateError } = await supabase
       .from('tenants')

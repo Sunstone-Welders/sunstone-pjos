@@ -40,6 +40,20 @@ export async function POST(request: NextRequest) {
     try {
       const twilio = require('twilio');
       const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
+      // Remove from Messaging Service sender pool first
+      const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
+      if (messagingServiceSid) {
+        try {
+          await client.messaging.v1
+            .services(messagingServiceSid)
+            .phoneNumbers(tenant.dedicated_phone_sid)
+            .remove();
+        } catch (msErr: any) {
+          console.error('[Release] Failed to remove from Messaging Service:', msErr.message);
+        }
+      }
+
       await client.incomingPhoneNumbers(tenant.dedicated_phone_sid).remove();
     } catch (err: any) {
       console.error('[Release] Twilio removal failed:', err.message);
