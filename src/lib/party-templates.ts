@@ -8,7 +8,7 @@
 
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { renderTemplate } from '@/lib/templates';
-import { sendSMS, normalizePhone } from '@/lib/twilio';
+import { sendSMS, normalizePhone, normalizePhoneDigits } from '@/lib/twilio';
 import { getCrmStatus } from '@/lib/crm-status';
 
 // ============================================================================
@@ -82,6 +82,48 @@ export const DEFAULT_PARTY_TEMPLATES = [
 ];
 
 // ============================================================================
+// Default Guest Post-Party Templates (seeded per tenant, category: party-guest)
+// ============================================================================
+
+export const DEFAULT_GUEST_TEMPLATES = [
+  {
+    name: 'Guest Thank You + Aftercare',
+    channel: 'sms',
+    category: 'party-guest',
+    is_default: true,
+    body: 'Hi {{guest_name}}! Thank you for coming to {{host_name}}\'s party! Here are a few tips to keep your permanent jewelry looking beautiful: avoid pulling or tugging, keep it dry for the first 24 hours, and it\'s totally fine to shower with it daily after that. If you ever need a re-weld, just reach out! — {{business_name}}',
+  },
+  {
+    name: 'Guest Social Share',
+    channel: 'sms',
+    category: 'party-guest',
+    is_default: true,
+    body: 'Hi {{guest_name}}! How are you loving your new permanent jewelry? We\'d love to see it! Tag us on Instagram {{instagram_url}} — it makes our day seeing you sparkle! — {{business_name}}',
+  },
+  {
+    name: 'Guest Book Your Own Party',
+    channel: 'sms',
+    category: 'party-guest',
+    is_default: true,
+    body: 'Hi {{guest_name}}! Have friends who are jealous of your permanent jewelry? Host your own party and make it a night to remember! Check out the details here: {{profile_url}} — {{business_name}}',
+  },
+  {
+    name: 'Guest Collection Nudge',
+    channel: 'sms',
+    category: 'party-guest',
+    is_default: true,
+    body: 'Hi {{guest_name}}! Ready to add to your permanent jewelry collection? Whether it\'s a new bracelet, anklet, or a piece for someone special — we\'d love to see you again! Book anytime at {{profile_url}} — {{business_name}}',
+  },
+  {
+    name: 'Guest Opt-In Invite',
+    channel: 'sms',
+    category: 'party-guest',
+    is_default: true,
+    body: 'Hi {{guest_name}}! It was so fun meeting you at {{host_name}}\'s party! If you\'d like to hear about future events and special offers, you can sign up for updates here: {{profile_url}} — {{business_name}}',
+  },
+];
+
+// ============================================================================
 // Party-Specific Template Variables
 // ============================================================================
 
@@ -100,6 +142,8 @@ export const PARTY_TEMPLATE_VARIABLES = [
   { key: 'total_party_revenue', label: 'Total Party Revenue', example: '850' },
   { key: 'business_name', label: 'Business Name', example: 'Golden Touch PJ' },
   { key: 'profile_url', label: 'Profile URL', example: 'sunstonepj.app/studio/your-studio' },
+  { key: 'instagram_url', label: 'Instagram URL', example: '@goldentouchpj' },
+  { key: 'guest_name', label: 'Guest Name', example: 'Sarah' },
 ] as const;
 
 /**
@@ -123,6 +167,7 @@ export function resolvePartyVariables(
     name: string;
     slug: string;
     phone?: string | null;
+    instagram_url?: string | null;
   },
   rsvpCount?: number
 ): Record<string, string> {
@@ -161,6 +206,7 @@ export function resolvePartyVariables(
     business_name: tenant.name || 'our studio',
     business_phone: tenant.phone || '',
     profile_url: `${baseUrl}/studio/${tenant.slug}`,
+    instagram_url: tenant.instagram_url || '',
     guest_name: '', // Placeholder — only used for guest-facing templates
   };
 }
@@ -183,11 +229,25 @@ export async function seedPartyTemplates(tenantId: string): Promise<void> {
     .eq('category', 'party')
     .limit(1);
 
-  if (existing && existing.length > 0) return;
+  if (!existing || existing.length === 0) {
+    await supabase.from('message_templates').insert(
+      DEFAULT_PARTY_TEMPLATES.map((t) => ({ ...t, tenant_id: tenantId }))
+    );
+  }
 
-  await supabase.from('message_templates').insert(
-    DEFAULT_PARTY_TEMPLATES.map((t) => ({ ...t, tenant_id: tenantId }))
-  );
+  // Also seed guest templates if missing
+  const { data: existingGuest } = await supabase
+    .from('message_templates')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('category', 'party-guest')
+    .limit(1);
+
+  if (!existingGuest || existingGuest.length === 0) {
+    await supabase.from('message_templates').insert(
+      DEFAULT_GUEST_TEMPLATES.map((t) => ({ ...t, tenant_id: tenantId }))
+    );
+  }
 }
 
 /**
@@ -210,8 +270,9 @@ async function getTemplateBody(
 
   if (data) return data.body;
 
-  // Fall back to hardcoded default
-  const def = DEFAULT_PARTY_TEMPLATES.find((t) => t.name === templateName);
+  // Fall back to hardcoded default (check both host and guest templates)
+  const def = DEFAULT_PARTY_TEMPLATES.find((t) => t.name === templateName)
+    || DEFAULT_GUEST_TEMPLATES.find((t) => t.name === templateName);
   return def?.body || templateName;
 }
 
@@ -247,7 +308,7 @@ export async function handlePartyStatusChange(
   // Fetch tenant
   const { data: tenant } = await supabase
     .from('tenants')
-    .select('name, slug, phone, dedicated_phone_number, party_auto_reminders, party_reward_settings, crm_enabled, crm_subscription_id, crm_trial_end, crm_deactivated_at')
+    .select('name, slug, phone, dedicated_phone_number, party_auto_reminders, party_reward_settings, party_guest_sequences, instagram_url, crm_enabled, crm_subscription_id, crm_trial_end, crm_deactivated_at')
     .eq('id', tenantId)
     .single();
 
@@ -355,7 +416,7 @@ export async function handlePartyStatusChange(
       break;
     }
 
-    // ── Completed → thank you (CRM-gated) + reward if earned ────────────
+    // ── Completed → thank you (CRM-gated) + reward if earned + guest sequences ─
     case 'completed': {
       if (crmActive) {
         // Thank you 2 hours after marking complete
@@ -371,6 +432,15 @@ export async function handlePartyStatusChange(
             await scheduleFuture('Host Reward Earned', threeHoursLater);
           }
         }
+      }
+
+      // Guest post-party sequences (fire-and-forget)
+      if ((tenant as any).party_guest_sequences !== false) {
+        scheduleGuestSequences(
+          supabase, tenantId, partyRequestId, party, tenant, variables, crmActive
+        ).catch((err: unknown) => {
+          console.error('[Party] Failed to schedule guest sequences:', err);
+        });
       }
       break;
     }
@@ -396,6 +466,261 @@ export async function handlePartyStatusChange(
           .eq('id', partyRequestId);
       }
       break;
+    }
+  }
+}
+
+// ============================================================================
+// Guest Variable Resolution
+// ============================================================================
+
+/**
+ * Extend party variables with guest-specific fields.
+ */
+function resolveGuestVariables(
+  partyVars: Record<string, string>,
+  guest: { name: string }
+): Record<string, string> {
+  // Use first name only
+  const firstName = guest.name.split(' ')[0] || guest.name;
+  return { ...partyVars, guest_name: firstName };
+}
+
+// ============================================================================
+// Guest Post-Party Sequence Scheduling
+// ============================================================================
+
+/**
+ * Schedule guest marketing sequences when a party is marked "completed."
+ * Track A (waiver + SMS consent): G1 + G2 (if instagram) + G3 + G4
+ * Track B (RSVP-only, no consent): G1 + G5 only
+ */
+async function scheduleGuestSequences(
+  supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
+  tenantId: string,
+  partyRequestId: string,
+  party: { host_phone: string; host_name: string; id: string },
+  tenant: { name: string; slug: string; dedicated_phone_number?: string | null; instagram_url?: string | null },
+  partyVars: Record<string, string>,
+  crmActive: boolean
+): Promise<void> {
+  if (!tenant.dedicated_phone_number) return;
+
+  // Idempotency: check if guest messages already exist
+  const { count: existingCount } = await supabase
+    .from('party_scheduled_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('party_request_id', partyRequestId)
+    .not('party_rsvp_id', 'is', null);
+
+  if (existingCount && existingCount > 0) return;
+
+  // Fetch attending RSVPs with phone numbers
+  const { data: rsvps } = await supabase
+    .from('party_rsvps')
+    .select('id, name, phone, waiver_signed, waiver_id')
+    .eq('party_request_id', partyRequestId)
+    .eq('attending', true)
+    .not('phone', 'is', null);
+
+  if (!rsvps || rsvps.length === 0) return;
+
+  // Normalize host phone for comparison
+  const hostDigits = party.host_phone ? normalizePhoneDigits(party.host_phone) : '';
+
+  const now = new Date();
+
+  for (const rsvp of rsvps) {
+    if (!rsvp.phone) continue;
+
+    // Skip if phone matches host
+    const guestDigits = normalizePhoneDigits(rsvp.phone);
+    if (hostDigits && guestDigits === hostDigits) continue;
+
+    // Determine track: check waiver SMS consent
+    let isTrackA = false;
+    if (rsvp.waiver_signed && rsvp.waiver_id) {
+      const { data: waiver } = await supabase
+        .from('waivers')
+        .select('sms_consent')
+        .eq('id', rsvp.waiver_id)
+        .single();
+      isTrackA = waiver?.sms_consent === true;
+    }
+
+    const guestVars = resolveGuestVariables(partyVars, rsvp);
+    const guestPhone = normalizePhone(rsvp.phone);
+    const guestFirstName = rsvp.name.split(' ')[0] || rsvp.name;
+
+    // Track A: find or create CRM client, apply tags
+    let clientId: string | null = null;
+    if (isTrackA) {
+      clientId = await findOrCreateGuestClient(
+        supabase, tenantId, rsvp, guestPhone
+      );
+      if (clientId) {
+        // Link RSVP to client
+        await supabase
+          .from('party_rsvps')
+          .update({ client_id: clientId })
+          .eq('id', rsvp.id);
+
+        // Apply tags (fire-and-forget)
+        applyPartyGuestTags(supabase, tenantId, clientId, party.host_name).catch(() => {});
+      }
+    }
+
+    // Helper to schedule a guest message
+    const scheduleGuest = async (templateName: string, sendAt: Date) => {
+      const body = await getTemplateBody(tenantId, templateName);
+      const resolved = renderTemplate(body, guestVars);
+      await supabase.from('party_scheduled_messages').insert({
+        tenant_id: tenantId,
+        party_request_id: partyRequestId,
+        party_rsvp_id: rsvp.id,
+        template_name: templateName,
+        recipient_phone: guestPhone,
+        recipient_name: guestFirstName,
+        message_body: resolved,
+        scheduled_for: sendAt.toISOString(),
+        status: 'pending',
+      });
+    };
+
+    // ── G1: Guest Thank You + Aftercare (Day 0, +2hrs) — ALL tiers, both tracks ─
+    const g1Time = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    await scheduleGuest('Guest Thank You + Aftercare', g1Time);
+
+    if (isTrackA && crmActive) {
+      // ── G2: Social Share (Day 3, 11am) — CRM only, skip if no instagram_url ─
+      if (tenant.instagram_url) {
+        const g2Time = new Date(now);
+        g2Time.setDate(g2Time.getDate() + 3);
+        g2Time.setHours(11, 0, 0, 0);
+        await scheduleGuest('Guest Social Share', g2Time);
+      }
+
+      // ── G3: Book Your Own Party (Day 10, 11am) — CRM only ─
+      const g3Time = new Date(now);
+      g3Time.setDate(g3Time.getDate() + 10);
+      g3Time.setHours(11, 0, 0, 0);
+      await scheduleGuest('Guest Book Your Own Party', g3Time);
+
+      // ── G4: Collection Nudge (Day 21, 11am) — CRM only ─
+      const g4Time = new Date(now);
+      g4Time.setDate(g4Time.getDate() + 21);
+      g4Time.setHours(11, 0, 0, 0);
+      await scheduleGuest('Guest Collection Nudge', g4Time);
+    } else if (!isTrackA) {
+      // ── G5: Opt-In Invite (Day 3, 11am) — ALL tiers, Track B only ─
+      const g5Time = new Date(now);
+      g5Time.setDate(g5Time.getDate() + 3);
+      g5Time.setHours(11, 0, 0, 0);
+      await scheduleGuest('Guest Opt-In Invite', g5Time);
+    }
+  }
+}
+
+// ============================================================================
+// Guest Client Matching / Creation
+// ============================================================================
+
+/**
+ * Find an existing client by phone, or create a new one for a party guest.
+ * Returns the client_id or null.
+ */
+async function findOrCreateGuestClient(
+  supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
+  tenantId: string,
+  rsvp: { name: string; phone: string | null; email?: string | null },
+  normalizedPhone: string
+): Promise<string | null> {
+  const digits = normalizePhoneDigits(normalizedPhone);
+
+  // Try to find existing client
+  const { data: matched } = await supabase.rpc('find_client_by_phone', {
+    p_tenant_id: tenantId,
+    p_digits: digits,
+  });
+
+  if (matched && matched.length > 0) {
+    return matched[0].id;
+  }
+
+  // Create new client
+  const nameParts = rsvp.name.trim().split(/\s+/);
+  const firstName = nameParts[0] || rsvp.name;
+  const lastName = nameParts.slice(1).join(' ') || null;
+
+  const { data: newClient } = await supabase
+    .from('clients')
+    .insert({
+      tenant_id: tenantId,
+      first_name: firstName,
+      last_name: lastName,
+      phone: normalizedPhone,
+      email: rsvp.email || null,
+      source: 'party_guest',
+    })
+    .select('id')
+    .single();
+
+  return newClient?.id || null;
+}
+
+// ============================================================================
+// Guest Tag Application
+// ============================================================================
+
+/**
+ * Apply "Party Guest" and "{Host}'s Party" tags to a guest client.
+ * Uses check-then-insert pattern matching auto-tags.ts.
+ */
+async function applyPartyGuestTags(
+  supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
+  tenantId: string,
+  clientId: string,
+  hostName: string
+): Promise<void> {
+  const tagNames = ['Party Guest', `${hostName}'s Party`];
+
+  for (const tagName of tagNames) {
+    // Find or create tag
+    let tagId: string | null = null;
+
+    const { data: existingTag } = await supabase
+      .from('tags')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('name', tagName)
+      .single();
+
+    if (existingTag) {
+      tagId = existingTag.id;
+    } else {
+      const { data: created } = await supabase
+        .from('tags')
+        .insert({ tenant_id: tenantId, name: tagName, color: '#C07850', auto_apply: false })
+        .select('id')
+        .single();
+      tagId = created?.id || null;
+    }
+
+    if (!tagId) continue;
+
+    // Check if already assigned
+    const { data: existing } = await supabase
+      .from('client_tag_assignments')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('tag_id', tagId)
+      .single();
+
+    if (!existing) {
+      await supabase.from('client_tag_assignments').insert({
+        client_id: clientId,
+        tag_id: tagId,
+      });
     }
   }
 }

@@ -383,6 +383,10 @@ function SettingsPage() {
   const [partyAutoReminders, setPartyAutoReminders] = useState(true);
   const [savingReminders, setSavingReminders] = useState(false);
 
+  // ── Party guest sequences state ──
+  const [partyGuestSequences, setPartyGuestSequences] = useState(true);
+  const [savingGuestSeq, setSavingGuestSeq] = useState(false);
+
   // ============================================================================
   // OAuth redirect handling
   // ============================================================================
@@ -499,6 +503,7 @@ function SettingsPage() {
 
     // Load party auto-reminders
     setPartyAutoReminders((tenant as any).party_auto_reminders !== false);
+    setPartyGuestSequences((tenant as any).party_guest_sequences !== false);
 
     supabase
       .from('tax_profiles')
@@ -2171,6 +2176,56 @@ function SettingsPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                   </svg>
                   Customize party message templates
+                </a>
+              </div>
+
+              {/* Guest Post-Party Sequences */}
+              <div className="border-t border-[var(--border-subtle)] pt-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">Guest Post-Party Sequences</p>
+                    <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                      {getCrmStatus(tenant as any).active
+                        ? 'Send automated follow-up messages to party guests after the event (aftercare tips, social share, booking nudge).'
+                        : 'Basic aftercare messages send on all plans. Upgrade to CRM for the full guest marketing sequence.'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const newVal = !partyGuestSequences;
+                      setPartyGuestSequences(newVal);
+                      setSavingGuestSeq(true);
+                      try {
+                        const { error } = await supabase
+                          .from('tenants')
+                          .update({ party_guest_sequences: newVal })
+                          .eq('id', tenant!.id);
+                        if (error) throw error;
+                        toast.success(newVal ? 'Guest sequences enabled' : 'Guest sequences disabled');
+                        refetch();
+                      } catch {
+                        setPartyGuestSequences(!newVal);
+                        toast.error('Failed to update');
+                      } finally {
+                        setSavingGuestSeq(false);
+                      }
+                    }}
+                    disabled={savingGuestSeq}
+                    className={`relative w-9 h-5 rounded-full transition-colors ${partyGuestSequences ? 'bg-[var(--accent-primary)]' : 'bg-[var(--border-default)]'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${partyGuestSequences ? 'translate-x-4' : ''}`} />
+                  </button>
+                </div>
+
+                {/* Link to edit guest templates */}
+                <a
+                  href="/dashboard/broadcasts?tab=templates&category=party-guest"
+                  className="flex items-center gap-2 text-sm text-[var(--accent-primary)] hover:underline"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                  </svg>
+                  Customize guest templates
                 </a>
               </div>
             </>

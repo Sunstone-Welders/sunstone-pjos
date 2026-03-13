@@ -45,6 +45,10 @@ export async function POST(request: NextRequest) {
 
   let sent = 0;
   let failed = 0;
+  let skipped = 0;
+
+  // Templates that have exit conditions (guest marketing messages)
+  const EXIT_CHECK_TEMPLATES = ['Guest Book Your Own Party', 'Guest Collection Nudge'];
 
   for (const msg of dueMessages) {
     try {
@@ -62,6 +66,19 @@ export async function POST(request: NextRequest) {
           .update({ status: 'cancelled' })
           .eq('id', msg.id);
         continue;
+      }
+
+      // Check exit conditions for G3/G4 guest messages
+      if (EXIT_CHECK_TEMPLATES.includes(msg.template_name) && msg.party_rsvp_id) {
+        const skipReason = await checkGuestExitConditions(db, msg);
+        if (skipReason) {
+          await db
+            .from('party_scheduled_messages')
+            .update({ status: 'skipped', skip_reason: skipReason })
+            .eq('id', msg.id);
+          skipped++;
+          continue;
+        }
       }
 
       // Send the message
@@ -93,6 +110,57 @@ export async function POST(request: NextRequest) {
     processed: dueMessages.length,
     sent,
     failed,
-    skipped: dueMessages.length - sent - failed,
+    skipped,
   });
+}
+
+// ============================================================================
+// Guest Exit Condition Check
+// ============================================================================
+
+/**
+ * Check if a guest has taken an action that makes a marketing message irrelevant.
+ * Returns a skip_reason string if the message should be skipped, null otherwise.
+ */
+async function checkGuestExitConditions(
+  db: Awaited<ReturnType<typeof createServiceRoleClient>>,
+  msg: { party_rsvp_id: string | null; tenant_id: string; created_at: string }
+): Promise<string | null> {
+  if (!msg.party_rsvp_id) return null;
+
+  // Look up the client_id from the RSVP
+  const { data: rsvp } = await db
+    .from('party_rsvps')
+    .select('client_id')
+    .eq('id', msg.party_rsvp_id)
+    .single();
+
+  if (!rsvp?.client_id) return null;
+
+  // Check if guest has booked their own party since this message was created
+  const { count: partyCount } = await db
+    .from('party_requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', msg.tenant_id)
+    .eq('client_id', rsvp.client_id)
+    .gte('created_at', msg.created_at);
+
+  if (partyCount && partyCount > 0) {
+    return 'booked_own_party';
+  }
+
+  // Check if guest has made a purchase since this message was created
+  const { count: saleCount } = await db
+    .from('sales')
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', msg.tenant_id)
+    .eq('client_id', rsvp.client_id)
+    .eq('status', 'completed')
+    .gte('created_at', msg.created_at);
+
+  if (saleCount && saleCount > 0) {
+    return 'made_purchase';
+  }
+
+  return null;
 }

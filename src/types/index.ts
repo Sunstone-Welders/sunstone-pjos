@@ -883,7 +883,7 @@ export interface PartyRequest {
   attending_count?: number;
 }
 
-export type PartyMessageStatus = 'pending' | 'sent' | 'cancelled' | 'failed';
+export type PartyMessageStatus = 'pending' | 'sent' | 'cancelled' | 'failed' | 'skipped';
 
 export interface PartyScheduledMessage {
   id: string;
@@ -895,6 +895,8 @@ export interface PartyScheduledMessage {
   message_body: string;
   scheduled_for: string;
   sent_at: string | null;
+  party_rsvp_id: string | null;
+  skip_reason: string | null;
   status: PartyMessageStatus;
   created_at: string;
 }
@@ -910,5 +912,6 @@ export interface PartyRsvp {
   plus_ones: number;
   waiver_signed: boolean;
   waiver_id: string | null;
+  client_id: string | null;
   created_at: string;
 }

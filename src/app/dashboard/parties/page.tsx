@@ -78,7 +78,9 @@ export default function PartiesPage() {
     message_body: string;
     scheduled_for: string;
     sent_at: string | null;
-    status: 'pending' | 'sent' | 'cancelled' | 'failed';
+    status: 'pending' | 'sent' | 'cancelled' | 'failed' | 'skipped';
+    party_rsvp_id: string | null;
+    skip_reason: string | null;
     created_at: string;
   }
   const [messages, setMessages] = useState<PartyMessage[]>([]);
@@ -825,87 +827,143 @@ export default function PartiesPage() {
                 </>
               ) : detailTab === 'messages' ? (
                 /* ── Messages Tab ─────────────────────────────────────── */
-                <div className="space-y-4">
-                  {messagesLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="w-6 h-6 border-2 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin" />
-                    </div>
-                  ) : messages.length === 0 ? (
-                    <div className="text-center py-8 space-y-2">
-                      <p className="text-sm text-[var(--text-secondary)]">No messages yet</p>
-                      <p className="text-xs text-[var(--text-tertiary)]">
-                        Messages will appear here as they&apos;re sent automatically or manually.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {messages.map((msg) => {
-                        const isSent = msg.status === 'sent';
-                        const isPending = msg.status === 'pending';
-                        const isCancelled = msg.status === 'cancelled';
-                        const isFailed = msg.status === 'failed';
-                        const time = msg.sent_at || msg.scheduled_for;
-                        const timeLabel = isSent ? 'Sent' : isPending ? 'Scheduled' : isCancelled ? 'Cancelled' : 'Failed';
-                        const timeColor = isSent ? 'text-green-600' : isPending ? 'text-blue-600' : isCancelled ? 'text-[var(--text-tertiary)]' : 'text-red-500';
+                (() => {
+                  const hostMessages = messages.filter((m) => !m.party_rsvp_id);
+                  const guestMessages = messages.filter((m) => m.party_rsvp_id);
+                  const guestSentCount = guestMessages.filter((m) => m.status === 'sent').length;
+                  const guestPendingCount = guestMessages.filter((m) => m.status === 'pending').length;
 
-                        return (
-                          <div
-                            key={msg.id}
-                            className={`px-3 py-2.5 rounded-lg border text-sm ${
-                              isCancelled ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-[var(--surface-subtle)] border-[var(--border-default)]'
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2 mb-1">
-                              <span className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-                                {msg.template_name}
-                              </span>
-                              <div className="flex items-center gap-2">
-                                <span className={`text-[10px] font-medium ${timeColor}`}>{timeLabel}</span>
-                                {isPending && (
-                                  <button
-                                    onClick={() => handleCancelMessage(msg.id)}
-                                    disabled={cancellingMsgId === msg.id}
-                                    className="text-[10px] text-red-400 hover:text-red-600 transition-colors"
-                                  >
-                                    {cancellingMsgId === msg.id ? '...' : 'Cancel'}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                            <p className={`text-xs leading-relaxed ${isCancelled ? 'line-through text-[var(--text-tertiary)]' : 'text-[var(--text-primary)]'}`}>
-                              {msg.message_body.length > 200 ? msg.message_body.slice(0, 200) + '...' : msg.message_body}
-                            </p>
-                            <p className="text-[10px] text-[var(--text-tertiary)] mt-1">
-                              {new Date(time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  // Group guest messages by recipient_name
+                  const guestsByName = guestMessages.reduce<Record<string, PartyMessage[]>>((acc, m) => {
+                    const key = m.recipient_name || 'Unknown';
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(m);
+                    return acc;
+                  }, {});
 
-                  {/* Send custom message */}
-                  <div className="border-t border-[var(--border-subtle)] pt-3">
-                    <label className="block text-xs font-medium text-[var(--text-tertiary)] mb-1">Send Custom Message</label>
-                    <Textarea
-                      rows={2}
-                      placeholder={`Message to ${selected.host_name}...`}
-                      value={customMessage}
-                      onChange={(e) => setCustomMessage(e.target.value)}
-                    />
-                    <div className="flex justify-end mt-2">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={handleSendCustomMessage}
-                        loading={sendingCustom}
-                        disabled={!customMessage.trim()}
+                  const renderMessageCard = (msg: PartyMessage) => {
+                    const isSent = msg.status === 'sent';
+                    const isPending = msg.status === 'pending';
+                    const isCancelled = msg.status === 'cancelled';
+                    const isSkipped = msg.status === 'skipped';
+                    const isFaded = isCancelled || isSkipped;
+                    const time = msg.sent_at || msg.scheduled_for;
+                    const timeLabel = isSent ? 'Sent' : isPending ? 'Scheduled' : isCancelled ? 'Cancelled' : isSkipped ? 'Skipped' : 'Failed';
+                    const timeColor = isSent ? 'text-green-600' : isPending ? 'text-blue-600' : isSkipped ? 'text-amber-600' : isCancelled ? 'text-[var(--text-tertiary)]' : 'text-red-500';
+
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`px-3 py-2.5 rounded-lg border text-sm ${
+                          isFaded ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-[var(--surface-subtle)] border-[var(--border-default)]'
+                        }`}
                       >
-                        Send
-                      </Button>
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <span className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
+                            {msg.template_name}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-medium ${timeColor}`}>{timeLabel}</span>
+                            {isSkipped && msg.skip_reason && (
+                              <span className="text-[10px] text-amber-600">
+                                ({msg.skip_reason === 'booked_own_party' ? 'booked a party' : msg.skip_reason === 'made_purchase' ? 'made a purchase' : msg.skip_reason})
+                              </span>
+                            )}
+                            {isPending && (
+                              <button
+                                onClick={() => handleCancelMessage(msg.id)}
+                                disabled={cancellingMsgId === msg.id}
+                                className="text-[10px] text-red-400 hover:text-red-600 transition-colors"
+                              >
+                                {cancellingMsgId === msg.id ? '...' : 'Cancel'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <p className={`text-xs leading-relaxed ${isFaded ? 'line-through text-[var(--text-tertiary)]' : 'text-[var(--text-primary)]'}`}>
+                          {msg.message_body.length > 200 ? msg.message_body.slice(0, 200) + '...' : msg.message_body}
+                        </p>
+                        <p className="text-[10px] text-[var(--text-tertiary)] mt-1">
+                          {new Date(time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    );
+                  };
+
+                  return (
+                    <div className="space-y-4">
+                      {messagesLoading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="w-6 h-6 border-2 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      ) : messages.length === 0 ? (
+                        <div className="text-center py-8 space-y-2">
+                          <p className="text-sm text-[var(--text-secondary)]">No messages yet</p>
+                          <p className="text-xs text-[var(--text-tertiary)]">
+                            Messages will appear here as they&apos;re sent automatically or manually.
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Host Messages */}
+                          {hostMessages.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Host Messages</p>
+                              {hostMessages.map(renderMessageCard)}
+                            </div>
+                          )}
+
+                          {/* Guest Messages */}
+                          {guestMessages.length > 0 && (
+                            <div className="space-y-2 border-t border-[var(--border-subtle)] pt-3">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Guest Messages</p>
+                                <p className="text-[10px] text-[var(--text-tertiary)]">
+                                  {Object.keys(guestsByName).length} guest{Object.keys(guestsByName).length !== 1 ? 's' : ''} · {guestSentCount} sent · {guestPendingCount} pending
+                                </p>
+                              </div>
+                              {Object.entries(guestsByName).map(([name, msgs]) => (
+                                <details key={name} className="group">
+                                  <summary className="flex items-center justify-between cursor-pointer text-sm text-[var(--text-primary)] py-1 hover:text-[var(--accent-primary)]">
+                                    <span>{name}</span>
+                                    <span className="text-[10px] text-[var(--text-tertiary)]">
+                                      {msgs.filter((m) => m.status === 'sent').length}/{msgs.length} sent
+                                    </span>
+                                  </summary>
+                                  <div className="space-y-1.5 mt-1.5 ml-2">
+                                    {msgs.map(renderMessageCard)}
+                                  </div>
+                                </details>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* Send custom message */}
+                      <div className="border-t border-[var(--border-subtle)] pt-3">
+                        <label className="block text-xs font-medium text-[var(--text-tertiary)] mb-1">Send Custom Message</label>
+                        <Textarea
+                          rows={2}
+                          placeholder={`Message to ${selected.host_name}...`}
+                          value={customMessage}
+                          onChange={(e) => setCustomMessage(e.target.value)}
+                        />
+                        <div className="flex justify-end mt-2">
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={handleSendCustomMessage}
+                            loading={sendingCustom}
+                            disabled={!customMessage.trim()}
+                          >
+                            Send
+                          </Button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  );
+                })()
               ) : (
                 /* ── Revenue Tab ──────────────────────────────────────── */
                 <div className="space-y-4">
