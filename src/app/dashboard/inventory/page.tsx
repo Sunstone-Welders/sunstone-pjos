@@ -24,7 +24,7 @@ import { Badge } from '@/components/ui/Badge';
 import ChainPricingConfig, { type PriceConfigRow } from '@/components/inventory/ChainPricingConfig';
 import SupplierDropdown from '@/components/inventory/SupplierDropdown';
 import MaterialDropdown from '@/components/inventory/MaterialDropdown';
-import type { InventoryItem, InventoryType, InventoryUnit, PricingMode, Material } from '@/types';
+import type { InventoryItem, InventoryType, InventoryUnit, PricingMode, Material, TenantPricingMode } from '@/types';
 import { Skeleton } from '@/components/ui';
 import SunnyTutorial from '@/components/SunnyTutorial';
 import ProductTypesSection from '@/components/settings/ProductTypesSection';
@@ -603,7 +603,7 @@ export default function InventoryPage() {
 // ============================================================================
 
 interface InventoryItemFormProps {
-  tenant: { id: string };
+  tenant: { id: string; pricing_mode?: string };
   editingItem: InventoryItem | null;
   onClose: () => void;
   onSaved: () => void;
@@ -646,6 +646,9 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
     (editingItem as any)?.pricing_mode || 'per_product'
   );
   const [chainPriceRows, setChainPriceRows] = useState<PriceConfigRow[]>([]);
+  const [pricingTierId, setPricingTierId] = useState<string | null>(
+    (editingItem as any)?.pricing_tier_id || null
+  );
 
   // Validation
   const [validationTriggered, setValidationTriggered] = useState(false);
@@ -752,6 +755,7 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
         reorder_threshold: reorderThreshold,
         notes: notes.trim() || null,
         pricing_mode: type === 'chain' ? pricingMode : 'per_product',
+        pricing_tier_id: type === 'chain' ? pricingTierId : null,
       };
 
       let savedItemId: string;
@@ -1039,6 +1043,9 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
                 onPricesChange={setChainPriceRows}
                 chainName={name.trim() || 'This chain'}
                 validationTriggered={validationTriggered}
+                tenantPricingMode={(tenant as any).pricing_mode || 'per_product'}
+                pricingTierId={pricingTierId}
+                onPricingTierChange={setPricingTierId}
               />
             ) : (
               /* Non-chain: simple sell price */

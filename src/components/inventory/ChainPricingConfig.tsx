@@ -12,7 +12,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { PricingMode, ProductType } from '@/types';
+import type { PricingMode, ProductType, PricingTier, TenantPricingMode } from '@/types';
 
 // Row data passed back to parent form
 export interface PriceConfigRow {
@@ -33,6 +33,10 @@ interface ChainPricingConfigProps {
   onPricesChange: (rows: PriceConfigRow[]) => void;
   chainName?: string; // For preview display
   validationTriggered?: boolean; // True when user attempted save
+  // Tier pricing
+  tenantPricingMode?: TenantPricingMode;
+  pricingTierId?: string | null;
+  onPricingTierChange?: (tierId: string | null) => void;
 }
 
 export default function ChainPricingConfig({
@@ -45,6 +49,9 @@ export default function ChainPricingConfig({
   onPricesChange,
   chainName = 'This chain',
   validationTriggered = false,
+  tenantPricingMode,
+  pricingTierId,
+  onPricingTierChange,
 }: ChainPricingConfigProps) {
   const supabase = createClient();
 
@@ -52,6 +59,23 @@ export default function ChainPricingConfig({
   const [loading, setLoading] = useState(true);
   const [priceRows, setPriceRows] = useState<PriceConfigRow[]>([]);
   const [existingPricesLoaded, setExistingPricesLoaded] = useState(false);
+  const [tiers, setTiers] = useState<PricingTier[]>([]);
+
+  // Load pricing tiers when tenant uses tier mode
+  useEffect(() => {
+    if (tenantPricingMode !== 'tier') return;
+    const loadTiers = async () => {
+      const { data } = await supabase
+        .from('pricing_tiers')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .order('sort_order');
+      setTiers(data || []);
+    };
+    loadTiers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId, tenantPricingMode]);
 
   // Load product types from Supabase
   useEffect(() => {
@@ -239,6 +263,60 @@ export default function ChainPricingConfig({
           </button>
         </div>
       </div>
+
+      {/* ─── Tier Assignment (when tenant uses tier pricing) ─── */}
+      {tenantPricingMode === 'tier' && pricingMode === 'per_product' && tiers.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">
+            Pricing Tier
+          </label>
+          <p className="text-xs text-[var(--text-tertiary)] mb-2">
+            Select a tier to auto-fill product prices. You can still override individual prices.
+          </p>
+          <select
+            value={pricingTierId || ''}
+            onChange={(e) => {
+              const tierId = e.target.value || null;
+              onPricingTierChange?.(tierId);
+              // Auto-fill prices from the selected tier
+              if (tierId) {
+                const tier = tiers.find(t => t.id === tierId);
+                if (tier) {
+                  const tierPriceMap: Record<string, number | null> = {
+                    bracelet: tier.bracelet_price,
+                    anklet: tier.anklet_price,
+                    ring: tier.ring_price,
+                    necklace: tier.necklace_price_per_inch,
+                    'hand chain': tier.hand_chain_price,
+                  };
+                  const newRows = priceRows.map(row => {
+                    const rowNameLower = row.product_type_name.toLowerCase();
+                    for (const [key, price] of Object.entries(tierPriceMap)) {
+                      if (price != null && rowNameLower.includes(key)) {
+                        return { ...row, sell_price: Number(price), is_active: true };
+                      }
+                    }
+                    return row;
+                  });
+                  setPriceRows(newRows);
+                  onPricesChange(newRows);
+                }
+              }
+            }}
+            className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] min-h-[44px]"
+          >
+            <option value="">None (custom prices)</option>
+            {tiers.map(tier => (
+              <option key={tier.id} value={tier.id}>{tier.name}</option>
+            ))}
+          </select>
+          {pricingTierId && tiers.find(t => t.id === pricingTierId) && (
+            <p className="mt-1.5 text-xs text-[var(--accent-600)]">
+              Prices auto-filled from &ldquo;{tiers.find(t => t.id === pricingTierId)?.name}&rdquo; tier
+            </p>
+          )}
+        </div>
+      )}
 
       {/* ─── Per Inch Mode ─── */}
       {pricingMode === 'per_inch' && (

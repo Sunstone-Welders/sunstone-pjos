@@ -32,7 +32,7 @@ import {
 } from '@/components/ui';
 import { applyTheme } from '@/lib/theme';
 import { THEMES, LIGHT_THEMES, DARK_THEMES, getThemeById, DEFAULT_THEME_ID, type ThemeDefinition } from '@/lib/themes';
-import type { TaxProfile, SubscriptionTier } from '@/types';
+import type { TaxProfile, SubscriptionTier, PricingTier, TenantPricingMode } from '@/types';
 import { PLATFORM_FEE_RATES, SUBSCRIPTION_PRICES } from '@/types';
 import { getSubscriptionTier } from '@/lib/subscription';
 import { getCrmStatus } from '@/lib/crm-status';
@@ -94,7 +94,7 @@ interface TeamMember {
 }
 
 type PaymentProcessor = 'square' | 'stripe';
-type SectionId = 'business' | 'communications' | 'payments' | 'billing' | 'tax' | 'waiver' | 'team' | 'profile';
+type SectionId = 'business' | 'communications' | 'pricing' | 'payments' | 'billing' | 'tax' | 'waiver' | 'team' | 'profile';
 
 // ============================================================================
 // Subscription Helpers
@@ -212,6 +212,12 @@ const IconTeam = (
 const IconCommunications = (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+  </svg>
+);
+
+const IconPricing = (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 );
 
@@ -1142,6 +1148,21 @@ function SettingsPage() {
       >
         <div className="space-y-3 pt-4">
           <CommsSubAccordion tenant={tenant} onSaved={refetch} onProvisioned={refetch} />
+        </div>
+      </AccordionSection>
+
+      {/* ================================================================ */}
+      {/* Section 1c: Default Pricing                                      */}
+      {/* ================================================================ */}
+      <AccordionSection
+        icon={IconPricing}
+        title="Default Pricing"
+        summary={tenant?.pricing_mode === 'tier' ? 'Tier-based pricing' : tenant?.pricing_mode === 'flat' ? 'Flat rate pricing' : 'Per-product pricing'}
+        isOpen={openSection === 'pricing'}
+        onToggle={() => toggleSection('pricing')}
+      >
+        <div className="space-y-5 pt-4">
+          <PricingTiersSection tenant={tenant} onSaved={refetch} />
         </div>
       </AccordionSection>
 
@@ -3044,6 +3065,340 @@ function MessagingAISection({ tenant, onSaved }: { tenant: any; onSaved: () => v
         </Button>
       </div>
     </div>
+  );
+}
+
+// ============================================================================
+// Pricing Tiers Section
+// ============================================================================
+
+function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => void }) {
+  const supabase = createClient();
+  const [pricingMode, setPricingMode] = useState<TenantPricingMode>(tenant?.pricing_mode || 'per_product');
+  const [tiers, setTiers] = useState<PricingTier[]>([]);
+  const [loadingTiers, setLoadingTiers] = useState(false);
+  const [editingTier, setEditingTier] = useState<PricingTier | null>(null);
+  const [showTierForm, setShowTierForm] = useState(false);
+  const [savingMode, setSavingMode] = useState(false);
+
+  // Tier form state
+  const [tierName, setTierName] = useState('');
+  const [braceletPrice, setBraceletPrice] = useState('');
+  const [ankletPrice, setAnkletPrice] = useState('');
+  const [ringPrice, setRingPrice] = useState('');
+  const [necklacePrice, setNecklacePrice] = useState('');
+  const [handChainPrice, setHandChainPrice] = useState('');
+
+  const loadTiers = useCallback(async () => {
+    if (!tenant) return;
+    setLoadingTiers(true);
+    const { data } = await supabase
+      .from('pricing_tiers')
+      .select('*')
+      .eq('tenant_id', tenant.id)
+      .eq('is_active', true)
+      .order('sort_order');
+    setTiers(data || []);
+    setLoadingTiers(false);
+  }, [tenant, supabase]);
+
+  useEffect(() => { loadTiers(); }, [loadTiers]);
+
+  const savePricingMode = async (mode: TenantPricingMode) => {
+    if (!tenant) return;
+    setSavingMode(true);
+    const { error } = await supabase
+      .from('tenants')
+      .update({ pricing_mode: mode })
+      .eq('id', tenant.id);
+    if (error) {
+      toast.error('Failed to update pricing mode');
+    } else {
+      setPricingMode(mode);
+      toast.success('Pricing mode updated');
+      onSaved();
+    }
+    setSavingMode(false);
+  };
+
+  const openTierForm = (tier?: PricingTier) => {
+    if (tier) {
+      setEditingTier(tier);
+      setTierName(tier.name);
+      setBraceletPrice(tier.bracelet_price != null ? String(tier.bracelet_price) : '');
+      setAnkletPrice(tier.anklet_price != null ? String(tier.anklet_price) : '');
+      setRingPrice(tier.ring_price != null ? String(tier.ring_price) : '');
+      setNecklacePrice(tier.necklace_price_per_inch != null ? String(tier.necklace_price_per_inch) : '');
+      setHandChainPrice(tier.hand_chain_price != null ? String(tier.hand_chain_price) : '');
+    } else {
+      setEditingTier(null);
+      setTierName('');
+      setBraceletPrice('');
+      setAnkletPrice('');
+      setRingPrice('');
+      setNecklacePrice('');
+      setHandChainPrice('');
+    }
+    setShowTierForm(true);
+  };
+
+  const saveTier = async () => {
+    if (!tenant || !tierName.trim()) {
+      toast.error('Tier name is required');
+      return;
+    }
+    const payload = {
+      tenant_id: tenant.id,
+      name: tierName.trim(),
+      bracelet_price: braceletPrice ? Number(braceletPrice) : null,
+      anklet_price: ankletPrice ? Number(ankletPrice) : null,
+      ring_price: ringPrice ? Number(ringPrice) : null,
+      necklace_price_per_inch: necklacePrice ? Number(necklacePrice) : null,
+      hand_chain_price: handChainPrice ? Number(handChainPrice) : null,
+    };
+
+    if (editingTier) {
+      const { error } = await supabase
+        .from('pricing_tiers')
+        .update({ ...payload, updated_at: new Date().toISOString() })
+        .eq('id', editingTier.id);
+      if (error) { toast.error('Failed to update tier'); return; }
+      toast.success('Tier updated');
+    } else {
+      const maxSort = tiers.length > 0 ? Math.max(...tiers.map(t => t.sort_order)) + 1 : 0;
+      const { error } = await supabase
+        .from('pricing_tiers')
+        .insert({ ...payload, sort_order: maxSort });
+      if (error) { toast.error('Failed to create tier'); return; }
+      toast.success('Tier created');
+    }
+    setShowTierForm(false);
+    loadTiers();
+  };
+
+  const deleteTier = async (tier: PricingTier) => {
+    if (!confirm(`Delete "${tier.name}"? Chains using this tier will keep their current prices but won't be linked to a tier.`)) return;
+    const { error } = await supabase
+      .from('pricing_tiers')
+      .update({ is_active: false })
+      .eq('id', tier.id);
+    if (error) { toast.error('Failed to delete tier'); return; }
+    toast.success('Tier deleted');
+    loadTiers();
+  };
+
+  const moveTier = async (tier: PricingTier, direction: 'up' | 'down') => {
+    const idx = tiers.findIndex(t => t.id === tier.id);
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= tiers.length) return;
+    const other = tiers[swapIdx];
+    await Promise.all([
+      supabase.from('pricing_tiers').update({ sort_order: other.sort_order }).eq('id', tier.id),
+      supabase.from('pricing_tiers').update({ sort_order: tier.sort_order }).eq('id', other.id),
+    ]);
+    loadTiers();
+  };
+
+  const PRICING_MODES: { value: TenantPricingMode; label: string; description: string }[] = [
+    { value: 'flat', label: 'Flat Rate', description: 'All chains share the same prices per product type.' },
+    { value: 'per_product', label: 'Per Product', description: 'Set individual prices for each chain.' },
+    { value: 'tier', label: 'By Tier', description: 'Group chains into pricing tiers (e.g., Silver, Gold Filled, 14k).' },
+  ];
+
+  const formatPrice = (val: number | null) => val != null ? `$${Number(val).toFixed(2)}` : '—';
+
+  return (
+    <>
+      {/* Pricing Mode Selector */}
+      <div>
+        <label className="text-sm font-medium text-[var(--text-primary)] block mb-3">Pricing Mode</label>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {PRICING_MODES.map(mode => (
+            <button
+              key={mode.value}
+              onClick={() => savePricingMode(mode.value)}
+              disabled={savingMode}
+              className={`text-left p-4 rounded-xl border-2 transition-all ${
+                pricingMode === mode.value
+                  ? 'border-[var(--accent-primary)] bg-[var(--accent-50)] shadow-sm'
+                  : 'border-[var(--border-default)] hover:border-[var(--border-strong)]'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                  pricingMode === mode.value ? 'border-[var(--accent-primary)]' : 'border-[var(--text-tertiary)]'
+                }`}>
+                  {pricingMode === mode.value && (
+                    <div className="w-2 h-2 rounded-full bg-[var(--accent-primary)]" />
+                  )}
+                </div>
+                <span className="text-sm font-medium text-[var(--text-primary)]">{mode.label}</span>
+              </div>
+              <p className="text-xs text-[var(--text-tertiary)] ml-6">{mode.description}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tier Management — only when mode is 'tier' */}
+      {pricingMode === 'tier' && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <label className="text-sm font-medium text-[var(--text-primary)]">Pricing Tiers</label>
+            <Button variant="primary" size="sm" onClick={() => openTierForm()}>
+              + Add Tier
+            </Button>
+          </div>
+
+          {loadingTiers ? (
+            <div className="text-sm text-[var(--text-tertiary)] py-4 text-center">Loading...</div>
+          ) : tiers.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[var(--border-default)] p-6 text-center">
+              <p className="text-sm text-[var(--text-tertiary)]">No pricing tiers yet. Create your first tier to get started.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {tiers.map((tier, idx) => (
+                <div
+                  key={tier.id}
+                  className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border-default)] bg-[var(--surface-base)] hover:bg-[var(--surface-subtle)] transition-colors"
+                >
+                  {/* Reorder arrows */}
+                  <div className="flex flex-col gap-0.5 shrink-0">
+                    <button
+                      onClick={() => moveTier(tier, 'up')}
+                      disabled={idx === 0}
+                      className="p-0.5 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-30 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => moveTier(tier, 'down')}
+                      disabled={idx === tiers.length - 1}
+                      className="p-0.5 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-30 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* Tier info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-[var(--text-primary)]">{tier.name}</p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                      {tier.bracelet_price != null && <span className="text-xs text-[var(--text-tertiary)]">Bracelet {formatPrice(tier.bracelet_price)}</span>}
+                      {tier.anklet_price != null && <span className="text-xs text-[var(--text-tertiary)]">Anklet {formatPrice(tier.anklet_price)}</span>}
+                      {tier.ring_price != null && <span className="text-xs text-[var(--text-tertiary)]">Ring {formatPrice(tier.ring_price)}</span>}
+                      {tier.necklace_price_per_inch != null && <span className="text-xs text-[var(--text-tertiary)]">Necklace {formatPrice(tier.necklace_price_per_inch)}/in</span>}
+                      {tier.hand_chain_price != null && <span className="text-xs text-[var(--text-tertiary)]">Hand Chain {formatPrice(tier.hand_chain_price)}</span>}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => openTierForm(tier)}
+                      className="p-2 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-raised)] transition-colors"
+                      title="Edit"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => deleteTier(tier)}
+                      className="p-2 rounded-lg text-[var(--text-tertiary)] hover:text-error-500 hover:bg-error-50 transition-colors"
+                      title="Delete"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tier Add/Edit Modal */}
+      {showTierForm && (
+        <Modal isOpen onClose={() => setShowTierForm(false)} size="sm">
+          <ModalHeader>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+              {editingTier ? 'Edit Tier' : 'New Pricing Tier'}
+            </h2>
+          </ModalHeader>
+          <ModalBody>
+            <div className="space-y-4">
+              <Input
+                label="Tier Name"
+                value={tierName}
+                onChange={(e) => setTierName(e.target.value)}
+                placeholder="e.g., Gold Filled"
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Bracelet Price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={braceletPrice}
+                  onChange={(e) => setBraceletPrice(e.target.value)}
+                  placeholder="$0.00"
+                />
+                <Input
+                  label="Anklet Price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={ankletPrice}
+                  onChange={(e) => setAnkletPrice(e.target.value)}
+                  placeholder="$0.00"
+                />
+                <Input
+                  label="Ring Price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={ringPrice}
+                  onChange={(e) => setRingPrice(e.target.value)}
+                  placeholder="$0.00"
+                />
+                <Input
+                  label="Necklace $/Inch"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={necklacePrice}
+                  onChange={(e) => setNecklacePrice(e.target.value)}
+                  placeholder="$0.00"
+                />
+                <Input
+                  label="Hand Chain Price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={handChainPrice}
+                  onChange={(e) => setHandChainPrice(e.target.value)}
+                  placeholder="$0.00"
+                />
+              </div>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <div className="flex gap-2 justify-end">
+              <Button variant="ghost" size="sm" onClick={() => setShowTierForm(false)}>Cancel</Button>
+              <Button variant="primary" size="sm" onClick={saveTier}>{editingTier ? 'Save' : 'Create Tier'}</Button>
+            </div>
+          </ModalFooter>
+        </Modal>
+      )}
+    </>
   );
 }
 

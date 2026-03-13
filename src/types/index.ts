@@ -18,6 +18,7 @@ export type QueueStatus = 'waiting' | 'notified' | 'served' | 'no_show';
 export type SaleStatus = 'draft' | 'completed' | 'voided';
 export type RefundStatus = 'none' | 'partial' | 'full';
 export type PricingMode = 'per_product' | 'per_inch';
+export type TenantPricingMode = 'flat' | 'per_product' | 'tier';
 
 // Re-export Permission from the canonical source
 export type { Permission, TenantRole as PermissionRole } from '@/lib/permissions';
@@ -87,6 +88,8 @@ export interface Tenant {
   // Sunny personality (customer-facing SMS tone)
   sunny_tone_preset: string;
   sunny_tone_custom: string | null;
+  // Pricing
+  pricing_mode: TenantPricingMode;
   // Receipts
   auto_email_receipt: boolean;
   auto_sms_receipt: boolean;
@@ -131,6 +134,22 @@ export interface InventoryItem {
   notes: string | null;
   // Chain-specific
   pricing_mode: PricingMode | null;
+  pricing_tier_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PricingTier {
+  id: string;
+  tenant_id: string;
+  name: string;
+  bracelet_price: number | null;
+  anklet_price: number | null;
+  ring_price: number | null;
+  necklace_price_per_inch: number | null;
+  hand_chain_price: number | null;
+  sort_order: number;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
 }
