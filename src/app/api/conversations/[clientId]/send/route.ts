@@ -63,7 +63,17 @@ export async function POST(
     if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
     if (!client.phone) return NextResponse.json({ error: 'Client has no phone number' }, { status: 400 });
 
-    phone = client.phone;
+    // Reply to the number the client last texted from (if different from primary)
+    const { data: lastInbound } = await supabase
+      .from('conversations')
+      .select('phone_number')
+      .eq('client_id', clientId)
+      .eq('direction', 'inbound')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    phone = lastInbound?.phone_number || client.phone;
     resolvedClientId = clientId;
   }
 

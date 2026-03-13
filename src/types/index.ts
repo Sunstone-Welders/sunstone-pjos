@@ -773,6 +773,21 @@ export interface ConversationMessage {
 }
 
 // ============================================================================
+// Client Phone Numbers
+// ============================================================================
+
+export interface ClientPhoneNumber {
+  id: string;
+  tenant_id: string;
+  client_id: string;
+  phone: string;
+  phone_normalized: string;
+  label: string;
+  is_primary: boolean;
+  created_at: string;
+}
+
+// ============================================================================
 // Cash Drawers
 // ============================================================================
 

@@ -88,14 +88,26 @@ export async function POST(request: NextRequest) {
   try {
     if (channel === 'sms') {
       if (!client.phone) return NextResponse.json({ error: 'Client has no phone number' }, { status: 400 });
-      const sid = await sendSMS({ to: client.phone, body: resolvedMessage, tenantId });
+
+      // Reply to the number the client last texted from (if different from primary)
+      const { data: lastInbound } = await supabase
+        .from('conversations')
+        .select('phone_number')
+        .eq('client_id', clientId)
+        .eq('direction', 'inbound')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      const smsPhone = lastInbound?.phone_number || client.phone;
+      const sid = await sendSMS({ to: smsPhone, body: resolvedMessage, tenantId });
       logSmsCost({ tenantId, operation: 'sms_direct' });
 
       // Write to conversations table for two-way SMS thread
       supabase.from('conversations').insert({
         tenant_id: tenantId,
         client_id: clientId,
-        phone_number: client.phone,
+        phone_number: smsPhone,
         direction: 'outbound',
         body: resolvedMessage,
         twilio_sid: sid,

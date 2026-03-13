@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { normalizePhone, validateTwilioWebhook, sendSMS } from '@/lib/twilio';
+import { normalizePhone, normalizePhoneDigits, validateTwilioWebhook, sendSMS } from '@/lib/twilio';
 import { logSmsCost, logAnthropicCost } from '@/lib/cost-tracker';
 
 const TWIML_EMPTY = '<Response></Response>';
@@ -60,22 +60,51 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedFrom = normalizePhone(from);
+    const last10 = normalizePhoneDigits(from);
 
-    // Look up client by phone (try multiple formats)
-    const digitsOnly = normalizedFrom.replace(/\D/g, '');
-    const last10 = digitsOnly.slice(-10);
-    const formatted = `(${last10.slice(0, 3)}) ${last10.slice(3, 6)}-${last10.slice(6)}`;
-
-    const { data: clients } = await supabase
-      .from('clients')
-      .select('id, phone')
-      .eq('tenant_id', tenant.id)
-      .or(`phone.eq.${normalizedFrom},phone.eq.${last10},phone.eq.+1${last10},phone.eq.${formatted}`);
+    // Look up client by normalized phone digits (handles any format)
+    const { data: matchedClients } = await supabase.rpc('find_client_by_phone', {
+      p_tenant_id: tenant.id,
+      p_digits: last10,
+    });
 
     let clientId: string | null = null;
 
-    if (clients && clients.length > 0) {
-      clientId = clients[0].id;
+    if (matchedClients && matchedClients.length > 0) {
+      clientId = matchedClients[0].id;
+
+      // Retroactively link any orphaned conversations from this phone
+      const { data: linkedCount } = await supabase.rpc('link_orphaned_conversations', {
+        p_tenant_id: tenant.id,
+        p_client_id: clientId,
+        p_digits: last10,
+      });
+
+      if (linkedCount && linkedCount > 0) {
+        // Recalculate unread count for the client
+        const { count: totalUnread } = await supabase
+          .from('conversations')
+          .select('*', { count: 'exact', head: true })
+          .eq('client_id', clientId)
+          .eq('direction', 'inbound')
+          .eq('read', false);
+
+        const { data: lastConvo } = await supabase
+          .from('conversations')
+          .select('created_at')
+          .eq('client_id', clientId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        await supabase
+          .from('clients')
+          .update({
+            unread_messages: totalUnread || 0,
+            last_message_at: lastConvo?.created_at || new Date().toISOString(),
+          })
+          .eq('id', clientId);
+      }
     }
     // Unknown numbers: no client record created — conversation stored with client_id: null
 

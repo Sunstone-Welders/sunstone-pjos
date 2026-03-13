@@ -23,6 +23,14 @@ export function normalizePhone(phone: string): string {
   return `+${digits}`;
 }
 
+/**
+ * Strip a phone number to its last 10 digits for normalized comparison.
+ * Works with any format: +18014009693, 801-400-9693, (801) 400-9693, 8014009693, etc.
+ */
+export function normalizePhoneDigits(phone: string): string {
+  return phone.replace(/\D/g, '').slice(-10);
+}
+
 // ---------------------------------------------------------------------------
 // Dedicated Phone Number Lookup (in-memory cache)
 // ---------------------------------------------------------------------------

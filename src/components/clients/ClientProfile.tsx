@@ -9,7 +9,7 @@ import { Button } from '@/components/ui';
 import { getTagColor } from '@/lib/tag-colors';
 import { downloadWaiverPDF } from '@/lib/generate-waiver-pdf';
 import { getThemeById } from '@/lib/themes';
-import type { Client, ClientTag, Waiver, Sale, SaleItem } from '@/types';
+import type { Client, ClientTag, ClientPhoneNumber, Waiver, Sale, SaleItem } from '@/types';
 import type { WaiverPDFData } from '@/lib/generate-waiver-pdf';
 import ComposeModal from './ComposeModal';
 import ConversationPanel from './ConversationPanel';
@@ -88,6 +88,13 @@ export default function ClientProfile({ clientId, tenantId, onClose, onEdit, onT
   const [refundSaleId, setRefundSaleId] = useState<string | null>(null);
   const [refundSummary, setRefundSummary] = useState<RefundModalSaleSummary | null>(null);
 
+  // Secondary phone numbers
+  const [clientPhones, setClientPhones] = useState<ClientPhoneNumber[]>([]);
+  const [showAddPhone, setShowAddPhone] = useState(false);
+  const [newPhone, setNewPhone] = useState('');
+  const [newPhoneLabel, setNewPhoneLabel] = useState('mobile');
+  const [addingPhone, setAddingPhone] = useState(false);
+
   const fetchData = useCallback(async () => {
     if (!tenant) return;
     setLoading(true);
@@ -115,6 +122,12 @@ export default function ClientProfile({ clientId, tenantId, onClose, onEdit, onT
     fetch(`/api/clients/${clientId}/activity?tenantId=${tenant.id}`)
       .then(r => r.ok ? r.json() : { entries: [] })
       .then(data => setActivity(data.entries || []))
+      .catch(() => {});
+
+    // Fetch secondary phone numbers
+    fetch(`/api/clients/${clientId}/phones`)
+      .then(r => r.ok ? r.json() : { phones: [] })
+      .then(data => setClientPhones(data.phones || []))
       .catch(() => {});
 
     setLoading(false);
@@ -335,9 +348,104 @@ export default function ClientProfile({ clientId, tenantId, onClose, onEdit, onT
                   );
                 })}
               </div>
-              {/* Contact */}
+              {/* Contact — phone numbers */}
               <div className="text-[11px] text-[var(--text-secondary)] space-y-0.5">
-                {client.phone && <p>{client.phone}</p>}
+                {client.phone && (
+                  <p>{client.phone} <span className="text-[var(--text-tertiary)]">(primary)</span></p>
+                )}
+                {clientPhones.filter(p => !p.is_primary).map(p => (
+                  <div key={p.id} className="flex items-center gap-1 justify-center">
+                    <span>{p.phone}</span>
+                    <span className="text-[var(--text-tertiary)]">({p.label})</span>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(`/api/clients/${clientId}/phones`, {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ phoneId: p.id }),
+                          });
+                          if (res.ok) {
+                            setClientPhones(prev => prev.filter(x => x.id !== p.id));
+                            toast.success('Phone removed');
+                          }
+                        } catch {
+                          toast.error('Failed to remove phone');
+                        }
+                      }}
+                      className="text-red-400 hover:text-red-600 p-0.5"
+                      title="Remove number"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+                {!showAddPhone ? (
+                  <button
+                    onClick={() => setShowAddPhone(true)}
+                    className="text-[var(--accent-500)] hover:text-[var(--accent-600)] text-[10px] font-medium"
+                  >
+                    + Add number
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1 mt-1">
+                    <input
+                      type="tel"
+                      value={newPhone}
+                      onChange={(e) => setNewPhone(e.target.value)}
+                      placeholder="Phone number"
+                      className="w-28 h-7 px-2 rounded border border-[var(--border-default)] bg-[var(--surface-base)] text-[11px] focus:outline-none focus:ring-1 focus:ring-[var(--accent-500)]"
+                      autoFocus
+                    />
+                    <select
+                      value={newPhoneLabel}
+                      onChange={(e) => setNewPhoneLabel(e.target.value)}
+                      className="h-7 px-1 rounded border border-[var(--border-default)] bg-[var(--surface-base)] text-[10px]"
+                    >
+                      <option value="mobile">Mobile</option>
+                      <option value="work">Work</option>
+                      <option value="home">Home</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <button
+                      disabled={!newPhone.trim() || addingPhone}
+                      onClick={async () => {
+                        setAddingPhone(true);
+                        try {
+                          const res = await fetch(`/api/clients/${clientId}/phones`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ phone: newPhone.trim(), label: newPhoneLabel }),
+                          });
+                          const data = await res.json();
+                          if (res.ok) {
+                            setClientPhones(prev => [...prev, data.phone]);
+                            setNewPhone('');
+                            setShowAddPhone(false);
+                            toast.success('Phone added');
+                          } else {
+                            toast.error(data.error || 'Failed to add phone');
+                          }
+                        } catch {
+                          toast.error('Failed to add phone');
+                        } finally {
+                          setAddingPhone(false);
+                        }
+                      }}
+                      className="h-7 px-2 rounded bg-[var(--accent-500)] text-white text-[10px] font-medium disabled:opacity-50"
+                    >
+                      {addingPhone ? '...' : 'Add'}
+                    </button>
+                    <button
+                      onClick={() => { setShowAddPhone(false); setNewPhone(''); }}
+                      className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] text-[10px]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
                 {client.email && <p>{client.email}</p>}
               </div>
             </div>

@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
-import { normalizePhone } from '@/lib/twilio';
+import { normalizePhone, normalizePhoneDigits } from '@/lib/twilio';
 
 export async function POST(request: NextRequest) {
   const supabase = await createServerSupabase();
@@ -31,17 +31,15 @@ export async function POST(request: NextRequest) {
   }
 
   const normalizedPhone = normalizePhone(phone);
+  const last10 = normalizePhoneDigits(phone);
 
-  // Check if a client already exists with this phone number
-  const digitsOnly = normalizedPhone.replace(/\D/g, '');
-  const last10 = digitsOnly.slice(-10);
-  const formatted = `(${last10.slice(0, 3)}) ${last10.slice(3, 6)}-${last10.slice(6)}`;
+  // Check if a client already exists with this phone (normalized digit match)
+  const { data: matchedClients } = await supabase.rpc('find_client_by_phone', {
+    p_tenant_id: tenantId,
+    p_digits: last10,
+  });
 
-  const { data: existingClients } = await supabase
-    .from('clients')
-    .select('id')
-    .eq('tenant_id', tenantId)
-    .or(`phone.eq.${normalizedPhone},phone.eq.${last10},phone.eq.+1${last10},phone.eq.${formatted}`);
+  const existingClients = matchedClients;
 
   let clientId: string;
 
@@ -77,17 +75,12 @@ export async function POST(request: NextRequest) {
     clientId = newClient.id;
   }
 
-  // Link all phone-only conversations to the client
-  const { error: updateErr } = await supabase
-    .from('conversations')
-    .update({ client_id: clientId })
-    .eq('tenant_id', tenantId)
-    .is('client_id', null)
-    .eq('phone_number', normalizedPhone);
-
-  if (updateErr) {
-    console.error('[LinkClient] Failed to link conversations:', updateErr);
-  }
+  // Link all phone-only conversations to the client (handles any phone format)
+  await supabase.rpc('link_orphaned_conversations', {
+    p_tenant_id: tenantId,
+    p_client_id: clientId,
+    p_digits: last10,
+  });
 
   // Calculate unread count and set last_message_at
   const { count: unreadCount } = await supabase

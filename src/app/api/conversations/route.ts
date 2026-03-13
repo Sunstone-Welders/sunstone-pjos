@@ -97,15 +97,28 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const phoneConversations = Array.from(phoneMap.values()).map((entry) => ({
-    client_id: null,
-    client_name: formatPhoneDisplay(entry.phone),
-    client_phone: entry.phone,
-    last_message: entry.lastBody,
-    last_direction: entry.lastDirection,
-    last_message_at: entry.lastAt,
-    unread_count: entry.unread,
-  }));
+  // Filter out phone-only entries whose digits match a known client
+  // (handles transition period where old orphaned threads still exist)
+  const clientPhoneDigits = new Set(
+    (clients || [])
+      .filter(c => c.phone)
+      .map(c => c.phone!.replace(/\D/g, '').slice(-10))
+  );
+
+  const phoneConversations = Array.from(phoneMap.values())
+    .filter((entry) => {
+      const digits = entry.phone.replace(/\D/g, '').slice(-10);
+      return !clientPhoneDigits.has(digits);
+    })
+    .map((entry) => ({
+      client_id: null,
+      client_name: formatPhoneDisplay(entry.phone),
+      client_phone: entry.phone,
+      last_message: entry.lastBody,
+      last_direction: entry.lastDirection,
+      last_message_at: entry.lastAt,
+      unread_count: entry.unread,
+    }));
 
   // 3. Merge and sort
   const conversations = [...clientConversations, ...phoneConversations];

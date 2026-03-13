@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui';
 import type { ConversationMessage } from '@/types';
 
@@ -47,6 +48,13 @@ export default function ConversationPanel({
   const [addLastName, setAddLastName] = useState('');
   const [addEmail, setAddEmail] = useState('');
   const [addingClient, setAddingClient] = useState(false);
+
+  // Link to existing client state
+  const [showLinkClient, setShowLinkClient] = useState(false);
+  const [linkSearch, setLinkSearch] = useState('');
+  const [linkResults, setLinkResults] = useState<{ id: string; first_name: string; last_name: string | null; phone: string | null }[]>([]);
+  const [linkSearching, setLinkSearching] = useState(false);
+  const [linkingClient, setLinkingClient] = useState(false);
 
   // Compute API id: client UUID or phone: prefix
   const apiId = clientId || `phone:${encodeURIComponent(clientPhone)}`;
@@ -191,6 +199,50 @@ export default function ConversationPanel({
     }
   };
 
+  // Search clients for "Link to Client"
+  const handleLinkSearch = useCallback(async (query: string) => {
+    setLinkSearch(query);
+    if (query.trim().length < 2) { setLinkResults([]); return; }
+    setLinkSearching(true);
+    try {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from('clients')
+        .select('id, first_name, last_name, phone')
+        .eq('tenant_id', tenantId)
+        .or(`first_name.ilike.%${query.trim()}%,last_name.ilike.%${query.trim()}%,phone.ilike.%${query.trim()}%`)
+        .limit(5);
+      setLinkResults(data || []);
+    } catch {
+      setLinkResults([]);
+    } finally {
+      setLinkSearching(false);
+    }
+  }, [tenantId]);
+
+  // Link phone to existing client
+  const handleLinkExistingClient = async (selectedClientId: string) => {
+    if (linkingClient) return;
+    setLinkingClient(true);
+    try {
+      const res = await fetch('/api/conversations/link-existing-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: clientPhone, clientId: selectedClientId }),
+      });
+      if (res.ok) {
+        setShowLinkClient(false);
+        setLinkSearch('');
+        setLinkResults([]);
+        if (onClientLinked) onClientLinked(selectedClientId);
+      }
+    } catch (err) {
+      console.error('Link client failed:', err);
+    } finally {
+      setLinkingClient(false);
+    }
+  };
+
   // Character count and segment info
   const charCount = input.length;
   const segments = charCount <= 160 ? 1 : Math.ceil(charCount / 153);
@@ -234,7 +286,7 @@ export default function ConversationPanel({
       {/* Unknown Number Bar — Add as Client prompt */}
       {isPhoneOnly && (
         <div className="px-4 py-2.5 bg-[var(--surface-raised)] border-b border-[var(--border-default)]">
-          {!showAddClient ? (
+          {!showAddClient && !showLinkClient ? (
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -244,12 +296,70 @@ export default function ConversationPanel({
                 </svg>
                 <span>Unknown number</span>
               </div>
-              <button
-                onClick={() => setShowAddClient(true)}
-                className="px-3 py-1.5 rounded-lg text-sm font-medium text-[var(--accent-600)] hover:bg-[var(--accent-50)] transition-colors min-h-[36px]"
-              >
-                Add as Client
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowLinkClient(true)}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-base)] transition-colors min-h-[36px]"
+                >
+                  Link to Client
+                </button>
+                <button
+                  onClick={() => setShowAddClient(true)}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium text-[var(--accent-600)] hover:bg-[var(--accent-50)] transition-colors min-h-[36px]"
+                >
+                  Add as Client
+                </button>
+              </div>
+            </div>
+          ) : showLinkClient ? (
+            <div className="space-y-2">
+              <p className="text-xs text-[var(--text-secondary)] font-medium">Link to existing client</p>
+              <input
+                type="text"
+                value={linkSearch}
+                onChange={(e) => handleLinkSearch(e.target.value)}
+                placeholder="Search by name or phone..."
+                className="w-full h-9 px-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-500)]/30 focus:border-[var(--accent-500)]"
+                autoFocus
+              />
+              {linkSearching && (
+                <p className="text-xs text-[var(--text-tertiary)]">Searching...</p>
+              )}
+              {linkResults.length > 0 && (
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {linkResults.map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => handleLinkExistingClient(c.id)}
+                      disabled={linkingClient}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left hover:bg-[var(--surface-base)] transition-colors disabled:opacity-50"
+                    >
+                      <div className="w-7 h-7 rounded-full bg-[var(--accent-100)] text-[var(--accent-600)] flex items-center justify-center text-xs font-semibold shrink-0">
+                        {(c.first_name || '?')[0]}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+                          {[c.first_name, c.last_name].filter(Boolean).join(' ')}
+                        </p>
+                        {c.phone && (
+                          <p className="text-xs text-[var(--text-tertiary)]">{c.phone}</p>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {linkSearch.trim().length >= 2 && !linkSearching && linkResults.length === 0 && (
+                <p className="text-xs text-[var(--text-tertiary)]">No clients found</p>
+              )}
+              <div className="flex justify-end">
+                <button
+                  onClick={() => { setShowLinkClient(false); setLinkSearch(''); setLinkResults([]); }}
+                  className="px-3 py-1.5 rounded-lg text-sm text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors min-h-[36px]"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-2">
