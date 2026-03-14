@@ -486,7 +486,10 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
             />
           </div>
         ) : (
-          <div className="p-3 pb-4 border-t border-border-default shrink-0 bg-[var(--surface-base)] safe-area-bottom">
+          <div
+            className="pt-3 px-3 border-t border-border-default shrink-0 bg-[var(--surface-base)]"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}
+          >
             <div className="flex items-end gap-2">
               <textarea
                 ref={inputRef}
@@ -509,7 +512,7 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
                 onClick={() => sendMessage(input)}
                 disabled={!input.trim() || isLoading}
                 className={cn(
-                  'flex items-center justify-center w-10 h-10 rounded-xl transition-all shrink-0',
+                  'flex items-center justify-center w-10 h-10 rounded-xl border-0 transition-all shrink-0',
                   input.trim() && !isLoading
                     ? 'bg-accent-500 text-white hover:bg-accent-600 shadow-sm'
                     : 'bg-surface-raised text-text-tertiary cursor-not-allowed'
