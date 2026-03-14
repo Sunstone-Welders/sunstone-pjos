@@ -128,10 +128,12 @@ export function PaymentScreen({
   const [pendingSaleId, setPendingSaleId] = useState<string | null>(existingSaleId);
   const [creating, setCreating] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
+  const [paymentTimedOut, setPaymentTimedOut] = useState(false);
   const [smsPhone, setSmsPhone] = useState(initialPhone || '');
   const [sendingSms, setSendingSms] = useState(false);
   const [smsSent, setSmsSent] = useState(false);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const pollCountRef = useRef(0);
   const supabase = createClient();
 
   // Clean up polling on unmount
@@ -202,12 +204,24 @@ export function PaymentScreen({
     }
   }, [pendingSaleId, mode, stripeConnected]);
 
-  // ── Poll for payment status ──
+  // ── Poll for payment status (DB + Stripe API fallback) ──
 
   const startPolling = useCallback((saleId: string) => {
     if (pollRef.current) clearInterval(pollRef.current);
+    pollCountRef.current = 0;
+    setPaymentTimedOut(false);
 
     pollRef.current = setInterval(async () => {
+      pollCountRef.current += 1;
+
+      // Timeout after 10 minutes (200 × 3s)
+      if (pollCountRef.current > 200) {
+        if (pollRef.current) clearInterval(pollRef.current);
+        setPaymentTimedOut(true);
+        return;
+      }
+
+      // 1. Check DB first (updated by webhook)
       const { data } = await supabase
         .from('sales')
         .select('payment_status')
@@ -217,12 +231,29 @@ export function PaymentScreen({
       if (data?.payment_status === 'completed') {
         if (pollRef.current) clearInterval(pollRef.current);
         setPaymentComplete(true);
-        setTimeout(() => {
-          onPaymentCompleted(saleId);
-        }, 2000);
+        setTimeout(() => { onPaymentCompleted(saleId); }, 2000);
+        return;
+      }
+
+      // 2. Every 3rd poll, also check Stripe directly as fallback
+      if (checkoutSessionId && pollCountRef.current % 3 === 0) {
+        try {
+          const res = await fetch(`/api/stripe/session-status?sessionId=${checkoutSessionId}`);
+          if (res.ok) {
+            const status = await res.json();
+            if (status.status === 'paid') {
+              if (pollRef.current) clearInterval(pollRef.current);
+              setPaymentComplete(true);
+              setTimeout(() => { onPaymentCompleted(saleId); }, 2000);
+              return;
+            }
+          }
+        } catch {
+          // Non-critical — continue polling DB
+        }
       }
     }, 3000);
-  }, [supabase, onPaymentCompleted]);
+  }, [supabase, onPaymentCompleted, checkoutSessionId]);
 
   // ── Send SMS with payment link ──
 
@@ -261,8 +292,17 @@ export function PaymentScreen({
     if (pollRef.current) clearInterval(pollRef.current);
     setChargeMethod(null);
     setCheckoutUrl(null);
+    setCheckoutSessionId(null);
     setQrDataUrl(null);
     setSmsSent(false);
+    setPaymentTimedOut(false);
+  };
+
+  const retryPolling = () => {
+    if (pendingSaleId) {
+      setPaymentTimedOut(false);
+      startPolling(pendingSaleId);
+    }
   };
 
   // ── Gift card applied ──
@@ -327,11 +367,23 @@ export function PaymentScreen({
           )}
         </div>
 
-        {/* Waiting indicator */}
-        <div className="flex items-center gap-2 text-[var(--text-tertiary)] mb-8">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--accent-primary)] border-t-transparent" />
-          <span className="text-sm">Waiting for payment...</span>
-        </div>
+        {/* Waiting indicator or timeout */}
+        {paymentTimedOut ? (
+          <div className="flex flex-col items-center gap-3 mb-8">
+            <p className="text-sm text-[var(--text-secondary)]">Payment timed out</p>
+            <button
+              onClick={retryPolling}
+              className="px-4 py-2.5 rounded-xl text-sm font-medium border border-[var(--accent-primary)] text-[var(--accent-primary)] hover:bg-[var(--accent-50)] transition-colors min-h-[44px]"
+            >
+              Check Again
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-[var(--text-tertiary)] mb-8">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--accent-primary)] border-t-transparent" />
+            <span className="text-sm">Waiting for payment...</span>
+          </div>
+        )}
 
         {/* Action buttons */}
         <div className="flex gap-3">
@@ -406,10 +458,22 @@ export function PaymentScreen({
                 <p className="text-sm font-medium text-[var(--text-primary)]">
                   Link sent to {smsPhone}
                 </p>
-                <div className="flex items-center justify-center gap-2 mt-2 text-[var(--text-tertiary)]">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--accent-primary)] border-t-transparent" />
-                  <span className="text-sm">Waiting for payment...</span>
-                </div>
+                {paymentTimedOut ? (
+                  <div className="flex flex-col items-center gap-2 mt-2">
+                    <p className="text-sm text-[var(--text-secondary)]">Payment timed out</p>
+                    <button
+                      onClick={retryPolling}
+                      className="text-sm text-[var(--accent-primary)] hover:underline min-h-[44px]"
+                    >
+                      Check Again
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2 mt-2 text-[var(--text-tertiary)]">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--accent-primary)] border-t-transparent" />
+                    <span className="text-sm">Waiting for payment...</span>
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => { setSmsSent(false); sendPaymentSms(); }}

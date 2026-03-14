@@ -8,6 +8,8 @@
 // PUBLIC — no auth required. The sessionId is opaque and short-lived.
 // ============================================================================
 
+export const dynamic = 'force-dynamic';
+
 import { redirect } from 'next/navigation';
 import Stripe from 'stripe';
 import { createServiceRoleClient } from '@/lib/supabase/server';
@@ -62,11 +64,11 @@ export default async function PayRedirectPage({
     }
 
     // Retrieve the session from the connected account
-    const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: [],
-    }, {
-      stripeAccount: tenant.stripe_account_id,
-    });
+    const session = await stripe.checkout.sessions.retrieve(
+      sessionId,
+      {},
+      { stripeAccount: tenant.stripe_account_id }
+    );
 
     // Only redirect if the session is still open
     if (session.status === 'open' && session.url) {
