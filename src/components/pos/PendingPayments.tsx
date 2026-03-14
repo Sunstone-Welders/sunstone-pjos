@@ -144,13 +144,14 @@ export function PendingPayments({ tenantId, eventId, onPaymentCompleted }: Pendi
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      // Send SMS
+      // Send SMS — use sessionId for clean redirect URL (no # fragment)
       await fetch('/api/stripe/send-payment-sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: sale.receipt_phone,
           url: data.url,
+          sessionId: data.sessionId,
           total: sale.total,
         }),
       });

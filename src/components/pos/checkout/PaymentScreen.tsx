@@ -123,6 +123,7 @@ export function PaymentScreen({
   const [appliedGiftCard, setAppliedGiftCard] = useState<GiftCardData | null>(null);
   const [chargeMethod, setChargeMethod] = useState<ChargeMethod>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [pendingSaleId, setPendingSaleId] = useState<string | null>(existingSaleId);
   const [creating, setCreating] = useState(false);
@@ -178,6 +179,7 @@ export function PaymentScreen({
 
       const data = await res.json();
       setCheckoutUrl(data.url);
+      setCheckoutSessionId(data.sessionId || null);
 
       // Generate QR code
       if (data.url) {
@@ -234,6 +236,7 @@ export function PaymentScreen({
         body: JSON.stringify({
           phone: smsPhone.trim(),
           url: checkoutUrl,
+          sessionId: checkoutSessionId,
           tenantName,
           total,
         }),

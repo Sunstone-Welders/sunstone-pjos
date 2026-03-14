@@ -28,14 +28,19 @@ export async function POST(request: NextRequest) {
 
     const tenantId = member.tenant_id;
 
-    const { phone, url, tenantName, total } = await request.json();
+    const { phone, url, sessionId, tenantName, total } = await request.json();
 
-    if (!phone || !url) {
-      return NextResponse.json({ error: 'Missing phone or url' }, { status: 400 });
+    if (!phone || (!url && !sessionId)) {
+      return NextResponse.json({ error: 'Missing phone or payment URL' }, { status: 400 });
     }
 
+    // Build a clean redirect URL that won't be truncated by iOS Messages.
+    // Stripe Checkout URLs contain # fragments which iOS truncates in SMS.
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sunstonepj.app';
+    const paymentUrl = sessionId ? `${baseUrl}/pay/${sessionId}` : url;
+
     const formattedTotal = total ? `$${Number(total).toFixed(2)}` : '';
-    const body = `${tenantName || 'Your artist'} sent you a payment link${formattedTotal ? ` for ${formattedTotal}` : ''}. Tap to pay securely:\n${url}`;
+    const body = `${tenantName || 'Your artist'} sent you a payment link${formattedTotal ? ` for ${formattedTotal}` : ''}. Tap to pay securely:\n${paymentUrl}`;
 
     const sid = await sendSMS({ to: phone, body, tenantId });
 

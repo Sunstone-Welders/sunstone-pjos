@@ -124,9 +124,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // ── Optionally send deposit link to host via SMS ────────────────────
     if (sendSmsToHost && party.host_phone && tenant.dedicated_phone_number) {
       const formattedAmount = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(depositAmount);
+      // Use clean redirect URL — Stripe URLs contain # fragments which iOS truncates
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sunstonepj.app';
+      const cleanUrl = `${baseUrl}/pay/${session.id}`;
       sendSMS({
         to: normalizePhone(party.host_phone),
-        body: `Hi ${party.host_name}! ${tenant.name} has requested a ${formattedAmount} deposit to confirm your party. Pay securely here: ${session.url}`,
+        body: `Hi ${party.host_name}! ${tenant.name} has requested a ${formattedAmount} deposit to confirm your party. Pay securely here: ${cleanUrl}`,
         tenantId,
       }).catch(() => {}); // fire-and-forget
     }
