@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
       },
       success_url: `${baseUrl}${returnPath}?payment_success=${saleId}`,
       cancel_url: `${baseUrl}${returnPath}?payment_cancelled=${saleId}`,
-      expires_after: 1800, // 30 minutes
+      expires_at: Math.floor(Date.now() / 1000) + (30 * 60), // 30 minutes from now
       metadata: {
         sale_id: saleId,
         tenant_id: tenantId,

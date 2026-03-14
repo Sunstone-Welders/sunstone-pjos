@@ -98,7 +98,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       // No application_fee_amount — deposits are the artist's money
       success_url: `${baseUrl}/studio/${tenant.slug}?deposit=success`,
       cancel_url: `${baseUrl}/studio/${tenant.slug}?deposit=cancelled`,
-      expires_after: 86400, // 24 hours
+      expires_at: Math.floor(Date.now() / 1000) + (24 * 60 * 60), // 24 hours from now
       metadata: {
         type: 'party_deposit',
         party_request_id: partyRequestId,
