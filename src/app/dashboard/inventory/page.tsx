@@ -287,7 +287,7 @@ export default function InventoryPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, material, or SKUâ€¦"
+            placeholder="Search by name, material, or SKU..."
             className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] min-h-[44px]"
           />
         </div>
@@ -397,7 +397,7 @@ export default function InventoryPage() {
                     )}
                     {item.sku && (
                       <span className="text-xs text-[var(--text-tertiary)]">
-                        Â· SKU: {item.sku}
+                        · SKU: {item.sku}
                       </span>
                     )}
                   </div>

@@ -364,9 +364,12 @@ function PhoneBottomNav({ onMoreOpen }: { onMoreOpen: () => void }) {
   const crmStatus = useCrmStatus();
 
   return (
-    <nav className="md:hidden flex items-end justify-around bg-[var(--surface-base)] border-t border-border-default shrink-0 px-2 safe-area-bottom">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-end justify-around bg-[var(--surface-base)] border-t border-border-default px-2 safe-area-bottom" style={{ overflow: 'visible' }}>
       {/* Home */}
       <PhoneTab href="/dashboard" label="Home" icon={HomeIcon} />
+
+      {/* Messages (with unread badge) */}
+      <PhoneTab href="/dashboard/messages" label="Messages" icon={MessagesIcon} badge={unreadCount} />
 
       {/* POS — raised center button */}
       <div className="flex flex-col items-center justify-end pb-1.5 -mt-3">
@@ -389,9 +392,6 @@ function PhoneBottomNav({ onMoreOpen }: { onMoreOpen: () => void }) {
           POS
         </span>
       </div>
-
-      {/* Messages (with unread badge) */}
-      <PhoneTab href="/dashboard/messages" label="Messages" icon={MessagesIcon} badge={unreadCount} />
 
       {/* CRM (with lock if inactive) */}
       <PhoneTab href={crmStatus.active ? '/dashboard/broadcasts' : '#'} label="CRM" icon={BroadcastsIcon} locked={!crmStatus.active} />

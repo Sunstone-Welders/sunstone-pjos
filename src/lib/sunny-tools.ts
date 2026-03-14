@@ -1,7 +1,7 @@
 // ============================================================================
 // Sunny Tools — src/lib/sunny-tools.ts
 // ============================================================================
-// 28 agentic tools for Sunny (business mentor AI).
+// 35 agentic tools for Sunny (business mentor AI).
 // Each tool receives { serviceClient, tenantId, userId } context.
 // ============================================================================
 
@@ -568,7 +568,39 @@ export const SUNNY_TOOL_DEFINITIONS = [
       required: [],
     },
   },
-  // 33. search_sunstone_catalog
+  // 34. list_pricing_tiers
+  {
+    name: 'list_pricing_tiers',
+    description: 'List all active pricing tiers for this artist. Returns tier names, IDs, and associated chains. Use this when the artist asks about their tiers, wants to see which chains are in each tier, or before assigning a chain to a tier.',
+    input_schema: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
+  // 35. assign_pricing_tier
+  {
+    name: 'assign_pricing_tier',
+    description: 'Assign one or more inventory items to a pricing tier. Use this when the artist wants to move a chain into a tier (e.g. "put Chloe in my Gold tier"). ALWAYS confirm before executing.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        item_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of inventory item UUIDs to assign',
+        },
+        tier_id: { type: 'string', description: 'Pricing tier UUID to assign items to. Use null to remove from tier.' },
+        search_names: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Chain names to search for (alternative to item_ids)',
+        },
+      },
+      required: [],
+    },
+  },
+  // 36. search_sunstone_catalog
   {
     name: 'search_sunstone_catalog',
     description: 'Search the Sunstone product catalog (synced from Shopify). Use this BEFORE answering ANY product question — pricing, recommendations, availability, or specific product lookups. Returns matching products with name, price, type, URL, and variant details. Search by product name, category/type (e.g. "chain", "jump ring", "connector", "charm"), material/metal (e.g. "gold fill", "silver", "rose gold"), or any keyword.',
@@ -622,6 +654,8 @@ export function getSunnyToolStatusLabel(name: string): string {
     process_refund: 'Processing refund...',
     add_expense: 'Adding expense...',
     get_expenses: 'Fetching expenses...',
+    list_pricing_tiers: 'Fetching pricing tiers...',
+    assign_pricing_tier: 'Assigning pricing tier...',
     search_sunstone_catalog: 'Searching Sunstone catalog...',
   };
   return labels[name] || 'Working...';
@@ -2414,6 +2448,123 @@ export async function executeSunnyTool(
             note: results.length === 0
               ? `No products found matching "${input.query}". The catalog has ${allProducts.length} total products.`
               : undefined,
+          },
+        };
+      }
+
+      // ── 34. list_pricing_tiers ──
+      case 'list_pricing_tiers': {
+        const { data: tiers, error: tierErr } = await serviceClient
+          .from('pricing_tiers')
+          .select('id, name, sort_order')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .order('sort_order');
+
+        if (tierErr) return { result: { error: tierErr.message }, isError: true };
+        if (!tiers || tiers.length === 0) {
+          return { result: { tiers: [], message: 'No pricing tiers set up yet. The artist can create tiers in Settings → Default Pricing.' } };
+        }
+
+        // Fetch chains grouped by tier
+        const { data: chains } = await serviceClient
+          .from('inventory_items')
+          .select('id, name, material, pricing_tier_id')
+          .eq('tenant_id', tenantId)
+          .eq('type', 'chain')
+          .eq('is_active', true)
+          .order('name');
+
+        const tierResults = tiers.map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          sort_order: t.sort_order,
+          chains: (chains || []).filter((c: any) => c.pricing_tier_id === t.id).map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            material: c.material,
+          })),
+        }));
+
+        const unassigned = (chains || []).filter((c: any) => !c.pricing_tier_id).map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          material: c.material,
+        }));
+
+        return {
+          result: {
+            tiers: tierResults,
+            unassigned_chains: unassigned,
+            total_chains: (chains || []).length,
+          },
+        };
+      }
+
+      // ── 35. assign_pricing_tier ──
+      case 'assign_pricing_tier': {
+        const targetTierId = input.tier_id || null;
+
+        // Validate tier exists if not removing
+        if (targetTierId) {
+          const { data: tier } = await serviceClient
+            .from('pricing_tiers')
+            .select('id, name')
+            .eq('id', targetTierId)
+            .eq('tenant_id', tenantId)
+            .single();
+          if (!tier) return { result: { error: `Pricing tier not found with ID "${targetTierId}"` }, isError: true };
+        }
+
+        // Resolve item IDs — either from item_ids or search_names
+        let itemIds: string[] = input.item_ids || [];
+
+        if (input.search_names && input.search_names.length > 0) {
+          for (const searchName of input.search_names) {
+            const { data: matches } = await serviceClient
+              .from('inventory_items')
+              .select('id, name, material')
+              .eq('tenant_id', tenantId)
+              .eq('type', 'chain')
+              .ilike('name', `%${searchName}%`);
+
+            if (!matches || matches.length === 0) {
+              return { result: { error: `No chain found matching "${searchName}"` }, isError: true };
+            }
+            if (matches.length > 1) {
+              return {
+                result: {
+                  needs_clarification: true,
+                  message: `Multiple chains match "${searchName}". Which one?`,
+                  matches: matches.map((m: any) => ({ id: m.id, name: m.name, material: m.material })),
+                },
+              };
+            }
+            itemIds.push(matches[0].id);
+          }
+        }
+
+        if (itemIds.length === 0) {
+          return { result: { error: 'Provide item_ids or search_names to identify which chains to assign' }, isError: true };
+        }
+
+        // Update all items
+        const { error: updateErr } = await serviceClient
+          .from('inventory_items')
+          .update({ pricing_tier_id: targetTierId })
+          .in('id', itemIds)
+          .eq('tenant_id', tenantId);
+
+        if (updateErr) return { result: { error: updateErr.message }, isError: true };
+
+        return {
+          result: {
+            success: true,
+            items_updated: itemIds.length,
+            tier_id: targetTierId,
+            message: targetTierId
+              ? `Assigned ${itemIds.length} chain(s) to the pricing tier.`
+              : `Removed ${itemIds.length} chain(s) from their pricing tier.`,
           },
         };
       }

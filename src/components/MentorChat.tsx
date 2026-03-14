@@ -493,7 +493,7 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
                 value={input}
                 onChange={e => {
                   setInput(e.target.value);
-                  // Auto-expand: reset height then set to scrollHeight (up to max-h)
+                  // Auto-expand: reset height then set to scrollHeight (up to max)
                   const el = e.target;
                   el.style.height = 'auto';
                   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
@@ -501,9 +501,9 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
                 onKeyDown={handleKeyDown}
                 placeholder="Ask me anything about PJ..."
                 className="flex-1 resize-none rounded-xl border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500 transition-all"
-                rows={2}
+                rows={1}
                 disabled={isLoading}
-                style={{ minHeight: 48, maxHeight: 120 }}
+                style={{ maxHeight: 120 }}
               />
               <button
                 onClick={() => sendMessage(input)}
