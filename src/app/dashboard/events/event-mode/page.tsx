@@ -728,7 +728,7 @@ function EventModePageInner() {
     <div className="fixed inset-0 bg-[var(--surface-base)] flex flex-col">
 
       {/* ── Header ── */}
-      <header className="bg-[var(--surface-base)] border-b border-[var(--border-default)] px-5 py-3.5 flex items-center justify-between shrink-0 z-10">
+      <header className="bg-[var(--surface-base)] border-b border-[var(--border-default)] px-5 py-3.5 flex items-center justify-between shrink-0 z-10 min-h-[56px]" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 14px)' }}>
         <div className="flex items-center gap-3 min-w-0">
           <button onClick={() => router.push('/dashboard/events')}
             className="w-10 h-10 rounded-xl border border-[var(--border-default)] bg-[var(--surface-raised)] flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors">

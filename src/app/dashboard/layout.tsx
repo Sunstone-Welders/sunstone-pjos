@@ -363,6 +363,11 @@ function PhoneBottomNav({ onMoreOpen }: { onMoreOpen: () => void }) {
   const unreadCount = useUnreadCount();
   const crmStatus = useCrmStatus();
 
+  // Hide bottom nav inside POS sessions (full-screen experience)
+  if (pathname.startsWith('/dashboard/pos') || pathname.startsWith('/dashboard/events/event-mode')) {
+    return null;
+  }
+
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-end justify-around bg-[var(--surface-base)] border-t border-border-default px-2 safe-area-bottom" style={{ overflow: 'visible' }}>
       {/* Home */}
