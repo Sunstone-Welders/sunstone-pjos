@@ -183,8 +183,11 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('[Payment Link] Error creating checkout session:', error);
+    const message = error?.type?.startsWith('Stripe')
+      ? error.message
+      : 'Failed to create payment link. Please try again.';
     return NextResponse.json(
-      { error: 'Failed to create payment link' },
+      { error: message },
       { status: 500 }
     );
   }

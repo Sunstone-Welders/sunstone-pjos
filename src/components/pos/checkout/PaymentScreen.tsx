@@ -16,6 +16,7 @@ import type { PaymentMethod } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 import { GiftCardRedeemModal } from '@/components/pos/GiftCardRedeemModal';
 import { formatGiftCardCode } from '@/lib/gift-cards';
+import { toast } from 'sonner';
 
 // ── Types ──
 
@@ -142,6 +143,12 @@ export function PaymentScreen({
   // ── Create pending sale + Stripe session ──
 
   const startStripePayment = useCallback(async (method: 'qr' | 'text') => {
+    // Guard: check Stripe connection before making any calls
+    if (!stripeConnected) {
+      toast.error('Connect your Stripe account in Settings to accept card payments.');
+      return;
+    }
+
     setCreating(true);
     setChargeMethod(method);
 
@@ -164,9 +171,12 @@ export function PaymentScreen({
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to create payment link');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Payment setup failed. Please try again.');
+      }
 
+      const data = await res.json();
       setCheckoutUrl(data.url);
 
       // Generate QR code
@@ -183,11 +193,12 @@ export function PaymentScreen({
       startPolling(saleId);
     } catch (err: any) {
       console.error('[PaymentScreen] Error:', err);
+      toast.error(err.message || 'Payment setup failed. Please try again.');
       setChargeMethod(null);
     } finally {
       setCreating(false);
     }
-  }, [pendingSaleId, mode]);
+  }, [pendingSaleId, mode, stripeConnected]);
 
   // ── Poll for payment status ──
 
@@ -231,10 +242,11 @@ export function PaymentScreen({
       if (data.sent) {
         setSmsSent(true);
       } else {
-        console.error('SMS failed:', data.error);
+        toast.error(data.error || 'Failed to send payment link via SMS.');
       }
     } catch (err) {
       console.error('SMS error:', err);
+      toast.error('Network error. Please check your connection.');
     } finally {
       setSendingSms(false);
     }
