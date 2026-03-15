@@ -183,6 +183,7 @@ export function PaymentScreen({
       const data = await res.json();
       setCheckoutUrl(data.url);
       setCheckoutSessionId(data.sessionId || null);
+      console.log('Starting poll for session:', data.sessionId);
 
       // Generate QR code
       if (data.url) {
@@ -194,8 +195,9 @@ export function PaymentScreen({
         setQrDataUrl(qr);
       }
 
-      // Start polling for payment completion
-      startPolling(saleId);
+      // Start polling for payment completion — pass sessionId directly
+      // to avoid stale closure (setState hasn't re-rendered yet)
+      startPolling(saleId, data.sessionId || null);
     } catch (err: any) {
       console.error('[PaymentScreen] Error:', err);
       toast.error(err.message || 'Payment setup failed. Please try again.');
@@ -207,7 +209,7 @@ export function PaymentScreen({
 
   // ── Poll for payment status (DB + Stripe API fallback) ──
 
-  const startPolling = useCallback((saleId: string) => {
+  const startPolling = useCallback((saleId: string, sessionId: string | null) => {
     if (pollRef.current) clearInterval(pollRef.current);
     pollCountRef.current = 0;
     setPaymentTimedOut(false);
@@ -237,12 +239,12 @@ export function PaymentScreen({
       }
 
       // 2. Every 3rd poll, also check Stripe directly as fallback
-      if (checkoutSessionId && pollCountRef.current % 3 === 0) {
+      if (sessionId && pollCountRef.current % 3 === 0) {
         try {
-          const res = await fetch(`/api/stripe/session-status?sessionId=${checkoutSessionId}`);
+          const res = await fetch(`/api/stripe/session-status?sessionId=${sessionId}`);
           const stripeData = await res.json();
           console.log('Poll result:', {
-            sessionId: checkoutSessionId,
+            sessionId,
             responseOk: res.ok,
             status: stripeData.status,
             rawData: stripeData,
@@ -260,7 +262,7 @@ export function PaymentScreen({
         }
       }
     }, 3000);
-  }, [supabase, onPaymentCompleted, checkoutSessionId]);
+  }, [supabase, onPaymentCompleted]);
 
   // ── Send SMS with payment link ──
 
@@ -309,7 +311,7 @@ export function PaymentScreen({
   const retryPolling = () => {
     if (pendingSaleId) {
       setPaymentTimedOut(false);
-      startPolling(pendingSaleId);
+      startPolling(pendingSaleId, checkoutSessionId);
     }
   };
 
