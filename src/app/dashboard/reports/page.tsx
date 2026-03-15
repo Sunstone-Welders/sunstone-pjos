@@ -259,14 +259,14 @@ export default function ReportsPage() {
   // Compute date range
   const dateRange = useMemo(() => {
     if (datePreset === 'custom' && customStart && customEnd) {
-      return { start: new Date(customStart), end: new Date(customEnd + 'T23:59:59') };
+      return { start: new Date(customStart + 'T00:00:00'), end: new Date(customEnd + 'T23:59:59') };
     }
     return getDateRange(datePreset, currentYear);
   }, [datePreset, customStart, customEnd, currentYear]);
 
   const dateLabel = useMemo(() => {
     if (datePreset === 'custom' && customStart && customEnd) {
-      return `${format(new Date(customStart), 'MMM d, yyyy')} – ${format(new Date(customEnd), 'MMM d, yyyy')}`;
+      return `${format(new Date(customStart + 'T00:00:00'), 'MMM d, yyyy')} – ${format(new Date(customEnd + 'T00:00:00'), 'MMM d, yyyy')}`;
     }
     const labels: Record<DatePreset, string> = {
       ytd: `Year to Date (${currentYear})`,

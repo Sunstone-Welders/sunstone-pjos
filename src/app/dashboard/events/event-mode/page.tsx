@@ -394,6 +394,11 @@ function EventModePageInner() {
     if (!tenant) return;
     if (activeQueueEntry) setActiveQueueEntry(null);
 
+    // Ensure sale is marked completed (fallback if webhook is delayed)
+    await supabase.from('sales').update({
+      payment_status: 'completed',
+    }).eq('id', saleId).eq('payment_status', 'pending');
+
     // Redeem gift card if applied
     if (giftCardData) {
       try {

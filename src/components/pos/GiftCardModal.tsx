@@ -311,6 +311,10 @@ export function GiftCardModal({
             const status = await res.json();
             if (status.status === 'paid') {
               if (pollRef.current) clearInterval(pollRef.current);
+              // Belt-and-suspenders: update sale status in case webhook is delayed
+              await supabase.from('sales').update({
+                payment_status: 'completed',
+              }).eq('id', saleId).eq('payment_status', 'pending');
               setPaymentComplete(true);
               return;
             }
