@@ -1,0 +1,39 @@
+/* ═══════════════════════════════════════════════════════════════
+   MARKETING PAGE FONTS — The Picnic Club + Montserrat
+   Only imported by landing page and CRM marketing pages.
+   Does NOT affect the dashboard (Inter/Fraunces/JetBrains Mono).
+   ═══════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+
+@font-face {
+  font-family: 'The Picnic Club';
+  src: url('/fonts/ThePicnicClub-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'The Picnic Club';
+  src: url('/fonts/ThePicnicClub-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'The Picnic Club';
+  src: url('/fonts/ThePicnicClub-RegularItalic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'The Picnic Club Script';
+  src: url('/fonts/ThePicnicClub-Script.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}

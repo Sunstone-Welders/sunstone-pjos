@@ -4,35 +4,41 @@ import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import '../marketing-fonts.css'
 
 /* ═══════════════════════════════════════════════════════════════
    SUNSTONE CRM — DEDICATED MARKETING PAGE
-   Same palette as main landing: Wine (#6b2942) + Gold (#c8a55c)
+   Brand: The Picnic Club + Montserrat, official Sunstone palette
    ═══════════════════════════════════════════════════════════════ */
 
 const C = {
   bg: '#ffffff',
-  bgSoft: '#fdfbfa',
-  bgDeep: '#f8f5f3',
-  text: '#1c1917',
-  textSec: '#57534e',
-  textMuted: '#a8a29e',
-  wine: '#6b2942',
-  wineDeep: '#4e1d30',
-  wineLight: '#8a3d5a',
-  wineBg: 'rgba(107,41,66,0.05)',
-  wineBorder: 'rgba(107,41,66,0.12)',
-  gold: '#c8a55c',
-  goldDeep: '#a8873e',
-  goldLight: '#dfc088',
-  goldBg: 'rgba(200,165,92,0.08)',
-  dark: '#140e12',
-  darkCard: '#1e1620',
-  darkText: '#f5f0ed',
-  darkMuted: '#9a9490',
+  bgSoft: '#FDF6F6',
+  bgDeep: '#FBEEEE',
+  text: '#31241B',
+  textSec: '#85625D',
+  textMuted: '#BF9F9A',
+  wine: '#852454',
+  wineDeep: '#6a1d44',
+  wineLight: '#B1275E',
+  wineBg: 'rgba(133,36,84,0.05)',
+  wineBorder: 'rgba(133,36,84,0.12)',
+  gold: '#FF8200',
+  goldDeep: '#E15126',
+  goldLight: '#FF8200',
+  goldBg: 'rgba(255,130,0,0.08)',
+  dark: '#31241B',
+  darkCard: '#3d2e23',
+  darkText: '#FBEEEE',
+  darkMuted: '#BF9F9A',
   card: '#ffffff',
   border: '#e7e0dc',
   borderLight: '#f2ede9',
+}
+
+const FONT = {
+  display: "'The Picnic Club', Georgia, serif",
+  body: "'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif",
 }
 
 /* ─── Reveal animation hook ─── */
@@ -199,12 +205,12 @@ export default function CRMPageClient({ authState, trialEndDate }: { authState: 
   }
 
   return (
-    <div style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", color: C.text, background: C.bg }}>
+    <div style={{ fontFamily: FONT.body, color: C.text, background: C.bg }}>
       <style>{`
         html { scroll-behavior: smooth; }
         ::selection { background: ${C.wineBg}; color: ${C.wine}; }
         .crm-container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
-        .serif { font-family: 'Playfair Display', Georgia, serif; }
+        .serif { font-family: ${FONT.display}; }
         @media (max-width: 900px) {
           .crm-grid-2 { grid-template-columns: 1fr !important; }
           .crm-grid-3 { grid-template-columns: 1fr !important; max-width: 420px !important; margin-left: auto !important; margin-right: auto !important; }
