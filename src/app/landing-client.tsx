@@ -15,7 +15,7 @@ const B = {
   blackBrown: '#31241B',
   softBrown: '#85625D',
   deepWine: '#852454',
-  redrock: '#E15126',
+  redrock: '#852454',
   raspberry: '#B1275E',
   forest: '#1B4F3A',
   taupe: '#BF9F9A',
