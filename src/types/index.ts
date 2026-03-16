@@ -505,7 +505,9 @@ export type DashboardCardType =
   | 'networking_nudge'
   | 'recent_messages'
   | 'pj_university'
-  | 'sunstone_product';
+  | 'sunstone_product'
+  | 'todays_priorities'
+  | 'growth_tip';
 
 export interface DashboardCard {
   type: DashboardCardType;
@@ -592,6 +594,21 @@ export interface GettingStartedData {
 export interface SunnyTakeData {
   insight: string;
   generatedAt: string;
+}
+
+export interface TodaysPrioritiesData {
+  items: {
+    type: string;
+    label: string;
+    link: string;
+    icon: string;
+  }[];
+}
+
+export interface GrowthTipData {
+  stage: 'new' | 'growth' | 'established';
+  tip: string;
+  metric?: number;
 }
 
 export interface PJUniversityData {

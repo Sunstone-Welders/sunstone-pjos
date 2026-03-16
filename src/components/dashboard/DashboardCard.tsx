@@ -12,6 +12,8 @@ import type {
   GettingStartedData,
   PJUniversityData,
   SunnyTakeData,
+  TodaysPrioritiesData,
+  GrowthTipData,
 } from '@/types';
 import { NextEventCard } from './NextEventCard';
 import { RevenueCard } from './RevenueCard';
@@ -23,6 +25,8 @@ import { SunstoneProductCard } from './SunstoneProductCard';
 import { GettingStartedCard } from './GettingStartedCard';
 import { PJUniversityCard } from './PJUniversityCard';
 import { SunnyTakeCard } from './SunnyTakeCard';
+import { TodaysPrioritiesCard } from './TodaysPrioritiesCard';
+import { GrowthTipCard } from './GrowthTipCard';
 
 export function DashboardCardRenderer({ card }: { card: DashboardCard }) {
   if (!card || !card.data) return null;
@@ -48,6 +52,10 @@ export function DashboardCardRenderer({ card }: { card: DashboardCard }) {
       return <PJUniversityCard data={card.data as unknown as PJUniversityData} />;
     case 'sunstone_product':
       return <SunstoneProductCard data={card.data as unknown as SunstoneProductData} />;
+    case 'todays_priorities':
+      return <TodaysPrioritiesCard data={card.data as unknown as TodaysPrioritiesData} />;
+    case 'growth_tip':
+      return <GrowthTipCard data={card.data as unknown as GrowthTipData} />;
     default:
       return null;
   }

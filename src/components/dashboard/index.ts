@@ -12,3 +12,5 @@ export { SunstoneProductCard } from './SunstoneProductCard';
 export { GettingStartedCard } from './GettingStartedCard';
 export { PJUniversityCard } from './PJUniversityCard';
 export { SunnyTakeCard } from './SunnyTakeCard';
+export { TodaysPrioritiesCard } from './TodaysPrioritiesCard';
+export { GrowthTipCard } from './GrowthTipCard';

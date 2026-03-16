@@ -1,25 +1,38 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { GettingStartedData } from '@/types';
 
 export function GettingStartedCard({ data }: { data: GettingStartedData }) {
   const router = useRouter();
   const [dismissed, setDismissed] = useState(false);
+  const [fading, setFading] = useState(false);
+
+  const allDone = data && data.completedCount >= data.totalCount;
+
+  // Auto-dismiss after brief congrats when all steps complete
+  useEffect(() => {
+    if (!allDone || dismissed) return;
+    const fadeTimer = setTimeout(() => setFading(true), 2700);
+    const dismissTimer = setTimeout(() => {
+      setDismissed(true);
+      fetch('/api/dashboard/getting-started', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'dismiss' }),
+      }).catch(() => {});
+    }, 3200);
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(dismissTimer);
+    };
+  }, [allDone, dismissed]);
+
   if (!data || !Array.isArray(data.steps) || dismissed) return null;
 
   const { steps, completedCount, totalCount } = data;
   const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-  const allDone = completedCount >= totalCount;
-  const encouragement =
-    completedCount === 0
-      ? "Let's get started!"
-      : allDone
-        ? "All done \u2014 you're ready to go!"
-        : completedCount >= totalCount - 1
-          ? 'Almost there!'
-          : "You're making great progress!";
 
   async function handleDismiss() {
     setDismissed(true);
@@ -52,6 +65,60 @@ export function GettingStartedCard({ data }: { data: GettingStartedData }) {
 
     router.push(step.href);
   }
+
+  // ── All-done congrats state ────────────────────────────────────────────
+  if (allDone) {
+    return (
+      <div
+        className="col-span-full border border-[var(--border-default)]"
+        style={{
+          borderRadius: 'var(--card-radius, 16px)',
+          boxShadow: 'var(--shadow-card)',
+          padding: 24,
+          background: 'linear-gradient(135deg, var(--accent-50), var(--surface-raised))',
+          opacity: fading ? 0 : 1,
+          transition: 'opacity 0.5s ease',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
+          <div
+            className="bg-accent-500"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 9999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-on-accent)" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          </div>
+          <p
+            className="text-text-primary"
+            style={{
+              fontFamily: 'var(--font-heading)',
+              fontSize: 17,
+              fontWeight: 600,
+            }}
+          >
+            {"You\u2019re all set! Let\u2019s get to work."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Normal checklist state ─────────────────────────────────────────────
+  const encouragement =
+    completedCount === 0
+      ? "Let\u2019s get started!"
+      : completedCount >= totalCount - 1
+        ? 'Almost there!'
+        : "You\u2019re making great progress!";
 
   return (
     <div

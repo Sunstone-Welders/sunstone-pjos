@@ -28,7 +28,7 @@ import type { DashboardCard } from '@/types';
 
 // Bump this version whenever card generation logic changes. Cached cards with
 // a different version are treated as stale and regenerated on next load.
-const CARD_CACHE_VERSION = 7;
+const CARD_CACHE_VERSION = 8;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -144,7 +144,10 @@ export async function GET(request: NextRequest) {
             if (hasGettingStarted) {
               // Re-check getting_started conditions live
               const freshCards = await refreshGettingStarted(db, tenantId, cached.cards as DashboardCard[]);
-              return NextResponse.json({ cards: freshCards, cached: true });
+              if (freshCards !== null) {
+                return NextResponse.json({ cards: freshCards, cached: true });
+              }
+              // null → all done, fall through to full regeneration
             }
             return NextResponse.json({ cards: cached.cards, cached: true });
           }
@@ -197,7 +200,7 @@ async function refreshGettingStarted(
   db: Awaited<ReturnType<typeof createServiceRoleClient>>,
   tenantId: string,
   cachedCards: DashboardCard[]
-): Promise<DashboardCard[]> {
+): Promise<DashboardCard[] | null> {
   try {
     const { data: tenant } = await db
       .from('tenants')
@@ -228,16 +231,16 @@ async function refreshGettingStarted(
 
     const completedCount = steps.filter((s) => s.done).length;
     const otherCards = cachedCards.filter((c) => c.type !== 'getting_started');
+
     if (onboardingData.getting_started_dismissed === true) {
       return otherCards;
     }
 
-    // Auto-dismiss 7 days after all tasks completed
-    if (completedCount >= steps.length && onboardingData.getting_started_completed_at) {
-      const daysSinceComplete = Math.floor(
-        (Date.now() - new Date(onboardingData.getting_started_completed_at).getTime()) / (1000 * 60 * 60 * 24)
-      );
-      if (daysSinceComplete >= 7) return otherCards;
+    const allDone = completedCount >= steps.length;
+    if (allDone) {
+      // All done — bust cache and signal full regeneration so new card types are included
+      try { await db.from('dashboard_card_cache').delete().eq('tenant_id', tenantId); } catch { /* non-critical */ }
+      return null;
     }
 
     return [
@@ -301,6 +304,12 @@ async function generateCards(
   let allEventsCountResult: { count: number | null } = { count: 0 };
   let inventoryCountResult: { count: number | null } = { count: 0 };
   let taxProfilesCountResult: { count: number | null } = { count: 0 };
+  let unreadClientsResult: { data: any[] | null } = { data: [] };
+  let newPartyRequestsCount: { count: number | null } = { count: 0 };
+  let pendingWarrantyClaimsCount: { count: number | null } = { count: 0 };
+  let totalSalesCount: { count: number | null } = { count: 0 };
+  let totalWarrantyCount: { count: number | null } = { count: 0 };
+  let partyBookingsCount: { count: number | null } = { count: 0 };
 
   try {
     [
@@ -317,6 +326,12 @@ async function generateCards(
       allEventsCountResult,
       inventoryCountResult,
       taxProfilesCountResult,
+      unreadClientsResult,
+      newPartyRequestsCount,
+      pendingWarrantyClaimsCount,
+      totalSalesCount,
+      totalWarrantyCount,
+      partyBookingsCount,
     ] = await Promise.all([
       // Next event — use start of today (UTC) so events happening today aren't missed
       (() => {
@@ -424,15 +439,57 @@ async function generateCards(
         .from('tax_profiles')
         .select('id', { count: 'exact', head: true })
         .eq('tenant_id', tenantId),
+
+      // Unread client messages (Today's Priorities)
+      db
+        .from('clients')
+        .select('unread_messages')
+        .eq('tenant_id', tenantId)
+        .gt('unread_messages', 0),
+
+      // New party requests (Today's Priorities)
+      db
+        .from('party_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId)
+        .eq('status', 'new'),
+
+      // Pending warranty claims (Today's Priorities)
+      db
+        .from('warranty_claims')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId)
+        .eq('status', 'submitted'),
+
+      // Total completed sales (Growth Tip stage)
+      db
+        .from('sales')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId)
+        .eq('status', 'completed'),
+
+      // Total warranties (Growth Tip attach rate)
+      db
+        .from('warranties')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId),
+
+      // Confirmed/completed party bookings (Growth Tip)
+      db
+        .from('party_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId)
+        .in('status', ['confirmed', 'completed']),
     ]);
   } catch (err) {
     console.error('Dashboard cards: parallel queries failed:', err);
     // Continue with defaults — revenue $0 card will still be generated below
   }
 
-  // ── Getting Started Checklist (until dismissed or all complete for 7+ days) ──
+  // ── Getting Started Checklist ──────────────────────────────────────────────
   const onboardingData = (tenant?.onboarding_data as Record<string, any>) || {};
   const isDismissed = onboardingData.getting_started_dismissed === true;
+  let onboardingComplete = isDismissed;
 
   if (!isDismissed) {
     try {
@@ -443,68 +500,206 @@ async function generateCards(
       const hasTaxRate = (taxProfilesCountResult.count || 0) > 0;
 
       const steps = [
-        {
-          label: 'Create your first event',
-          done: hasEvents,
-          href: '/dashboard/events',
-        },
-        {
-          label: 'Add inventory items',
-          done: hasInventory,
-          href: '/dashboard/inventory',
-        },
-        {
-          label: 'Connect a payment processor',
-          done: hasPayment,
-          href: '/dashboard/settings',
-        },
-        {
-          label: 'Customize your theme',
-          done: hasTheme,
-          href: '/dashboard/settings',
-        },
-        {
-          label: 'Set your tax rate',
-          done: hasTaxRate,
-          href: '/dashboard/settings',
-        },
+        { label: 'Create your first event', done: hasEvents, href: '/dashboard/events' },
+        { label: 'Add inventory items', done: hasInventory, href: '/dashboard/inventory' },
+        { label: 'Connect a payment processor', done: hasPayment, href: '/dashboard/settings' },
+        { label: 'Customize your theme', done: hasTheme, href: '/dashboard/settings' },
+        { label: 'Set your tax rate', done: hasTaxRate, href: '/dashboard/settings' },
       ];
 
       const completedCount = steps.filter((s) => s.done).length;
-
-      // Show checklist until all steps are done — then auto-dismiss after 7 days
       const allDone = completedCount >= steps.length;
       const completedAt = onboardingData.getting_started_completed_at;
-      let shouldHide = false;
 
       if (allDone && !completedAt) {
-        // First time all done — record the timestamp (fire-and-forget)
+        // First time all done — record timestamp, show congrats (client auto-dismisses after 3s)
         try {
           await db.from('tenants').update({
             onboarding_data: { ...onboardingData, getting_started_completed_at: new Date().toISOString() },
           }).eq('id', tenantId);
         } catch { /* non-critical */ }
-      } else if (allDone && completedAt) {
-        // Auto-dismiss 7 days after all tasks completed
-        const daysSinceComplete = Math.floor(
-          (now.getTime() - new Date(completedAt).getTime()) / (1000 * 60 * 60 * 24)
-        );
-        if (daysSinceComplete >= 7) shouldHide = true;
-      }
-
-      if (!shouldHide) {
         cards.push({
           type: 'getting_started',
-          priority: 0, // Highest priority — always first
-          data: {
-            steps,
-            completedCount,
-            totalCount: steps.length,
-          },
+          priority: 0,
+          data: { steps, completedCount, totalCount: steps.length },
+        });
+        onboardingComplete = true;
+      } else if (allDone && completedAt) {
+        // Previously completed but not dismissed yet — auto-dismiss server-side
+        try {
+          await db.from('tenants').update({
+            onboarding_data: { ...onboardingData, getting_started_dismissed: true },
+          }).eq('id', tenantId);
+        } catch { /* non-critical */ }
+        onboardingComplete = true;
+      } else {
+        // Still in progress — show checklist
+        cards.push({
+          type: 'getting_started',
+          priority: 0,
+          data: { steps, completedCount, totalCount: steps.length },
         });
       }
     } catch (err) {
       console.error('Dashboard cards: getting_started failed:', err);
+    }
+  }
+
+  // ── Today's Priorities + Growth Tip (shown after onboarding complete) ────
+  if (onboardingComplete) {
+    try {
+      const priorityItems: { type: string; label: string; link: string; icon: string }[] = [];
+
+      // 1. Upcoming event within 7 days
+      const upcomingEvents = eventsResult.data || [];
+      if (upcomingEvents.length > 0) {
+        const next = upcomingEvents[0];
+        const days = Math.max(0, daysUntil(next.start_time));
+        if (days <= 7) {
+          const dayText = days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`;
+          priorityItems.push({
+            type: 'upcoming_event',
+            label: `${next.name} is ${dayText}`,
+            link: '/dashboard/events',
+            icon: '\u{1F4C5}',
+          });
+        }
+      }
+
+      // 2. Low stock chains
+      const allStock = lowStockResult.data || [];
+      const lowItems = allStock.filter((i: any) => i.quantity_on_hand <= i.reorder_threshold && i.quantity_on_hand >= 0);
+      if (lowItems.length > 0) {
+        priorityItems.push({
+          type: 'low_stock',
+          label: `${lowItems.length} item${lowItems.length === 1 ? '' : 's'} running low`,
+          link: '/dashboard/inventory',
+          icon: '\u26A0\uFE0F',
+        });
+      }
+
+      // 3. Unread messages
+      const unreadClients = unreadClientsResult.data || [];
+      const unreadTotal = unreadClients.reduce((s: number, c: any) => s + (Number(c.unread_messages) || 0), 0);
+      if (unreadTotal > 0) {
+        priorityItems.push({
+          type: 'unread_messages',
+          label: `${unreadTotal} unread message${unreadTotal === 1 ? '' : 's'}`,
+          link: '/dashboard/messages',
+          icon: '\u{1F4AC}',
+        });
+      }
+
+      // 4. Pending party requests
+      const newParties = newPartyRequestsCount.count || 0;
+      if (newParties > 0) {
+        priorityItems.push({
+          type: 'party_requests',
+          label: `${newParties} new party request${newParties === 1 ? '' : 's'}`,
+          link: '/dashboard/parties',
+          icon: '\u{1F389}',
+        });
+      }
+
+      // 5. Pending warranty claims
+      const pendingClaims = pendingWarrantyClaimsCount.count || 0;
+      if (pendingClaims > 0) {
+        priorityItems.push({
+          type: 'warranty_claims',
+          label: `${pendingClaims} warranty claim${pendingClaims === 1 ? '' : 's'} to review`,
+          link: '/dashboard/warranties',
+          icon: '\u{1F527}',
+        });
+      }
+
+      // 6. No events scheduled (only if nothing else is urgent)
+      if (priorityItems.length === 0 && (upcomingEventsResult.data || []).length === 0) {
+        priorityItems.push({
+          type: 'no_events',
+          label: 'No upcoming events \u2014 create one to start selling',
+          link: '/dashboard/events',
+          icon: '\u{1F4C5}',
+        });
+      }
+
+      cards.push({
+        type: 'todays_priorities',
+        priority: 0,
+        data: { items: priorityItems.slice(0, 3) },
+      });
+    } catch (err) {
+      console.error('Dashboard cards: todays_priorities failed:', err);
+    }
+
+    // ── Growth Tip (rules-based, stage-aware) ─────────────────────────────
+    try {
+      const totalSales = totalSalesCount.count || 0;
+      const totalWarranties = totalWarrantyCount.count || 0;
+      const partyBookings = partyBookingsCount.count || 0;
+      const thisMonthSales = thisMonthSalesResult.data || [];
+      const avgSale = thisMonthSales.length > 0
+        ? thisMonthSales.reduce((s: number, r: any) => s + (Number(r.subtotal) || 0), 0) / thisMonthSales.length
+        : 0;
+
+      const dayOfYear = Math.floor(
+        (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000
+      );
+
+      let stage: 'new' | 'growth' | 'established' = 'new';
+      let tip = '';
+      let metric: number | undefined;
+
+      if (totalSales < 10) {
+        stage = 'new';
+        const tips = [
+          'Offer anklets alongside bracelets \u2014 artists who bundle see significantly higher average tickets.',
+          'Your first private party is the fastest way to build word-of-mouth. Share your booking link on social!',
+          'Add a variety of chain styles to your inventory. Customers love having options.',
+        ];
+        tip = tips[dayOfYear % tips.length];
+      } else if (totalSales <= 100) {
+        stage = 'growth';
+        const warrantyRate = totalSales > 0 ? Math.round((totalWarranties / totalSales) * 100) : 0;
+        if (warrantyRate < 20) {
+          tip = `Only ${warrantyRate}% of your sales include warranty protection. Offering it on every piece is an easy revenue boost.`;
+          metric = warrantyRate;
+        } else if (partyBookings === 0) {
+          tip = 'Private parties drive 3-5x the revenue of typical events. Try promoting your booking page.';
+        } else if (avgSale > 0 && avgSale < 50) {
+          tip = 'Consider adding premium chains (14k gold) \u2014 even a few high-ticket options lift your average sale.';
+        } else {
+          const tips = [
+            'Private parties drive 3-5x the revenue of typical events. Try promoting your booking page.',
+            'Consider adding premium chains (14k gold) \u2014 even a few high-ticket options lift your average sale.',
+          ];
+          tip = tips[dayOfYear % tips.length];
+        }
+      } else {
+        stage = 'established';
+        const tips = [
+          "Review your best-selling chains and make sure you're always stocked. Running out at an event means lost revenue.",
+          "Focus on repeat business \u2014 a quick 'thinking of you' text to past clients goes a long way.",
+        ];
+        tip = tips[dayOfYear % tips.length];
+      }
+
+      // Fallback if tip is somehow empty
+      if (!tip) {
+        const fallbacks = [
+          'Photos of happy customers wearing their new jewelry are your best marketing. Ask permission and post!',
+          'Respond to messages within an hour when possible \u2014 fast replies build trust and close more bookings.',
+          'Track your expenses in Reports to see your true profit margins, not just revenue.',
+        ];
+        tip = fallbacks[dayOfYear % fallbacks.length];
+      }
+
+      cards.push({
+        type: 'growth_tip',
+        priority: 0,
+        data: { stage, tip, ...(metric !== undefined ? { metric } : {}) },
+      });
+    } catch (err) {
+      console.error('Dashboard cards: growth_tip failed:', err);
     }
   }
 
