@@ -631,38 +631,40 @@ export default function LandingPageClient() {
             .hero-text { max-width: 560px; }
             .hero-images { width: 95%; margin-top: 40px; }
             .hero-dashboard-wrap { border-radius: 12px; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.04); }
-            .hero-pill { justify-content: center; }
+            .hero-trust { justify-content: center; }
             @media (min-width: 1024px) {
               .hero-layout { flex-direction: row; text-align: left; gap: 48px; align-items: center; }
               .hero-text { flex: 0 0 38%; min-width: 0; max-width: none; }
               .hero-images { flex: 0 0 60%; min-width: 0; width: auto; margin-top: 0; }
               .hero-ctas { justify-content: flex-start !important; }
-              .hero-pill { justify-content: flex-start; }
               .hero-subline { margin-left: 0 !important; margin-right: 0 !important; }
+              .hero-trust { justify-content: flex-start; }
             }
           `}</style>
+
+          {/* ─── Pill: centered above the split layout ─── */}
+          <Reveal>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 32 }}>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 18px',
+                  borderRadius: 100,
+                  background: B.sage,
+                }}
+              >
+                <span style={{ color: B.pjRose, fontSize: 12 }}>{'\u2726'}</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: B.blackBrown, fontFamily: FONT.body }}>
+                  From the Pioneers of Permanent Jewelry
+                </span>
+              </div>
+            </div>
+          </Reveal>
+
           <div className="hero-layout">
             <div className="hero-text">
-              <Reveal>
-                <div className="hero-pill" style={{ display: 'flex', marginBottom: 28 }}>
-                  <div
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '8px 18px',
-                      borderRadius: 100,
-                      background: B.sage,
-                    }}
-                  >
-                    <span style={{ color: B.pjRose, fontSize: 12 }}>{'\u2726'}</span>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: B.blackBrown, fontFamily: FONT.body }}>
-                      From the Pioneers of Permanent Jewelry
-                    </span>
-                  </div>
-                </div>
-              </Reveal>
-
               <Reveal delay={0.1}>
                 <h1 style={{ fontFamily: FONT.display, margin: 0, lineHeight: 1.15 }}>
                   <span style={{ display: 'block', fontSize: 'clamp(1.875rem, 4.5vw, 3.375rem)', fontWeight: 700, color: B.blackBrown }}>
@@ -686,19 +688,22 @@ export default function LandingPageClient() {
                     Start Your Free Trial
                   </a>
                   <button onClick={() => scrollTo('features')} style={{ ...ctaStyle, background: 'transparent', color: B.blackBrown, border: `2px solid ${B.blackBrown}` }}>
-                    See It In Action
+                    See All Features
                   </button>
                 </div>
               </Reveal>
 
               <Reveal delay={0.35}>
-                <p style={{ fontSize: 13, color: B.softBrown, marginTop: 20, fontFamily: FONT.body }}>
-                  <span style={{ color: B.pjRose }}>{'\u25C6'}</span> 60-Day Free Pro Trial{' '}
-                  <span style={{ margin: '0 10px', color: B.taupe }}>|</span>
-                  <span style={{ color: B.pjRose }}>{'\u25C6'}</span> No Credit Card Required{' '}
-                  <span style={{ margin: '0 10px', color: B.taupe }}>|</span>
-                  <span style={{ color: B.pjRose }}>{'\u25C6'}</span> Cancel Anytime
-                </p>
+                <div className="hero-trust" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', marginTop: 20, fontFamily: FONT.body }}>
+                  {['60-Day Free Pro Trial', 'No Credit Card Required', 'Cancel Anytime'].map((text) => (
+                    <span key={text} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: B.softBrown }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 13l4 4L19 7" />
+                      </svg>
+                      {text}
+                    </span>
+                  ))}
+                </div>
               </Reveal>
             </div>
 
@@ -730,11 +735,11 @@ export default function LandingPageClient() {
             `}</style>
             <div className="hero-photo-break" style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
               <Image
-                src="/landing/hero-artist-clients.jpg"
-                alt="Permanent jewelry artist sizing a bracelet on a client"
-                width={1200}
+                src="/landing/hero-lifestyle.webp"
+                alt="Permanent jewelry artist managing her business with Sunstone Studio"
+                width={1400}
                 height={550}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 25%', display: 'block' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }}
               />
             </div>
           </Reveal>
@@ -947,11 +952,12 @@ export default function LandingPageClient() {
             `}</style>
             <div className="lifestyle-photo-break" style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
               <Image
-                src="/landing/IMG-154.jpg"
-                alt="Permanent jewelry artist relaxing with laptop and phone, planning her business"
-                width={1200}
+                src="/landing/lifestyle-business.webp"
+                alt="Permanent jewelry artist checking her business on the go"
+                width={1400}
                 height={500}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center center', display: 'block' }}
+                loading="lazy"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }}
               />
             </div>
           </Reveal>
