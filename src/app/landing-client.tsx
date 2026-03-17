@@ -942,6 +942,28 @@ export default function LandingPageClient() {
         </div>
       </section>
 
+      {/* ─── PHOTO BREAK: Welding Scene ─── */}
+      <section style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px' }}>
+          <Reveal>
+            <style>{`
+              .weld-scene-break { height: 350px; }
+              @media (min-width: 768px) { .weld-scene-break { height: 500px; } }
+            `}</style>
+            <div className="weld-scene-break" style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+              <Image
+                src="/landing/hero-artist-clients.jpg"
+                alt="Permanent jewelry artist welding a bracelet for a client"
+                width={4200}
+                height={2800}
+                loading="lazy"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center center', display: 'block' }}
+              />
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
       {/* ═══════ SECTION 5: ARTIST STOREFRONT ═══════ */}
       <section style={{ background: B.white, padding: '80px 0' }}>
         <div style={{ ...wrap, display: 'grid', gridTemplateColumns: '1fr', gap: 48, alignItems: 'center' }}>
