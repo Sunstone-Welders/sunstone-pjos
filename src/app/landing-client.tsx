@@ -704,8 +704,8 @@ export default function LandingPageClient() {
                   <Image
                     src="/landing/hero-dashboard.webp"
                     alt="Sunstone Studio dashboard showing AI-powered business insights and revenue overview"
-                    width={1200}
-                    height={750}
+                    width={2160}
+                    height={1419}
                     priority
                     style={{ width: '100%', height: 'auto', display: 'block' }}
                   />
