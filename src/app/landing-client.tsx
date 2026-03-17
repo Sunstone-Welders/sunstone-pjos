@@ -628,34 +628,34 @@ export default function LandingPageClient() {
         <div style={wrap}>
           <style>{`
             .hero-layout { display: flex; flex-direction: column; align-items: center; text-align: center; }
-            .hero-text { max-width: 560px; }
-            .hero-images { width: 100%; max-width: 600px; margin-top: 40px; overflow: hidden; }
+            .hero-text { max-width: 600px; }
+            .hero-images { width: 100%; margin-top: 48px; overflow: hidden; }
             .hero-dashboard-wrap { border-radius: 12px; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.04); }
             @media (min-width: 900px) {
-              .hero-layout { flex-direction: row; text-align: left; gap: 48px; align-items: center; }
-              .hero-text { flex: 0 0 38%; min-width: 0; }
-              .hero-images { flex: 0 0 60%; min-width: 0; margin-top: 0; max-width: 60%; }
-              .hero-ctas { justify-content: flex-start !important; }
+              .hero-text { max-width: 700px; }
+              .hero-images { max-width: 900px; margin: 48px auto 0; }
+              .hero-ctas { justify-content: center !important; }
             }
           `}</style>
           <div className="hero-layout">
             <div className="hero-text">
               <Reveal>
-                <div
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '8px 18px',
-                    borderRadius: 100,
-                    background: B.sage,
-                    marginBottom: 28,
-                  }}
-                >
-                  <span style={{ color: B.pjRose, fontSize: 12 }}>{'\u2726'}</span>
-                  <span style={{ fontSize: 12, fontWeight: 500, color: B.blackBrown, fontFamily: FONT.body }}>
-                    From the Pioneers of Permanent Jewelry
-                  </span>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28 }}>
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '8px 18px',
+                      borderRadius: 100,
+                      background: B.sage,
+                    }}
+                  >
+                    <span style={{ color: B.pjRose, fontSize: 12 }}>{'\u2726'}</span>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: B.blackBrown, fontFamily: FONT.body }}>
+                      From the Pioneers of Permanent Jewelry
+                    </span>
+                  </div>
                 </div>
               </Reveal>
 
@@ -825,7 +825,12 @@ export default function LandingPageClient() {
             </div>
           </Reveal>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 20 }}>
+          <style>{`
+            .feature-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+            @media (min-width: 768px) { .feature-grid { grid-template-columns: repeat(2, 1fr); } }
+            @media (min-width: 1100px) { .feature-grid { grid-template-columns: repeat(3, 1fr); } }
+          `}</style>
+          <div className="feature-grid">
             {[
               {
                 img: '/landing/pos-event.webp',
@@ -905,13 +910,13 @@ export default function LandingPageClient() {
                     transition: 'box-shadow 0.3s',
                   }}
                 >
-                  <div style={{ position: 'relative', width: '100%', aspectRatio: '16/10', overflow: 'hidden', background: '#F9F7F4', border: '1px solid rgba(0,0,0,0.08)', borderBottom: 'none', borderRadius: '16px 16px 0 0' }}>
+                  <div style={{ position: 'relative', width: '100%', aspectRatio: '16/10', overflow: 'hidden', background: '#F9F7F4', borderBottom: `1px solid rgba(0,0,0,0.06)`, borderRadius: '16px 16px 0 0' }}>
                     <Image
                       src={card.img}
                       alt={card.imgAlt}
                       fill
-                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 400px"
-                      style={{ objectFit: 'contain', padding: 8, maxHeight: 280 }}
+                      sizes="(max-width: 768px) 100vw, (max-width: 1100px) 50vw, 400px"
+                      style={{ objectFit: 'cover', objectPosition: 'top center' }}
                     />
                   </div>
                   <div style={{ padding: '20px 22px 24px' }}>
