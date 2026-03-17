@@ -739,4 +739,4 @@ Full pre-launch security audit performed. All Critical and High issues fixed.
 
 ---
 
-*Last updated March 15, 2026 (evening). Session included: Complete Stripe payment flow fix (QR + Text Link end-to-end), gift card Stripe payments, transaction list in Reports + tappable revenue in POS (shared TransactionList component), party deposit Send Link fix, reports date picker timezone fix, belt-and-suspenders sale status updates, payment_status enum consistency audit ('expired' → 'failed'), Sunny pricing tier tools, mobile nav/POS header/Sunny chat UX fixes. One migration (052). Core POS payment experience is now complete.*
+*Last updated March 17, 2026 (late evening). Session included: Landing page photo composition fixes (container heights, object-position), hero split layout restored with 60% dashboard column, hero subline updated to clarify product positioning, IMG-154 lifestyle photo swap, all 7 feature screenshots replaced with 3x DPR high-res WebP versions (4.7MB→1.0MB), storefront screenshot confirmed sharp, party booking screenshot upgraded to 3600×3954.*
