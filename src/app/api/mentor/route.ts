@@ -123,7 +123,7 @@ const SUBSECTIONS: Subsection[] = [
     id: 'wt-jumpring',
     label: 'Jump Ring Handling',
     data: WELDING_TECHNIQUE_KNOWLEDGE.jumpRingHandling,
-    keywords: ['jump ring', 'jumpring', 'close', 'gap', 'overlap', 'pinch', 'opening', 'flush'],
+    keywords: ['jump ring', 'jumpring', 'close', 'gap', 'overlap', 'pinch', 'opening', 'flush', 'gauge', 'thickest', 'match chain'],
   },
   {
     id: 'wt-grounding',
@@ -153,13 +153,13 @@ const SUBSECTIONS: Subsection[] = [
     id: 'wt-metals',
     label: 'Metal-Specific Welding Notes',
     data: WELDING_TECHNIQUE_KNOWLEDGE.metalWeldingNotes,
-    keywords: ['gold fill weld', 'silver weld', 'stainless weld', 'solid gold weld', 'metal specific', 'discolor'],
+    keywords: ['gold fill weld', 'silver weld', 'stainless weld', 'solid gold weld', 'metal specific', 'discolor', 'stainless steel', 'pvd', 'hard-wire cutter', 'enamel', 'enamel chain', 'plated'],
   },
   {
     id: 'wt-pieces',
     label: 'Piece-Specific Technique Notes',
     data: WELDING_TECHNIQUE_KNOWLEDGE.pieceSpecificNotes,
-    keywords: ['bracelet technique', 'anklet technique', 'necklace technique', 'ring technique', 'achilles', 'longer piece'],
+    keywords: ['bracelet technique', 'anklet technique', 'necklace technique', 'ring technique', 'achilles', 'longer piece', 'hand chain', 'hand chain technique'],
   },
 
   // ── TROUBLESHOOTING ──
@@ -316,7 +316,7 @@ const SUBSECTIONS: Subsection[] = [
     id: 'cx-reweld',
     label: 'Re-Weld Policy',
     data: BUSINESS_STRATEGY_KNOWLEDGE.reWeldPolicy,
-    keywords: ['reweld', 're-weld', 'broke off', 'fell off', 'came apart', 'warranty', 'free fix'],
+    keywords: ['reweld', 're-weld', 'broke off', 'fell off', 'came apart', 'warranty', 'free fix', 'walk-in repair', 'repair fee', 'reweld fee', 'not my customer'],
   },
   {
     id: 'cx-waiver',
@@ -522,6 +522,63 @@ const SUBSECTIONS: Subsection[] = [
     label: 'Sunny Tips & Dashboard Checklist',
     data: { sunnyTips: PJOS_PLATFORM_GUIDE.sunnyTips, dashboardChecklist: PJOS_PLATFORM_GUIDE.dashboardChecklist },
     keywords: ['sunny tips', 'tutorial', 'tips', 'getting started checklist', 'dashboard card', 'checklist', 'dismiss checklist', 'page tips', 'floating pill'],
+  },
+
+  // ── NEW KNOWLEDGE SUBSECTIONS ──
+  {
+    id: 'wt-ring-welding',
+    label: 'Ring Welding Technique',
+    data: WELDING_TECHNIQUE_KNOWLEDGE.ringWelding,
+    keywords: ['ring weld', 'ring technique', 'off hand', 'chain ring', 'finger chain', 'weld ring', 'ring off hand', 'ring sizing', 'ring add-on', 'ring sales'],
+    priority: 1,
+  },
+  {
+    id: 'cx-removal',
+    label: 'Removal Guidance',
+    data: CLIENT_EXPERIENCE_KNOWLEDGE.removalGuidance,
+    keywords: ['remove', 'take off', 'cut off', 'scissors', 'cut jump ring', 'removal', 'take it off', 'snip', 'clip off', 'nail clipper'],
+    priority: 1,
+  },
+  {
+    id: 'cx-journey',
+    label: 'Customer Journey & Identity Coaching',
+    data: CLIENT_EXPERIENCE_KNOWLEDGE.customerJourney,
+    keywords: ['scared', 'overwhelmed', 'new artist', 'beginner', 'milestone', 'coaching', 'identity', 'phase', 'setback', 'struggling', 'want to quit'],
+    priority: 1,
+  },
+  {
+    id: 'biz-objections',
+    label: 'Objection Handling',
+    data: BUSINESS_STRATEGY_KNOWLEDGE.objectionHandling,
+    keywords: ['objection', 'hesitant', 'too expensive', 'fad', 'discount code', 'carty', 'scared', 'can\'t afford', 'not technical', 'is pj a fad', 'which kit'],
+    priority: 2,
+  },
+  {
+    id: 'biz-shipping',
+    label: 'Shipping, Returns & Policies',
+    data: BUSINESS_STRATEGY_KNOWLEDGE.shippingAndPolicies,
+    keywords: ['ship', 'shipping', 'return', 'refund', 'warranty', 'circle protection', 'pj pro', 'financing', 'restocking', 'exchange', 'how long to ship', 'international'],
+    priority: 1,
+  },
+  {
+    id: 'pr-yield',
+    label: 'Yield Math (Internal Planning)',
+    data: PRODUCTS_KNOWLEDGE.yieldMath,
+    keywords: ['yield', 'how many bracelet', 'bracelets per foot', 'chain math', 'how far does chain go', 'how much chain', 'per foot', 'spool', 'waste'],
+    priority: 1,
+  },
+  {
+    id: 'pr-chain-universality',
+    label: 'Chain Universality Rule',
+    data: PRODUCTS_KNOWLEDGE.chainUniversality,
+    keywords: ['bracelet chain', 'necklace chain', 'which chain for', 'any chain', 'chain for necklace', 'chain for bracelet', 'chain for ring', 'chain type'],
+  },
+  {
+    id: 'pr-jumpring-select',
+    label: 'Jump Ring Selection Guide',
+    data: PRODUCTS_KNOWLEDGE.jumpRingSelection,
+    keywords: ['which jump ring', 'jump ring gauge', 'thickest gauge', 'what gauge', 'jump ring size', 'pick jump ring', 'right jump ring', '3mm', 'visual weight', 'gauge fit'],
+    priority: 1,
   },
 ];
 
@@ -1076,7 +1133,7 @@ ${currentPage ? `CURRENT PAGE CONTEXT:\nThe artist is currently on the ${getPage
 - NEVER recommend discounting.
 - NEVER say it's okay to skip eye protection.
 - Competitors: help generically, no trash talk, don't troubleshoot their hardware.
-- Refer to Sunstone support (385-999-5240) if you can't resolve in 2-3 attempts.
+- Refer to Sunstone support (385-999-5240 or 801-658-0015 — both reach the same team) if you can't resolve in 2-3 attempts.
 
 ${catalogText ? `SUNSTONE CATALOG SUMMARY (${shopifyCatalog?.products?.length || 0} products synced from Shopify):\nYou have access to the full Sunstone product catalog via the search_sunstone_catalog tool. Use it for ALL product questions.\nQuick reference of product categories available: ${[...new Set((shopifyCatalog?.products || []).map((p: any) => p.productType).filter(Boolean))].join(', ') || 'various'}\n` : 'SUNSTONE CATALOG: Not currently synced. If an artist asks about Sunstone products, suggest they check sunstonewelders.com.\n'}
 ⚠️ PRODUCT RECOMMENDATIONS (READ THIS — CRITICAL):

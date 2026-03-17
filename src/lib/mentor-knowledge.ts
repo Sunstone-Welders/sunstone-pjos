@@ -21,8 +21,15 @@ export const EQUIPMENT_KNOWLEDGE = {
     zapp: {
       name: 'Zapp',
       type: 'Entry-level micro TIG welder',
-      interface: 'Knob controls',
+      interface: 'Knob controls (step-based incremental settings)',
       includedInKit: 'Momentum ($2,399)',
+      energyRange: '~3-10 J',
+      weldSpotDiameter: '~0.5-1.0 mm',
+      weldRate: '~1 weld/sec, argon-ready',
+      weight: '~1.9 lbs',
+      voltage: '100-230 VAC auto-detect',
+      warranty: '3-year, USA-made',
+      bestFor: 'Beginners, simple launch, small events, mobile businesses, plug-and-go simplicity',
       notes: [
         'Good starter welder for artists entering the industry.',
         'Uses lowest/max power settings for many 20g and 26g jump rings rather than precise joule values.',
@@ -32,12 +39,19 @@ export const EQUIPMENT_KNOWLEDGE = {
     zappPlus2: {
       name: 'Zapp Plus 2',
       type: 'Mid-tier micro TIG welder',
-      interface: 'Touchscreen controls',
+      interface: 'Touchscreen controls (30 distinct energy settings, dial control)',
       includedInKit: 'Dream ($3,199 — HERO kit)',
+      energyRange: '~1-30 J',
+      weldSpotDiameter: '~0.5-2.0 mm',
+      weldRate: '~1 weld/sec, argon-ready',
+      removableStylus: true,
+      warranty: '3-year, USA-made',
+      bestFor: 'Frequent events, business launch, wide chain variety, growth',
       notes: [
         'Touchscreen interface for easier adjustment.',
         'Most popular welder — included in the recommended Dream kit.',
         'Precise joule settings across all gauges and metals.',
+        'Removable stylus cord with enhanced ergonomics.',
         'Available for rental through Sunstone OnDemand program.',
       ],
     },
@@ -46,6 +60,10 @@ export const EQUIPMENT_KNOWLEDGE = {
       type: 'Premium micro TIG welder',
       interface: 'Touchscreen controls with TruFire technology',
       includedInKit: 'Legacy ($4,999 — BEST kit)',
+      energyControl: 'Broadest and most granular energy control',
+      performance: 'Advanced pulsed micro-TIG, tuned for higher performance, comfortable for extended use',
+      warranty: '3-year, USA-made',
+      bestFor: 'High-volume events, studios, professional artists, maximum control',
       truFire: {
         description:
           'TruFire initiates the arc while the electrode is still retracting from the piece, rather than waiting until retraction is complete. This millisecond difference creates a low-voltage pre-arc that maintains connection, making welds more consistent and harder to accidentally abort.',
@@ -58,6 +76,14 @@ export const EQUIPMENT_KNOWLEDGE = {
         'Available for rental through Sunstone OnDemand program.',
       ],
     },
+    recommendationLogic: {
+      approach: 'Ask 1-2 questions max: "Are you planning small pop-ups or frequent/high-volume events?" and "Do you prefer simplicity, or do you want more control?"',
+      zapp: 'Simplicity, affordability, easy beginnings',
+      zappPlus2: 'More control, broader range, event readiness, growth',
+      mPulse: 'Professional workflow, high-volume, studio, maximum control',
+      upgradeFraming: 'Many people start with Zapp and upgrade once they\'re doing frequent events.',
+    },
+    lightRepair: 'All three welders can handle light repair (reattaching jump rings, simple breaks). Only mention if directly asked — do not proactively position any welder as a "repair welder."',
   },
 
   // ---------------------------------------------------------------------------
@@ -220,11 +246,12 @@ export const EQUIPMENT_KNOWLEDGE = {
       'The rule: start at chart value, adjust in small increments. Easier to add power than fix a burned-through ring.',
     ],
     quickRuleOfThumb: {
-      note: 'WARNING: These are VERY rough ranges ONLY for when the artist has NOT specified their welder. ALWAYS ask for their specific welder model and use the detailed chart above instead of these ranges.',
-      gauge26: '~2–4 joules (varies by welder and material — ask which welder and use chart)',
-      gauge24: '~4–7 joules (varies by welder and material — ask which welder and use chart)',
-      gauge22: '~5–10 joules (varies by welder and material — ask which welder and use chart)',
-      gauge20: '~7–15 joules, MULTIPLE WELDS always required (varies dramatically — ask which welder and use chart)',
+      note: 'WARNING: These are VERY rough starting points ONLY for when the artist has NOT specified their welder. ALWAYS ask for their specific welder model and use the detailed chart above instead of these ranges.',
+      principle: 'Always start low and work up. Safer to be too low (weak weld, try again) than too high (blowout).',
+      gauge26: '~3 (start around 3 — varies by welder and material, ask which welder and use chart)',
+      gauge24: '~5 (start around 5 — varies by welder and material, ask which welder and use chart)',
+      gauge22: '~7 (start around 7 — varies by welder and material, ask which welder and use chart)',
+      gauge20: '~9–10 (start around 9-10, MULTIPLE WELDS always required — varies dramatically, ask which welder and use chart)',
       always: 'ALWAYS ask which welder the artist has before giving a specific joule recommendation. The correct setting varies dramatically by welder model and material.',
     },
   },
@@ -377,12 +404,16 @@ export const WELDING_TECHNIQUE_KNOWLEDGE = {
       splashing: 'Possible with poor angle but rarely an issue at PJ power levels. Always maintain 90° angle.',
     },
     stainless_steel: {
-      note: 'Very durable. Good for practice. ALWAYS use silver jump rings on stainless steel chains.',
+      note: 'Stainless steel IS weldable with Sunstone welders. Sunstone does not sell stainless steel chain, but PVD-coated stainless is popular in the market. No judgment — help artists if they ask.',
       safetyBreakpoint:
-        'Stainless steel is much stronger than the jewelry metals typically used for PJ. If a stainless piece gets caught on something, the chain could injure the wearer before it breaks. A silver jump ring creates a deliberate weak point that will break first, protecting the wearer.',
+        'Stainless steel is much stronger than the jewelry metals typically used for PJ. If a stainless piece gets caught on something, the chain could injure the wearer before it breaks. Recommend sterling silver or gold-filled jump rings — NOT stainless jump rings. You want a break point that will give before the wrist does.',
+      cutterWarning: 'Stainless will ruin the standard cutters in Sunstone kits. They need hard-wire cutters (Sunstone sells these separately, not included in kits).',
+      sunstoneStance: 'Don\'t volunteer quality opinions. Keep it neutral and factual.',
     },
     enamel: {
-      note: 'Chips easily during welding. Display enamel chains to attract customers but set expectations. Not ideal for permanent wear if welded directly.',
+      note: 'Chain welds like its base metal — you never weld the stone/enamel, only the jump ring. Sunstone enamel chains use sterling silver or gold-filled base metal, NOT plated — they won\'t turn your skin green.',
+      handling: 'Handle carefully — avoid squeezing stones with pliers.',
+      greatFor: 'Color stories, seasonal events, youth markets.',
     },
     goldPlated: {
       note: 'AVOID for permanent jewelry. The plating is too thin and will wear off quickly. Not suitable for PJ.',
@@ -413,6 +444,28 @@ export const WELDING_TECHNIQUE_KNOWLEDGE = {
       sizing: 'Default 14 inches.',
       jumpRings: 'Hand chains use 2 jump rings. All other piece types use 1.',
       technique: 'Reference PJ Mastery Series module: "Rings & Hand Chains".',
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // Ring Welding Technique
+  // ---------------------------------------------------------------------------
+  ringWelding: {
+    overview: 'Rings are EASIER than bracelets because you don\'t weld them while on the customer.',
+    technique: [
+      'Wrap chain around their finger — measure snug, not tight, but not with a finger gap like bracelets.',
+      'Mark the link where it meets.',
+      'Unwrap from their finger and bring the chain to your workspace.',
+      'Weld it off-hand at your workstation.',
+      'Finished ring slides on and off like a regular ring.',
+    ],
+    whyOffHand: 'Snug fit means welding on the finger increases chance of hot metal touching skin. Even though heat is only there for a split second, not worth the risk. Rings slide on/off easily — this is also a selling point.',
+    safetyNote: 'Always weld rings off the finger. This is non-negotiable.',
+    salesStrategy: {
+      lowCommitmentEntry: 'Perfect low-commitment entry point: "Can\'t commit to a bracelet? Try a ring first. Come back for more."',
+      addOn: 'Suggest as an add-on to every bracelet sale — less expensive, perfect complement.',
+      visualAppeal: 'Matching chain on wrist and finger makes the whole look pop. Chain rings are a unique look that people notice.',
+      revenueImpact: 'Increases average ticket with minimal extra work.',
     },
   },
 };
@@ -544,7 +597,8 @@ export const TROUBLESHOOTING_KNOWLEDGE = {
     ],
     contactInfo: {
       phone: '385-999-5240',
-      method: 'Call or text',
+      secondaryPhone: '801-658-0015',
+      method: 'Call or text — both numbers reach the same team',
       note: 'Sunstone support team can also help Sunny answer questions not covered in the knowledge base.',
     },
   },
@@ -578,14 +632,22 @@ export const PRODUCTS_KNOWLEDGE = {
       careNote: 'May tarnish over time. Clean with water, a gentle toothbrush, and dish soap. Pat dry.',
     },
     stainlessSteel: {
-      customerPitch: 'Extremely durable and affordable.',
+      customerPitch: 'Extremely durable and affordable. PVD-coated stainless is very popular.',
       pricePosition: 'Entry tier',
       bestFor: 'Practice pieces, budget customers, athletic/active customers who need extra durability.',
-      safetyNote: 'ALWAYS use silver jump rings on stainless chains for safety breakpoint.',
+      safetyNote: 'ALWAYS use silver or gold-filled jump rings on stainless chains — NOT stainless jump rings. You want a break point that will give before the wrist does.',
+      cutterWarning: 'Stainless will ruin the standard cutters in Sunstone kits. Artists need hard-wire cutters (Sunstone sells these separately, not included in kits).',
+      sunstoneStance: 'Sunstone does not sell stainless steel chain. No judgment — help artists if they ask. Don\'t volunteer quality opinions.',
+    },
+    stoneAndEnamel: {
+      description: 'Chains with stones or enamel accents (like Lavinia, Benedetta, etc.).',
+      weldNote: 'Chain welds like its base metal — you weld the jump ring, never the stone/enamel.',
+      sunstoneAdvantage: 'Sunstone enamel chains use sterling silver or gold-filled base metal, NOT plated. They won\'t turn your skin green.',
+      handling: 'Handle carefully — avoid squeezing stones with pliers.',
+      greatFor: 'Color stories, seasonal events, youth markets.',
     },
     avoid: {
       goldPlated: 'Too thin — plating wears off quickly. Not suitable for permanent jewelry.',
-      enamel: 'Chips easily. Okay for display to attract customers but set expectations about durability.',
     },
   },
 
@@ -722,6 +784,44 @@ export const PRODUCTS_KNOWLEDGE = {
     sunnyStance:
       'Ready-to-wear is NOT part of the Sunstone PJ business model. Sunny does not suggest it. If an artist asks about it, they can certainly add it to their business, but it is outside the scope of what Sunny coaches on.',
   },
+
+  // ---------------------------------------------------------------------------
+  // Chain Universality Rule
+  // ---------------------------------------------------------------------------
+  chainUniversality: {
+    rule: 'All Sunstone chain works for any piece type — bracelets, anklets, necklaces, rings, hand chains. Just cut to the customer\'s size.',
+    clarification: 'There\'s no such thing as "bracelet chain" vs "necklace chain." Any chain can be used for any piece type.',
+  },
+
+  // ---------------------------------------------------------------------------
+  // Yield Math (Internal Artist Planning Only)
+  // ---------------------------------------------------------------------------
+  yieldMath: {
+    internalOnly: 'NEVER share yield math with customers. Customers buy "a bracelet," not "7 inches of chain." Inch math is internal only.',
+    averageLengths: {
+      bracelet: '~7 inches',
+      anklet: '~9-10 inches',
+      necklace: '~16-18 inches',
+      ring: '~2-3 inches',
+    },
+    spoolEstimates: '3 feet (36 inches) ≈ 5 bracelets, or 3-4 anklets, or 2 necklaces.',
+    wasteFactor: 'Factor ~1 inch waste per cut.',
+  },
+
+  // ---------------------------------------------------------------------------
+  // Jump Ring Selection Guide
+  // ---------------------------------------------------------------------------
+  jumpRingSelection: {
+    gaugeRule: 'Pick the thickest gauge that fits through the chain link. Thicker jump rings are easier to weld. Period.',
+    sunstoneOffers: [
+      '24ga Sterling Silver (3mm ID)',
+      '22ga Gold-Filled (3mm ID)',
+      '24ga 14K Gold (3mm ID)',
+    ],
+    diameterNote: 'Sunstone jump rings are 3mm inner diameter — looks nice with most common PJ chain styles.',
+    visualWeight: 'Match the jump ring to the chain\'s visual weight. Chunky chains → larger diameter. Dainty chains → smaller diameter.',
+    ruleOfThumb: 'Pick the thickest gauge that fits (for easy welding) and the diameter that matches the chain\'s visual style (for appearance).',
+  },
 };
 
 // =============================================================================
@@ -761,9 +861,12 @@ export const BUSINESS_STRATEGY_KNOWLEDGE = {
           appeal: 'Premium tier for house parties and clients who want the best',
         },
       },
-      necklaces: 'Often sold by the inch: $7–10/inch depending on material.',
+      necklaces: 'Often sold by the inch: $7–10/inch depending on material. Roughly 2x bracelet price.',
+      handChains: '~2-2.5x bracelet price (uses ~2.5x the chain, more detailed welding with two connection points).',
+      rings: 'Less than bracelets — exact price is up to the artist. Perfect low-commitment entry point.',
       connectorsCharms: '$15–35 each',
       reWelds: 'Free re-welds for life as long as the customer still has the chain. No time limit. No fee. This is a powerful selling point.',
+      neverPrecut: 'Always custom fit on the customer. NEVER precut chains.',
     },
     costCalculationExample: {
       description: 'Example for a standard gold-filled bracelet:',
@@ -951,7 +1054,85 @@ export const BUSINESS_STRATEGY_KNOWLEDGE = {
     ifBrokeAtWeld: 'Re-weld the same jump ring for free. No issue welding the same spot multiple times. If the jump ring is mangled or won\'t close properly, use a fresh one.',
     ifBrokeAtChainLink: 'This means the chain broke, not the weld. Add a new jump ring. Do it free — it builds goodwill and takes 30 seconds.',
     ifLostPiece: 'Customer needs to purchase a new piece. Do NOT offer discounts on replacements — this can imply fault and doesn\'t generate goodwill. They lost it; you make them a new one.',
-    nonCustomerRepairs: 'If someone comes in with a piece from another artist, help them out. It builds goodwill and often converts them into a paying customer for future pieces.',
+    nonCustomerRepairs: 'If someone comes in with a piece from another artist, charge a reweld fee. You\'re running a business, not a charity. Common fee is $25-35 but the artist sets their own price. It often converts them into a paying customer for future pieces.',
+  },
+
+  // ---------------------------------------------------------------------------
+  // Objection Handling
+  // ---------------------------------------------------------------------------
+  objectionHandling: {
+    corePattern: 'Identify type → Address emotion first → One fact → One next step',
+    types: {
+      emotional: {
+        example: '"I\'m scared I can\'t do this."',
+        response: 'Totally normal. The process is simpler than it looks, and the training walks you step-by-step.',
+      },
+      technical: {
+        example: '"Can I weld this material?"',
+        response: 'Use verified info from the knowledge base only. Keep it concise.',
+      },
+      financial: {
+        example: '"What if I can\'t make the money back?"',
+        response: 'It depends on your pricing and how often you\'re doing events. Start with the kit that matches your pace.',
+      },
+      confidence: {
+        example: '"I\'m not technical."',
+        response: 'You don\'t need to be. The welder does the heavy lifting — you guide the moment.',
+      },
+      trend: {
+        example: '"Is PJ just a fad?"',
+        response: 'What lasts is the experience: meaning, memory, and in-person service. Experiences don\'t get commoditized.',
+      },
+    },
+    kitDecisionLogic: {
+      momentum: 'Simplest start',
+      dream: 'Best value for most launches',
+      legacy: 'Pro setup',
+      question: 'Are you expecting frequent events, or starting slower?',
+    },
+    discountCode: {
+      code: 'CARTY',
+      discount: '5% off',
+      when: 'Use ONLY when: close to purchasing, they ask about deals, or they show price sensitivity.',
+      rules: 'Never lead with discounts. Never repeat multiple times.',
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // Shipping, Returns & Policies
+  // ---------------------------------------------------------------------------
+  shippingAndPolicies: {
+    shipping: {
+      processing: '1-2 business days',
+      origin: 'Ships from Utah',
+      kits: 'Kits ship ground (compressed argon tanks)',
+      domesticTransit: 'West Coast: ~2 days. East Coast: ~5 days. (Always say "typically")',
+      international: 'Ships, but no argon tanks. Sunstone provides credit for other items. 7-14 business days. Duties/taxes are customer responsibility.',
+      tracking: 'Tracking sent automatically',
+    },
+    returns: {
+      window: '30 days after delivery',
+      restockingFee: '10% restocking fee on returns',
+      chainReturns: 'Chain must be unopened in original packaging',
+      trainingReturns: 'Training not refundable once accessed',
+      exchanges: 'Exchanges: no restocking fee',
+    },
+    warranty: {
+      coverage: '3-year manufacturer warranty on all PJ welders',
+      includes: 'Covers manufacturing defects and regular wear/tear',
+      excludes: 'Does NOT cover damage from dropping, abuse, or misuse',
+    },
+    circleProtection: {
+      price: '$15/month, month-to-month, cancel anytime',
+      canBeAdded: 'Can be added anytime',
+      ifCancelled: 'Standard warranty still applies (if within period)',
+    },
+    pjProMembership: {
+      price: '$100/month (PJ Pro only) or $85/month (PJ Pro + Circle)',
+      terms: 'Month-to-month, cancel anytime',
+      benefits: ['Free shipping', '10% off chain/jump rings/connectors', '8 inches premium chain monthly', 'Same-day shipping', 'Free annual maintenance kit', 'Pre-launch product access'],
+    },
+    financing: 'Shop Pay and Affirm available at checkout. For other options: escalate to Maddy.',
   },
 
   // ---------------------------------------------------------------------------
@@ -1077,6 +1258,48 @@ export const CLIENT_EXPERIENCE_KNOWLEDGE = {
       'Polishing cloth or lash brush',
     ],
     aftercareDelivery: 'Hand them the aftercare card FIRST. Keep verbal aftercare brief unless they ask questions. The card has everything they need.',
+  },
+
+  // ---------------------------------------------------------------------------
+  // Removal Guidance
+  // ---------------------------------------------------------------------------
+  removalGuidance: {
+    howToRemove: 'Cut the JUMP RING — not a chain link. Use small scissors, nail clippers, or wire cutters.',
+    whyJumpRing: 'Cutting the jump ring preserves the chain for re-welding later (ties to free repair policy).',
+    normalize: 'It\'s called permanent, but it\'s not forever if you don\'t want it to be. A quick snip of the jump ring and it\'s off — and you can always come back to have it re-welded.',
+  },
+
+  // ---------------------------------------------------------------------------
+  // Customer Journey (Identity Shift Coaching)
+  // ---------------------------------------------------------------------------
+  customerJourney: {
+    overview: 'Customers aren\'t buying a welder — they\'re buying a new identity. Speak to identity, not transactions.',
+    phases: {
+      phase1: { name: 'Curious Observer', description: 'Inspired, nervous. Needs clarity and encouragement.' },
+      phase2: { name: 'Beginner/Student', description: 'Overwhelmed, afraid of doing it wrong. Needs structure and safety.' },
+      phase3: { name: 'First-Weld Artist', description: 'Nervous pride, hypercritical. Needs validation and "you\'re ready."' },
+      phase4: { name: 'New Business Owner', description: 'Excited, vulnerable about charging. Needs pricing simplicity.' },
+      phase5: { name: 'Growing Artist', description: 'Proud, curious about expansion. Needs strategic guidance.' },
+      phase6: { name: 'Established Entrepreneur', description: 'Confident, busy. Needs efficiency and partnership.' },
+    },
+    transformationAnchors: [
+      'Empowerment: "I can do this."',
+      'Creativity: identity expression becomes a lifestyle',
+      'Financial flexibility: income on their terms (no promises)',
+      'Control of time: fits their life',
+      'Legacy: building something meaningful',
+    ],
+    setbackHandling: [
+      '1. Normalize ("Everyone hits this point")',
+      '2. Reassure ("You\'re closer than you think")',
+      '3. One simple next step',
+      '4. Long-term framing ("Let\'s solve this one piece at a time")',
+    ],
+    setbackRules: 'Never minimize feelings. Never promise "it will definitely get better." Never imply others don\'t struggle.',
+    milestones: {
+      celebrate: ['first weld', 'completing training', 'first sale', 'first event', 'first reorder'],
+      tone: 'Keep it calm: "That\'s a huge milestone — well done." Never over-celebrate or use exaggerated intensity.',
+    },
   },
 
   // ---------------------------------------------------------------------------
@@ -1531,7 +1754,8 @@ export const PJ_UNIVERSITY_AND_SUNNY_ROLE = {
   supportResources: {
     sunstoneSupport: {
       phone: '385-999-5240',
-      method: 'Call or text',
+      secondaryPhone: '801-658-0015',
+      method: 'Call or text — both numbers reach the same team',
       for: ['Equipment malfunction', 'Account issues', 'Return policy questions', 'Edge cases beyond Sunny\'s knowledge', 'Competitive comparisons'],
     },
     communityGroups: [
