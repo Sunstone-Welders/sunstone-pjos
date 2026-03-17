@@ -716,8 +716,8 @@ export default function LandingPageClient() {
           <Reveal>
             <div style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', maxHeight: 400 }}>
               <Image
-                src="/landing/hero-pj-artist-client.jpg"
-                alt="Permanent jewelry artist welding a bracelet on a happy client"
+                src="/landing/hero-artist-clients.jpg"
+                alt="Permanent jewelry artist sizing a bracelet on a client"
                 width={1200}
                 height={400}
                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', maxHeight: 400 }}
@@ -924,8 +924,8 @@ export default function LandingPageClient() {
           <Reveal>
             <div style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', maxHeight: 500 }}>
               <Image
-                src="/landing/pj-welding-closeup.jpg"
-                alt="Close-up of permanent jewelry welding process"
+                src="/landing/craft-closeup-bracelet.jpg"
+                alt="Close-up of a permanent jewelry bracelet being welded"
                 width={1200}
                 height={500}
                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', maxHeight: 500 }}
@@ -1130,8 +1130,8 @@ export default function LandingPageClient() {
           <Reveal>
             <div style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', maxHeight: 400 }}>
               <Image
-                src="/landing/pj-welding-experience.jpg"
-                alt="Permanent jewelry artist creating a welded bracelet for a customer"
+                src="/landing/weld-moment-necklace.jpg"
+                alt="Artist welding a permanent necklace with visible weld flash"
                 width={1200}
                 height={400}
                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', maxHeight: 400 }}
@@ -1307,8 +1307,8 @@ export default function LandingPageClient() {
             <Reveal delay={0.15}>
               <div className="final-cta-photo" style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
                 <Image
-                  src="/landing/pj-artist-customer-experience.jpg"
-                  alt="Happy customer showing off her new permanent jewelry"
+                  src="/landing/party-celebration.jpg"
+                  alt="Friends celebrating with permanent jewelry at a private party"
                   width={400}
                   height={300}
                   style={{ width: '100%', height: 'auto', display: 'block' }}
