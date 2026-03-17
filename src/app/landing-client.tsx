@@ -634,8 +634,8 @@ export default function LandingPageClient() {
             .hero-trust { justify-content: center; }
             @media (min-width: 1024px) {
               .hero-layout { flex-direction: row; text-align: left; gap: 48px; align-items: center; }
-              .hero-text { flex: 0 0 38%; min-width: 0; max-width: none; }
-              .hero-images { flex: 0 0 60%; min-width: 0; width: auto; margin-top: 0; }
+              .hero-text { flex: 0 0 42%; min-width: 0; max-width: none; }
+              .hero-images { flex: 0 0 56%; min-width: 0; width: auto; margin-top: 0; }
               .hero-ctas { justify-content: flex-start !important; }
               .hero-subline { margin-left: 0 !important; margin-right: 0 !important; }
               .hero-trust { justify-content: flex-start; }
@@ -1148,27 +1148,6 @@ export default function LandingPageClient() {
               <a href="/auth/signup" style={{ ...ctaStyle, background: B.redrock, color: '#fff' }}>
                 Try Sunny &mdash; Start Your Free Trial
               </a>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ─── PHOTO BREAK: Welding Experience ─── */}
-      <section style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px' }}>
-          <Reveal>
-            <style>{`
-              .weld-photo-break { height: 350px; }
-              @media (min-width: 768px) { .weld-photo-break { height: 500px; } }
-            `}</style>
-            <div className="weld-photo-break" style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
-              <Image
-                src="/landing/weld-moment-necklace.jpg"
-                alt="Artist welding a permanent necklace with visible weld flash"
-                width={1200}
-                height={500}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%', display: 'block' }}
-              />
             </div>
           </Reveal>
         </div>
