@@ -970,12 +970,12 @@ export default function LandingPageClient() {
             </Reveal>
             <Reveal delay={0.15}>
               <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <div style={{ maxWidth: 320, borderRadius: 24, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.12)' }}>
+                <div style={{ maxWidth: 360, borderRadius: 24, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.12)' }}>
                   <Image
                     src="/landing/storefront-mobile.webp"
                     alt="Mobile artist storefront showing services, upcoming events, and party booking form"
-                    width={320}
-                    height={640}
+                    width={645}
+                    height={1577}
                     style={{ width: '100%', height: 'auto', display: 'block' }}
                   />
                 </div>
