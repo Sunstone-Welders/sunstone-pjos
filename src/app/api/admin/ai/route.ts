@@ -448,8 +448,8 @@ Subscription Tiers:
 - Starter ($99/month): 3% platform fee (deducted from artist's Stripe payouts), 5 Sunny questions/month, 1 team member, basic POS and inventory, integrated Stripe payments
 - Pro ($169/month): 1.5% platform fee (deducted from payouts), unlimited Sunny, full reports, AI insights, 3 team members
 - Business ($279/month): 0% platform fee (artist keeps 100%), everything in Pro, unlimited team members, priority support
-- Trial: 60-day Pro trial for new accounts, defaults to Starter after expiry
-- CRM Add-On: $69/mo add-on to any plan — dedicated business phone number, two-way SMS, automated aftercare, broadcasts, workflows, party booking, client intelligence. Included free during 60-day Pro trial.
+- Trial: 30-day Pro trial for new accounts, defaults to Starter after expiry
+- CRM Add-On: $69/mo add-on to any plan — dedicated business phone number, two-way SMS, automated aftercare, broadcasts, workflows, party booking, client intelligence. Included free during 30-day Pro trial.
 - CRM: Currently enabled per-tenant by admin toggle (crm_enabled flag on tenants table). Gives access to workflows, templates, broadcast messaging, dedicated phone number, two-way SMS, and automated follow-ups.
 
 Payment Model:
@@ -586,7 +586,7 @@ The dashboard shows a "Getting Started" card with 5 checks:
 The card can be dismissed (stored in onboarding_data.getting_started_dismissed). It only shows for owners who have completed onboarding.
 
 TRIAL SYSTEM:
-- New accounts get a 60-day Pro trial
+- New accounts get a 30-day Pro trial
 - Trial expiry date stored on tenant
 - After expiry, account downgrades to Starter (free) tier
 - Trial tenants approaching expiry are flagged in admin "Needs Attention"

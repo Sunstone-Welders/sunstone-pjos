@@ -8,7 +8,7 @@ import LandingPageClient from './landing-client'
 
 export const metadata: Metadata = {
   title: 'Sunstone Studio — The Operating System for Permanent Jewelry Artists',
-  description: 'POS, inventory, AI mentor, CRM, digital waivers, reports — everything a permanent jewelry artist needs in one beautiful platform. Built by Sunstone Welders. Start your free 60-day trial.',
+  description: 'POS, inventory, AI mentor, CRM, digital waivers, reports — everything a permanent jewelry artist needs in one beautiful platform. Built by Sunstone Welders. Start your free 30-day trial.',
   keywords: [
     'permanent jewelry software',
     'permanent jewelry POS',

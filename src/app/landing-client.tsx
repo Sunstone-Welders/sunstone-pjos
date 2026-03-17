@@ -49,7 +49,7 @@ const PRICING = [
       'Private party booking requests',
       'Basic reports',
       'Sunny AI \u2014 5 questions/mo',
-      '60-day Pro trial with full CRM',
+      '30-day Pro trial with full CRM',
     ],
   },
   {
@@ -67,7 +67,7 @@ const PRICING = [
       'Custom brand themes',
       'Artist Storefront & party booking',
       'Priority support',
-      '60-day Pro trial with full CRM',
+      '30-day Pro trial with full CRM',
     ],
   },
   {
@@ -84,7 +84,7 @@ const PRICING = [
       'Artist Storefront & party booking',
       'White-glove onboarding',
       'Dedicated support',
-      '60-day Pro trial with full CRM',
+      '30-day Pro trial with full CRM',
     ],
   },
 ]
@@ -128,12 +128,12 @@ const FAQS = [
     a: "You absolutely can \u2014 most artists start there. But Square doesn't know what a jump ring is, can't track chain by the inch, won't auto-deduct inventory when you sell, can't manage an event queue, and definitely can't give you AI-powered business coaching at 2am. Studio replaces 5+ tools with one purpose-built platform \u2014 and with built-in Stripe payments, you don't even need a card reader.",
   },
   {
-    q: 'What happens after my 60-day trial?',
+    q: 'What happens after my 30-day trial?',
     a: 'You pick your plan (Starter $99, Pro $169, or Business $279). CRM features (workflows, broadcasts, dedicated number, aftercare) become a $69/mo add-on. Your client data and conversation history are preserved indefinitely \u2014 just reactivate CRM to pick up where you left off.',
   },
   {
     q: "What's included in the CRM?",
-    a: 'Your own dedicated business phone number, two-way SMS conversations, automated aftercare sequences, broadcast messaging, client workflows, birthday automations, message templates, advanced party booking (deposits, RSVP tracking, automated reminders, host rewards), and client intelligence. $69/mo add-on to any plan \u2014 all included free during your 60-day Pro trial. Basic party booking and your artist storefront are included free on every plan.',
+    a: 'Your own dedicated business phone number, two-way SMS conversations, automated aftercare sequences, broadcast messaging, client workflows, birthday automations, message templates, advanced party booking (deposits, RSVP tracking, automated reminders, host rewards), and client intelligence. $69/mo add-on to any plan \u2014 all included free during your 30-day Pro trial. Basic party booking and your artist storefront are included free on every plan.',
   },
 ]
 
@@ -695,7 +695,7 @@ export default function LandingPageClient() {
 
               <Reveal delay={0.35}>
                 <div className="hero-trust" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', marginTop: 20, fontFamily: FONT.body }}>
-                  {['60-Day Free Pro Trial', 'No Credit Card Required', 'Cancel Anytime'].map((text) => (
+                  {['30-Day Free Pro Trial', 'No Credit Card Required', 'Cancel Anytime'].map((text) => (
                     <span key={text} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: B.softBrown }}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                         <path d="M5 13l4 4L19 7" />
@@ -1162,7 +1162,7 @@ export default function LandingPageClient() {
                 Simple, Transparent Pricing
               </h2>
               <p style={{ fontSize: 16, fontWeight: 500, color: B.softBrown, marginTop: 12 }}>
-                Start with a 60-day free Pro trial. No credit card required.
+                Start with a 30-day free Pro trial. No credit card required.
               </p>
             </div>
           </Reveal>
@@ -1216,20 +1216,26 @@ export default function LandingPageClient() {
                       </li>
                     ))}
                   </ul>
-                  <a
-                    href="/auth/signup"
-                    style={{
-                      ...ctaStyle,
-                      width: '100%',
-                      marginTop: 24,
-                      background: tier.popular ? B.redrock : 'transparent',
-                      color: tier.popular ? '#fff' : B.redrock,
-                      border: tier.popular ? 'none' : `2px solid ${B.redrock}`,
-                      textAlign: 'center',
-                    }}
-                  >
-                    Start Free Trial
-                  </a>
+                  {tier.name === 'Starter' ? (
+                    <p style={{ textAlign: 'center', fontSize: 13, color: B.softBrown, marginTop: 24, fontStyle: 'italic' }}>
+                      Available after your free Pro trial
+                    </p>
+                  ) : (
+                    <a
+                      href="/auth/signup"
+                      style={{
+                        ...ctaStyle,
+                        width: '100%',
+                        marginTop: 24,
+                        background: tier.popular ? B.redrock : 'transparent',
+                        color: tier.popular ? '#fff' : B.redrock,
+                        border: tier.popular ? 'none' : `2px solid ${B.redrock}`,
+                        textAlign: 'center',
+                      }}
+                    >
+                      Start Free Trial
+                    </a>
+                  )}
                 </div>
               </Reveal>
             ))}
@@ -1237,7 +1243,7 @@ export default function LandingPageClient() {
 
           <Reveal delay={0.3}>
             <p style={{ textAlign: 'center', fontSize: 14, color: B.softBrown, marginTop: 32 }}>
-              Add CRM tools for $69/mo &mdash; included free during your 60-day trial.
+              Add CRM tools for $69/mo &mdash; included free during your 30-day trial.
             </p>
           </Reveal>
         </div>
@@ -1298,7 +1304,7 @@ export default function LandingPageClient() {
               </Reveal>
               <Reveal delay={0.1}>
                 <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.9)', maxWidth: 560, margin: '0 0 32px', lineHeight: 1.6 }}>
-                  Start your 60-day free trial today. No credit card. No commitment. Just a better way to run your PJ business.
+                  Start your 30-day free trial today. No credit card. No commitment. Just a better way to run your PJ business.
                 </p>
               </Reveal>
               <Reveal delay={0.2}>

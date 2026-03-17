@@ -2,7 +2,7 @@
 // Signup Route — src/app/api/signup/route.ts
 // ============================================================================
 // Creates tenant + tenant_member using service role (bypasses RLS).
-// Sets 60-day Pro trial on new tenants.
+// Sets 30-day Pro trial on new tenants.
 // Stores first_name in auth user metadata.
 // ============================================================================
 
@@ -49,18 +49,18 @@ export async function POST(request: NextRequest) {
         .replace(/^-|-$/g, '')
         .substring(0, 48) + `-${Date.now().toString(36)}`;
 
-    // Calculate trial end date (60 days from now)
+    // Calculate trial end date (30 days from now)
     const trialEndsAt = new Date();
-    trialEndsAt.setDate(trialEndsAt.getDate() + 60);
+    trialEndsAt.setDate(trialEndsAt.getDate() + 30);
 
-    // 1. Create tenant with 60-day Pro trial
+    // 1. Create tenant with 30-day Pro trial
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
       .insert({
         name: businessName,
         slug,
         owner_id: userId,
-        // Subscription: 60-day Pro trial
+        // Subscription: 30-day Pro trial
         subscription_tier: 'pro',
         subscription_status: 'trialing',
         trial_ends_at: trialEndsAt.toISOString(),

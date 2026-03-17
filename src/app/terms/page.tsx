@@ -125,7 +125,7 @@ export default function TermsOfServicePage() {
           <Section title="4. Subscription Terms">
             <ul>
               <li>
-                <strong>Free trial:</strong> New accounts receive a 60-day free trial with access to all Pro-level features,
+                <strong>Free trial:</strong> New accounts receive a 30-day free trial with access to all Pro-level features,
                 including CRM. No credit card is required to start a trial.
               </li>
               <li>

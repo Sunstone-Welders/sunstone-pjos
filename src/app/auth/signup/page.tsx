@@ -128,7 +128,7 @@ export default function SignupPage() {
             Start your permanent jewelry business
           </p>
           <p className="text-text-secondary text-sm mt-1">
-            60 days free. No credit card required.
+            30 days free. No credit card required.
           </p>
         </div>
 

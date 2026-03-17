@@ -252,7 +252,7 @@ export default function CRMPageClient({ authState, trialEndDate }: { authState: 
         <div className="crm-container" style={{ textAlign: 'center', maxWidth: 780, margin: '0 auto' }}>
           <Reveal>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 20px', borderRadius: 100, background: C.goldBg, border: `1px solid rgba(200,165,92,0.2)`, fontSize: 13, fontWeight: 700, color: C.goldDeep, marginBottom: 24 }}>
-              Included in your 60-day trial
+              Included in your 30-day trial
             </div>
           </Reveal>
           <Reveal delay={0.08}>
@@ -563,7 +563,7 @@ export default function CRMPageClient({ authState, trialEndDate }: { authState: 
               Add to any Sunstone Studio plan.
             </p>
             <p style={{ fontSize: 15, color: C.darkMuted, lineHeight: 1.7, marginBottom: 40 }}>
-              Included free in your 60-day trial. Most artists never turn it off.
+              Included free in your 30-day trial. Most artists never turn it off.
             </p>
           </Reveal>
           <Reveal delay={0.12}>
@@ -614,7 +614,7 @@ export default function CRMPageClient({ authState, trialEndDate }: { authState: 
               },
               {
                 q: 'Is there a contract?',
-                a: 'No contracts, no commitments. Cancel anytime. Your CRM trial is included free for 60 days, and after that it\'s a simple $69/month add-on that you can turn on or off whenever you want.',
+                a: 'No contracts, no commitments. Cancel anytime. Your CRM trial is included free for 30 days, and after that it\'s a simple $69/month add-on that you can turn on or off whenever you want.',
               },
             ].map((faq, i) => (
               <Reveal key={i} delay={i * 0.05}>
@@ -633,7 +633,7 @@ export default function CRMPageClient({ authState, trialEndDate }: { authState: 
               Ready to let <em style={{ fontStyle: 'italic', color: C.wine }}>Sunny</em> handle your texts?
             </h2>
             <p style={{ fontSize: 16, color: C.textSec, marginBottom: 32 }}>
-              Try the full CRM free for 60 days. No credit card required to start.
+              Try the full CRM free for 30 days. No credit card required to start.
             </p>
             <button onClick={handleCta} disabled={checkingOut} style={{
               display: 'inline-block', padding: '16px 36px', borderRadius: 12,
