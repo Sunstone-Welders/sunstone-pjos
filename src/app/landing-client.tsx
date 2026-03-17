@@ -14,8 +14,8 @@ const B = {
   petal: '#FBEEEE',
   blackBrown: '#31241B',
   softBrown: '#85625D',
-  deepWine: '#852454',
-  redrock: '#852454',
+  deepWine: '#7A234A',
+  redrock: '#7A234A',
   raspberry: '#B1275E',
   forest: '#1B4F3A',
   taupe: '#BF9F9A',
@@ -290,7 +290,7 @@ function SunnyChat() {
           justifyContent: 'center',
           cursor: 'pointer',
           border: 'none',
-          boxShadow: '0 8px 32px rgba(133,36,84,0.4)',
+          boxShadow: '0 8px 32px rgba(122,35,74,0.4)',
           transition: 'transform 0.25s',
           transform: open ? 'rotate(45deg) scale(0.9)' : 'scale(1)',
         }}
@@ -468,7 +468,7 @@ function SunnyChat() {
                 fontFamily: 'inherit',
               }}
             >
-              \u2192
+              {'\u2192'}
             </button>
           </div>
         </div>
@@ -591,7 +591,7 @@ export default function LandingPageClient() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: navSolid ? 'rgba(251,238,238,0.95)' : 'transparent',
+          background: navSolid ? 'rgba(250,247,240,0.95)' : 'transparent',
           backdropFilter: navSolid ? 'blur(12px)' : 'none',
           borderBottom: navSolid ? `1px solid ${B.taupe}30` : 'none',
           transition: 'all 0.3s',
@@ -618,79 +618,107 @@ export default function LandingPageClient() {
       `}</style>
 
       {/* ═══════ SECTION 1: HERO ═══════ */}
-      <section style={{ background: B.petal, paddingTop: 120, paddingBottom: 60 }}>
-        <div style={{ ...wrap, textAlign: 'center' }}>
-          <Reveal>
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '8px 18px',
-                borderRadius: 100,
-                background: B.sage,
-                marginBottom: 28,
-              }}
-            >
-              <span style={{ color: B.pjRose, fontSize: 12 }}>{'\u2726'}</span>
-              <span style={{ fontSize: 12, fontWeight: 500, color: B.blackBrown, fontFamily: FONT.body }}>
-                From the Pioneers of Permanent Jewelry
-              </span>
+      <section style={{ background: '#FFFFFF', paddingTop: 120, paddingBottom: 60 }}>
+        <div style={wrap}>
+          <style>{`
+            .hero-layout { display: flex; flex-direction: column; align-items: center; text-align: center; }
+            .hero-text { max-width: 560px; }
+            .hero-images { position: relative; width: 100%; max-width: 600px; margin-top: 40px; }
+            .hero-dashboard-wrap { border-radius: 12px; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.04); }
+            .hero-photo-wrap { margin-top: 20px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+            @media (min-width: 900px) {
+              .hero-layout { flex-direction: row; text-align: left; gap: 48px; align-items: center; }
+              .hero-text { flex: 1; min-width: 0; }
+              .hero-images { flex: 1; min-width: 0; margin-top: 0; max-width: none; }
+              .hero-photo-wrap { position: absolute; bottom: -30px; left: -40px; width: 200px; z-index: 2; }
+              .hero-ctas { justify-content: flex-start !important; }
+            }
+          `}</style>
+          <div className="hero-layout">
+            <div className="hero-text">
+              <Reveal>
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 18px',
+                    borderRadius: 100,
+                    background: B.sage,
+                    marginBottom: 28,
+                  }}
+                >
+                  <span style={{ color: B.pjRose, fontSize: 12 }}>{'\u2726'}</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: B.blackBrown, fontFamily: FONT.body }}>
+                    From the Pioneers of Permanent Jewelry
+                  </span>
+                </div>
+              </Reveal>
+
+              <Reveal delay={0.1}>
+                <h1 style={{ fontFamily: FONT.display, margin: 0, lineHeight: 1.15 }}>
+                  <span style={{ display: 'block', fontSize: 'clamp(1.875rem, 4.5vw, 3.375rem)', fontWeight: 700, color: B.blackBrown }}>
+                    Grow Your PJ Business
+                  </span>
+                  <span style={{ display: 'block', fontSize: 'clamp(1.875rem, 4.5vw, 3.375rem)', fontWeight: 700, color: B.blackBrown }}>
+                    with Confidence.
+                  </span>
+                </h1>
+              </Reveal>
+
+              <Reveal delay={0.2}>
+                <p style={{ fontSize: 17, fontWeight: 500, color: B.softBrown, maxWidth: 600, margin: '24px auto 0', lineHeight: 1.6, fontFamily: FONT.body }}>
+                  From your first weld to your busiest event &mdash; a platform that grows with you.
+                </p>
+              </Reveal>
+
+              <Reveal delay={0.3}>
+                <div className="hero-ctas" style={{ display: 'flex', gap: 14, justifyContent: 'center', marginTop: 32, flexWrap: 'wrap' }}>
+                  <a href="/auth/signup" style={{ ...ctaStyle, background: B.redrock, color: '#fff' }}>
+                    Start Your Free Trial
+                  </a>
+                  <button onClick={() => scrollTo('features')} style={{ ...ctaStyle, background: 'transparent', color: B.blackBrown, border: `2px solid ${B.blackBrown}` }}>
+                    See It In Action
+                  </button>
+                </div>
+              </Reveal>
+
+              <Reveal delay={0.35}>
+                <p style={{ fontSize: 13, color: B.softBrown, marginTop: 20, fontFamily: FONT.body }}>
+                  <span style={{ color: B.pjRose }}>{'\u25C6'}</span> 60-Day Free Pro Trial{' '}
+                  <span style={{ margin: '0 10px', color: B.taupe }}>|</span>
+                  <span style={{ color: B.pjRose }}>{'\u25C6'}</span> No Credit Card Required{' '}
+                  <span style={{ margin: '0 10px', color: B.taupe }}>|</span>
+                  <span style={{ color: B.pjRose }}>{'\u25C6'}</span> Cancel Anytime
+                </p>
+              </Reveal>
             </div>
-          </Reveal>
 
-          <Reveal delay={0.1}>
-            <h1 style={{ fontFamily: FONT.display, margin: 0, lineHeight: 1.15 }}>
-              <span style={{ display: 'block', fontSize: 'clamp(2.5rem, 6vw, 4.5rem)', fontWeight: 700, color: B.blackBrown }}>
-                Grow Your PJ Business
-              </span>
-              <span style={{ display: 'block', fontSize: 'clamp(2.5rem, 6vw, 4.5rem)', fontWeight: 700, color: B.blackBrown }}>
-                with Confidence.
-              </span>
-            </h1>
-          </Reveal>
-
-          <Reveal delay={0.2}>
-            <p style={{ fontSize: 17, fontWeight: 500, color: B.softBrown, maxWidth: 600, margin: '24px auto 0', lineHeight: 1.6, fontFamily: FONT.body }}>
-              From your first weld to your busiest event &mdash; a platform that grows with you.
-            </p>
-          </Reveal>
-
-          <Reveal delay={0.3}>
-            <div style={{ display: 'flex', gap: 14, justifyContent: 'center', marginTop: 32, flexWrap: 'wrap' }}>
-              <a href="/auth/signup" style={{ ...ctaStyle, background: B.redrock, color: '#fff' }}>
-                Start Your Free Trial
-              </a>
-              <button onClick={() => scrollTo('features')} style={{ ...ctaStyle, background: 'transparent', color: B.blackBrown, border: `2px solid ${B.blackBrown}` }}>
-                See It In Action
-              </button>
-            </div>
-          </Reveal>
-
-          <Reveal delay={0.35}>
-            <p style={{ fontSize: 13, color: B.softBrown, marginTop: 20, fontFamily: FONT.body }}>
-              <span style={{ color: B.pjRose }}>{'\u25C6'}</span> 60-Day Free Pro Trial{' '}
-              <span style={{ margin: '0 10px', color: B.taupe }}>|</span>
-              <span style={{ color: B.pjRose }}>{'\u25C6'}</span> No Credit Card Required{' '}
-              <span style={{ margin: '0 10px', color: B.taupe }}>|</span>
-              <span style={{ color: B.pjRose }}>{'\u25C6'}</span> Cancel Anytime
-            </p>
-          </Reveal>
-
-          <Reveal delay={0.4}>
-            <div style={{ marginTop: 48, maxWidth: 900, margin: '48px auto 0' }}>
-              <div style={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.04)' }}>
-                <Image
-                  src="/landing/hero-dashboard.webp"
-                  alt="Sunstone Studio dashboard showing AI-powered business insights and revenue overview"
-                  width={1200}
-                  height={750}
-                  priority
-                  style={{ width: '100%', height: 'auto', display: 'block' }}
-                />
+            <Reveal delay={0.4}>
+              <div className="hero-images" style={{ position: 'relative' }}>
+                <div className="hero-dashboard-wrap">
+                  <Image
+                    src="/landing/hero-dashboard.webp"
+                    alt="Sunstone Studio dashboard showing AI-powered business insights and revenue overview"
+                    width={1200}
+                    height={750}
+                    priority
+                    style={{ width: '100%', height: 'auto', display: 'block' }}
+                  />
+                </div>
+                <div className="hero-photo-wrap">
+                  <Image
+                    src="/landing/hero-pj-artist-client.jpg"
+                    alt="Permanent jewelry artist welding a bracelet on a happy client"
+                    width={600}
+                    height={400}
+                    priority
+                    style={{ width: '100%', height: 'auto', display: 'block' }}
+                  />
+                </div>
               </div>
-            </div>
-          </Reveal>
+            </Reveal>
+          </div>
         </div>
       </section>
 
@@ -717,7 +745,7 @@ export default function LandingPageClient() {
             {[
               {
                 icon: (
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={B.forest} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke={B.deepWine} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                   </svg>
                 ),
@@ -726,7 +754,7 @@ export default function LandingPageClient() {
               },
               {
                 icon: (
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={B.forest} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke={B.deepWine} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
                 ),
@@ -735,7 +763,7 @@ export default function LandingPageClient() {
               },
               {
                 icon: (
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={B.forest} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke={B.deepWine} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
                 ),
@@ -745,13 +773,25 @@ export default function LandingPageClient() {
             ].map((item, i) => (
               <Reveal key={i} delay={i * 0.12}>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ marginBottom: 16 }}>{item.icon}</div>
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+                    <div style={{ width: 72, height: 72, borderRadius: '50%', background: `rgba(122,35,74,0.08)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {item.icon}
+                    </div>
+                  </div>
                   <h3 style={{ fontFamily: FONT.display, fontWeight: 400, fontSize: 22, color: B.blackBrown, marginBottom: 12 }}>{item.title}</h3>
                   <p style={{ fontSize: 15, lineHeight: 1.7, color: B.softBrown }}>{item.body}</p>
                 </div>
               </Reveal>
             ))}
           </div>
+
+          <Reveal delay={0.4}>
+            <div style={{ textAlign: 'center', marginTop: 48 }}>
+              <a href="/auth/signup" style={{ ...ctaStyle, background: B.redrock, color: '#fff' }}>
+                Start Free
+              </a>
+            </div>
+          </Reveal>
         </div>
       </section>
 
@@ -873,6 +913,23 @@ export default function LandingPageClient() {
         </div>
       </section>
 
+      {/* ─── PHOTO BREAK: Welding Closeup ─── */}
+      <section style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px' }}>
+          <Reveal>
+            <div style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', maxHeight: 400 }}>
+              <Image
+                src="/landing/pj-welding-closeup.jpg"
+                alt="Close-up of permanent jewelry welding process"
+                width={1200}
+                height={400}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', maxHeight: 400 }}
+              />
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
       {/* ═══════ SECTION 5: ARTIST STOREFRONT ═══════ */}
       <section style={{ background: B.white, padding: '80px 0' }}>
         <div style={{ ...wrap, display: 'grid', gridTemplateColumns: '1fr', gap: 48, alignItems: 'center' }}>
@@ -882,7 +939,7 @@ export default function LandingPageClient() {
               <div>
                 <h2 style={{ fontFamily: FONT.display, fontSize: 'clamp(1.8rem, 4vw, 2.5rem)', margin: 0, lineHeight: 1.2 }}>
                   <span style={{ fontWeight: 400, color: B.deepWine }}>Your Own Artist Storefront</span>{' '}
-                  <span style={{ fontWeight: 400, fontStyle: 'italic', color: B.forest }}>&mdash; included on every plan.</span>
+                  <span style={{ fontWeight: 400, fontStyle: 'italic', color: '#1D1D1D' }}>&mdash; included on every plan.</span>
                 </h2>
                 <p style={{ fontSize: 16, lineHeight: 1.7, color: B.softBrown, marginTop: 20 }}>
                   A beautiful, branded page that shows off your services, pricing, upcoming events, and party booking &mdash; shareable on Instagram, in your email signature, anywhere.
@@ -929,7 +986,95 @@ export default function LandingPageClient() {
             </p>
           </Reveal>
 
+          {/* ─── Phone Mockup Demos ─── */}
+          <style>{`
+            .sunny-phones { display: flex; gap: 24px; justify-content: center; margin-bottom: 48px; overflow-x: auto; padding: 8px 0; -webkit-overflow-scrolling: touch; }
+            .sunny-phones::-webkit-scrollbar { display: none; }
+            .sunny-phone { flex: 0 0 310px; min-width: 310px; }
+            @media (min-width: 1024px) { .sunny-phone { flex: 1; min-width: 0; max-width: 320px; } }
+          `}</style>
           <Reveal delay={0.2}>
+            <div className="sunny-phones">
+              {[
+                {
+                  label: 'Your AI Writing Partner',
+                  user: 'A customer asked about pricing. Can you write a quick reply for me?',
+                  sunny: "Here's a reply you can send:\n\n\"Hi! Our bracelets start at $75 depending on the style you choose. Everything is custom-fit and permanently welded, with free repairs for life. Want to pick a time to come in?\"\n\nFeel free to adjust the price to match your menu!",
+                },
+                {
+                  label: 'Always Professional',
+                  user: "How do I respond if someone wants to book but I'm fully booked this week?",
+                  sunny: "Here's a reply:\n\n\"I'm fully booked this week, but I'd love to get you scheduled. I have Tuesday at 3pm or Thursday at 6pm \u2014 which works best for you?\"",
+                },
+                {
+                  label: 'Takes Action For You',
+                  user: 'Send a message to all my VIP clients offering 20% off this weekend if they bring a friend.',
+                  sunny: "Done! I sent a personalized message to 24 VIP clients with your 20% referral offer for this weekend. \uD83D\uDCAC",
+                },
+              ].map((demo, i) => (
+                <div key={i} className="sunny-phone">
+                  <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: B.deepWine, fontFamily: FONT.body }}>{demo.label}</span>
+                  </div>
+                  <div style={{
+                    background: '#F9F7F4',
+                    borderRadius: 24,
+                    border: '1px solid #E5E0D8',
+                    boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
+                    overflow: 'hidden',
+                    padding: '20px 16px 20px',
+                  }}>
+                    {/* Phone notch */}
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+                      <div style={{ width: 60, height: 6, borderRadius: 3, background: B.deepWine, opacity: 0.3 }} />
+                    </div>
+                    {/* User message — right aligned */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                      <div style={{
+                        maxWidth: '85%',
+                        padding: '10px 14px',
+                        borderRadius: '14px 14px 4px 14px',
+                        background: '#fff',
+                        fontSize: 14,
+                        lineHeight: 1.55,
+                        color: B.blackBrown,
+                        fontFamily: FONT.body,
+                      }}>
+                        {demo.user}
+                      </div>
+                    </div>
+                    {/* Sunny message — left aligned */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-start', gap: 8, alignItems: 'flex-start' }}>
+                      <div style={{ width: 24, height: 24, borderRadius: '50%', background: B.deepWine, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#fff', flexShrink: 0, marginTop: 4 }}>
+                        {'\u2726'}
+                      </div>
+                      <div style={{
+                        maxWidth: '85%',
+                        padding: '10px 14px',
+                        borderRadius: '14px 14px 14px 4px',
+                        background: '#F0EDE8',
+                        fontSize: 14,
+                        lineHeight: 1.55,
+                        color: B.blackBrown,
+                        fontFamily: FONT.body,
+                        whiteSpace: 'pre-line',
+                      }}>
+                        {demo.sunny}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+
+          {/* ─── Pre-populated question buttons ─── */}
+          <Reveal delay={0.3}>
+            <div style={{ textAlign: 'center', marginBottom: 16 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: B.deepWine, fontFamily: FONT.body }}>
+                Try asking Sunny anything {'\u2192'}
+              </span>
+            </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, justifyContent: 'center', marginBottom: 40 }}>
               {[
                 'What joules should I use for 14k gold on the Zapp Plus 2?',
@@ -940,40 +1085,27 @@ export default function LandingPageClient() {
                   key={i}
                   onClick={() => window.dispatchEvent(new CustomEvent('sunny-ask', { detail: q }))}
                   style={{
-                    padding: '14px 22px',
+                    padding: '16px 24px',
                     borderRadius: 14,
                     background: B.white,
-                    border: `1px solid ${B.taupe}40`,
+                    border: `2px solid ${B.deepWine}20`,
                     cursor: 'pointer',
-                    fontSize: 14,
+                    fontSize: 15,
                     fontWeight: 500,
                     color: B.deepWine,
                     fontFamily: FONT.body,
                     textAlign: 'left',
-                    maxWidth: 340,
+                    maxWidth: 380,
                     lineHeight: 1.5,
                     boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                    transition: 'box-shadow 0.2s, transform 0.2s',
+                    transition: 'box-shadow 0.2s, transform 0.2s, border-color 0.2s',
+                    minHeight: 56,
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)'; e.currentTarget.style.transform = 'none' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = B.deepWine }}
+                  onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = `${B.deepWine}20` }}
                 >
                   &ldquo;{q}&rdquo;
                 </button>
-              ))}
-            </div>
-          </Reveal>
-
-          <Reveal delay={0.3}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, maxWidth: 800, margin: '0 auto 40px' }}>
-              {[
-                { src: '/landing/sunny-chains.webp', alt: 'Sunny AI showing detailed chain material knowledge' },
-                { src: '/landing/sunny-restock.webp', alt: 'Sunny AI suggesting inventory restock based on sales data' },
-                { src: '/landing/sunny-texting.webp', alt: 'Sunny AI drafting personalized client text messages' },
-              ].map((img, i) => (
-                <div key={i} style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }}>
-                  <Image src={img.src} alt={img.alt} width={400} height={280} style={{ width: '100%', height: 'auto', display: 'block' }} />
-                </div>
               ))}
             </div>
           </Reveal>
@@ -983,6 +1115,23 @@ export default function LandingPageClient() {
               <a href="/auth/signup" style={{ ...ctaStyle, background: B.redrock, color: '#fff' }}>
                 Try Sunny &mdash; Start Your Free Trial
               </a>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ─── PHOTO BREAK: Welding Experience ─── */}
+      <section style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px' }}>
+          <Reveal>
+            <div style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', maxHeight: 400 }}>
+              <Image
+                src="/landing/pj-welding-experience.jpg"
+                alt="Permanent jewelry artist creating a welded bracelet for a customer"
+                width={1200}
+                height={400}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', maxHeight: 400 }}
+              />
             </div>
           </Reveal>
         </div>
@@ -1011,7 +1160,7 @@ export default function LandingPageClient() {
                     borderRadius: 16,
                     padding: '32px 28px',
                     border: tier.popular ? `2px solid ${B.deepWine}` : `1px solid ${B.taupe}40`,
-                    boxShadow: tier.popular ? `0 8px 32px rgba(133,36,84,0.12)` : '0 2px 12px rgba(0,0,0,0.04)',
+                    boxShadow: tier.popular ? `0 8px 32px rgba(122,35,74,0.12)` : '0 2px 12px rgba(0,0,0,0.04)',
                     position: 'relative',
                     display: 'flex',
                     flexDirection: 'column',
@@ -1092,33 +1241,77 @@ export default function LandingPageClient() {
         </div>
       </section>
 
-      {/* ═══════ SECTION 8: FINAL CTA ═══════ */}
-      <section style={{ background: B.deepWine, padding: '80px 0' }}>
+      {/* ═══════ STILL HAVE QUESTIONS? ═══════ */}
+      <section style={{ background: '#FFFFFF', padding: '64px 0' }}>
         <div style={{ ...wrap, textAlign: 'center' }}>
           <Reveal>
-            <h2 style={{ fontFamily: FONT.display, fontWeight: 700, fontSize: 'clamp(2rem, 5vw, 3.2rem)', color: '#fff', marginBottom: 20 }}>
-              Ready to Build Your World?
+            <h2 style={{ fontFamily: FONT.display, fontWeight: 700, fontSize: 'clamp(1.6rem, 3.5vw, 2.4rem)', color: B.blackBrown, marginBottom: 12 }}>
+              Still have questions?
             </h2>
-          </Reveal>
-          <Reveal delay={0.1}>
-            <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.9)', maxWidth: 560, margin: '0 auto 32px', lineHeight: 1.6 }}>
-              Start your 60-day free trial today. No credit card. No commitment. Just a better way to run your PJ business.
+            <p style={{ fontSize: 16, lineHeight: 1.6, color: B.softBrown, maxWidth: 520, margin: '0 auto 32px', fontFamily: FONT.body }}>
+              Start your free trial and explore the platform yourself &mdash; or let Sunny walk you through it.
             </p>
+            <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <a href="/auth/signup" style={{ ...ctaStyle, background: B.redrock, color: '#fff' }}>
+                Start Your Free Trial
+              </a>
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent('sunny-ask', { detail: 'Tell me about Sunstone Studio' }))}
+                style={{ ...ctaStyle, background: 'transparent', color: B.deepWine, border: `2px solid ${B.deepWine}` }}
+              >
+                Chat with Sunny
+              </button>
+            </div>
           </Reveal>
-          <Reveal delay={0.2}>
-            <a
-              href="/auth/signup"
-              style={{
-                ...ctaStyle,
-                background: '#fff',
-                color: B.deepWine,
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = B.petal }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#fff' }}
-            >
-              Start Your Free Trial
-            </a>
-          </Reveal>
+        </div>
+      </section>
+
+      {/* ═══════ SECTION 8: FINAL CTA ═══════ */}
+      <section style={{ background: B.deepWine, padding: '80px 0' }}>
+        <div style={wrap}>
+          <style>{`
+            .final-cta-layout { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 40px; }
+            @media (min-width: 768px) { .final-cta-layout { flex-direction: row; text-align: left; } .final-cta-text { flex: 1; } .final-cta-photo { flex: 0 0 320px; } }
+          `}</style>
+          <div className="final-cta-layout">
+            <div className="final-cta-text">
+              <Reveal>
+                <h2 style={{ fontFamily: FONT.display, fontWeight: 700, fontSize: 'clamp(2rem, 5vw, 3.2rem)', color: '#fff', marginBottom: 20 }}>
+                  Ready to Build Your World?
+                </h2>
+              </Reveal>
+              <Reveal delay={0.1}>
+                <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.9)', maxWidth: 560, margin: '0 0 32px', lineHeight: 1.6 }}>
+                  Start your 60-day free trial today. No credit card. No commitment. Just a better way to run your PJ business.
+                </p>
+              </Reveal>
+              <Reveal delay={0.2}>
+                <a
+                  href="/auth/signup"
+                  style={{
+                    ...ctaStyle,
+                    background: '#fff',
+                    color: B.deepWine,
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = B.petal }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = '#fff' }}
+                >
+                  Start Your Free Trial
+                </a>
+              </Reveal>
+            </div>
+            <Reveal delay={0.15}>
+              <div className="final-cta-photo" style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                <Image
+                  src="/landing/pj-artist-customer-experience.jpg"
+                  alt="Happy customer showing off her new permanent jewelry"
+                  width={400}
+                  height={300}
+                  style={{ width: '100%', height: 'auto', display: 'block' }}
+                />
+              </div>
+            </Reveal>
+          </div>
         </div>
       </section>
 

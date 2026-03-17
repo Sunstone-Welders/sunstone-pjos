@@ -230,7 +230,7 @@ async function trySendInviteEmail(params: {
           <p style="color: #555; line-height: 1.6;">
             Sign up with this email address (<strong>${params.to}</strong>) and you'll automatically be connected to the team.
           </p>
-          <a href="${signupUrl}" style="display: inline-block; background: #852454; color: white; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; margin-top: 16px;">
+          <a href="${signupUrl}" style="display: inline-block; background: #7A234A; color: white; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; margin-top: 16px;">
             Sign Up Now
           </a>
           <p style="color: #999; font-size: 13px; margin-top: 32px;">
