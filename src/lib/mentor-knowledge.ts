@@ -77,7 +77,7 @@ export const EQUIPMENT_KNOWLEDGE = {
       bsConnectors: false,
       displayCase: false,
       chainTotal: '21ft (7 chains × 3ft each)',
-      chains: ['Chloe', 'Olivia', 'Marlee', 'Lavina', 'Ella', 'Paisley', 'Maria'],
+      chains: ['Chloe', 'Olivia', 'Marlee', 'Lavinia', 'Ella', 'Paisley', 'Maria'],
     },
     dream: {
       name: 'Dream',
@@ -93,7 +93,7 @@ export const EQUIPMENT_KNOWLEDGE = {
       bsConnectors: true,
       displayCase: true,
       chainTotal: '27ft (9 chains × 3ft each)',
-      chains: ['Chloe', 'Olivia', 'Marlee', 'Lavina', 'Ella', 'Paisley', 'Maria', 'Alessia', 'Benedetta'],
+      chains: ['Chloe', 'Olivia', 'Marlee', 'Lavinia', 'Ella', 'Paisley', 'Maria', 'Alessia', 'Benedetta'],
     },
     legacy: {
       name: 'Legacy',
@@ -110,7 +110,7 @@ export const EQUIPMENT_KNOWLEDGE = {
       displayCase: true,
       chainTotal: '45ft (15 chains × 3ft each)',
       chains: [
-        'Chloe', 'Olivia', 'Marlee', 'Lavina', 'Ella', 'Paisley', 'Maria',
+        'Chloe', 'Olivia', 'Marlee', 'Lavinia', 'Ella', 'Paisley', 'Maria',
         'Alessia', 'Benedetta', 'Charlie', 'Lucy', 'Grace', 'Bryce', 'Hannah', 'Ruby',
       ],
     },
@@ -1578,7 +1578,7 @@ export const PJOS_PLATFORM_GUIDE = {
     starterKits: {
       momentum: {
         price: '$2,399',
-        chains: ['Chloe (14/20 Yellow Gold-Filled)', 'Olivia (14/20 Yellow Gold-Filled)', 'Marlee (14/20 White Gold-Filled)', 'Lavina (Sterling Silver)', 'Ella (Sterling Silver)', 'Paisley (Sterling Silver)', 'Maria (14/20 Yellow Gold-Filled)'],
+        chains: ['Chloe (14/20 Yellow Gold-Filled)', 'Olivia (14/20 Yellow Gold-Filled)', 'Marlee (14/20 White Gold-Filled)', 'Lavinia (Sterling Silver)', 'Ella (Sterling Silver)', 'Paisley (Sterling Silver)', 'Maria (14/20 Yellow Gold-Filled)'],
         jumpRings: '25 Sterling Silver + 25 Gold-Filled',
         connectors: 'Not included',
         gas: '2x Argon Mini + 1x Argon Regulator',

@@ -30,7 +30,7 @@ const MOMENTUM_CHAINS: ChainDef[] = [
   { name: 'Chloe', material: '14/20 Yellow Gold-Filled' },
   { name: 'Olivia', material: '14/20 Yellow Gold-Filled' },
   { name: 'Marlee', material: '14/20 White Gold-Filled' },
-  { name: 'Lavina', material: 'Sterling Silver' },
+  { name: 'Lavinia', material: 'Sterling Silver' },
   { name: 'Ella', material: 'Sterling Silver' },
   { name: 'Paisley', material: 'Sterling Silver' },
   { name: 'Maria', material: '14/20 Yellow Gold-Filled' },

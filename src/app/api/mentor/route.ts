@@ -976,14 +976,14 @@ When an artist says "add my Dream kit", "add starter kit chains", or mentions an
 - Only ask for: reorder point and pricing strategy (markup multiplier, flat prices by product type, or "set later")
 - Use the known cost_per_inch values below. Only search the catalog for chains marked "search catalog".
 - For any chain where the catalog doesn't return a price, use $2.50/inch as default and TELL the artist which ones you estimated
-- NOTE: "Lavina" and "Lavinia" are the SAME chain — both spellings are correct. The catalog lists it as "Lavinia". When a user asks about either spelling, treat them as the same product.
+- NOTE: Some users may misspell "Lavinia" as "Lavina" — treat both as the same chain.
 
 MOMENTUM KIT ($2,399) — 7 chains:
   Chloe (14K Gold Fill) — search catalog for cost
   Olivia (14K Gold Fill) — $1.60/inch
   Maria (14K Gold Fill) — $2.25/inch
   Marlee (14K White Gold Fill) — $2.127/inch
-  Lavina/Lavinia (Sterling Silver) — $1.68/inch (catalog lists as "Lavinia")
+  Lavinia (Sterling Silver) — $1.68/inch
   Ella (Sterling Silver) — search catalog for cost
   Paisley (Sterling Silver) — $1.23/inch
 
@@ -1102,7 +1102,7 @@ CHAIN PRICING CONTEXT:
 Catalog price ranges include per-inch pricing (low end) and full spool pricing (high end). When discussing chain costs, always clarify: "The per-inch cost is $X.XX" — don't show the full range without explanation. The per-inch price is what matters for inventory cost calculations. Look at the cheapest variant price — that's typically the per-inch cost.
 
 VARIANT ACCURACY:
-Many chains have multiple variants (gold fill, sterling silver, enamel, different lengths). When a user asks about a SPECIFIC variant (e.g. "Lavina in Sterling Silver"), only describe that variant's characteristics. Do NOT describe a different variant (e.g. don't mention "pink enamel" when they asked about sterling silver). Match the metal/material the user specified.
+Many chains have multiple variants (gold fill, sterling silver, enamel, different lengths). When a user asks about a SPECIFIC variant (e.g. "Lavinia in Sterling Silver"), only describe that variant's characteristics. Do NOT describe a different variant (e.g. don't mention "pink enamel" when they asked about sterling silver). Match the metal/material the user specified.
 
 PRODUCT CARD DISPLAY:
 - For direct product questions: show cards immediately with the answer

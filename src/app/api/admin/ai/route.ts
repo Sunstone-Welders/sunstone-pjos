@@ -565,7 +565,7 @@ Onboarding is an 8-step wizard:
 7. Grand Reveal — summary and "Start Exploring" button
 
 Kit auto-populate: When an artist selects a kit, the system auto-creates inventory items matching their physical kit contents:
-- Momentum: 7 chains (Chloe, Olivia, Marlee, Lavina, Ella, Paisley, Maria), 25+25 jump rings
+- Momentum: 7 chains (Chloe, Olivia, Marlee, Lavinia, Ella, Paisley, Maria), 25+25 jump rings
 - Dream: 9 chains (all Momentum + Alessia, Benedetta), 50+50 jump rings, birthstone connectors
 - Legacy: 15 chains (all Dream + Charlie, Lucy, Grace, Bryce, Hannah, Ruby), 100+100 jump rings, birthstone connectors
 
