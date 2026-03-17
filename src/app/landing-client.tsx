@@ -739,7 +739,7 @@ export default function LandingPageClient() {
                 alt="Permanent jewelry artist managing her business with Sunstone Studio"
                 width={1400}
                 height={550}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%', display: 'block' }}
               />
             </div>
           </Reveal>
@@ -957,7 +957,7 @@ export default function LandingPageClient() {
                 width={1400}
                 height={500}
                 loading="lazy"
-                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 25%', display: 'block' }}
               />
             </div>
           </Reveal>
