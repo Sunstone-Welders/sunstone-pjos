@@ -628,19 +628,23 @@ export default function LandingPageClient() {
         <div style={wrap}>
           <style>{`
             .hero-layout { display: flex; flex-direction: column; align-items: center; text-align: center; }
-            .hero-text { max-width: 600px; }
-            .hero-images { width: 100%; margin-top: 48px; overflow: hidden; }
+            .hero-text { max-width: 560px; }
+            .hero-images { width: 95%; margin-top: 40px; }
             .hero-dashboard-wrap { border-radius: 12px; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.04); }
-            @media (min-width: 900px) {
-              .hero-text { max-width: 700px; }
-              .hero-images { max-width: 900px; margin: 48px auto 0; }
-              .hero-ctas { justify-content: center !important; }
+            .hero-pill { justify-content: center; }
+            @media (min-width: 1024px) {
+              .hero-layout { flex-direction: row; text-align: left; gap: 48px; align-items: center; }
+              .hero-text { flex: 0 0 38%; min-width: 0; max-width: none; }
+              .hero-images { flex: 0 0 60%; min-width: 0; width: auto; margin-top: 0; }
+              .hero-ctas { justify-content: flex-start !important; }
+              .hero-pill { justify-content: flex-start; }
+              .hero-subline { margin-left: 0 !important; margin-right: 0 !important; }
             }
           `}</style>
           <div className="hero-layout">
             <div className="hero-text">
               <Reveal>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28 }}>
+                <div className="hero-pill" style={{ display: 'flex', marginBottom: 28 }}>
                   <div
                     style={{
                       display: 'inline-flex',
@@ -671,8 +675,8 @@ export default function LandingPageClient() {
               </Reveal>
 
               <Reveal delay={0.2}>
-                <p style={{ fontSize: 17, fontWeight: 500, color: B.softBrown, maxWidth: 600, margin: '24px auto 0', lineHeight: 1.6, fontFamily: FONT.body }}>
-                  From your first weld to your busiest event &mdash; a platform that grows with you.
+                <p className="hero-subline" style={{ fontSize: 16, fontWeight: 500, color: B.softBrown, maxWidth: 520, margin: '24px auto 0', lineHeight: 1.6, fontFamily: FONT.body }}>
+                  The all-in-one app for POS, inventory, clients, and AI-powered business intelligence &mdash; built by Sunstone for permanent jewelry artists.
                 </p>
               </Reveal>
 
