@@ -735,10 +735,10 @@ export default function LandingPageClient() {
             `}</style>
             <div className="hero-photo-break" style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
               <Image
-                src="/landing/hero-lifestyle-wide.webp"
+                src="/landing/hero-lifestyle-landscape.webp"
                 alt="Permanent jewelry artist managing her business with Sunstone Studio"
-                width={2800}
-                height={1200}
+                width={4200}
+                height={2800}
                 style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center center', display: 'block' }}
               />
             </div>
@@ -939,28 +939,6 @@ export default function LandingPageClient() {
               </Reveal>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* ─── PHOTO BREAK: Lifestyle (IMG-154) ─── */}
-      <section style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px' }}>
-          <Reveal>
-            <style>{`
-              .lifestyle-photo-break { height: 350px; }
-              @media (min-width: 768px) { .lifestyle-photo-break { height: 500px; } }
-            `}</style>
-            <div className="lifestyle-photo-break" style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
-              <Image
-                src="/landing/lifestyle-business-wide.webp"
-                alt="Permanent jewelry artist checking her business on the go"
-                width={2800}
-                height={1200}
-                loading="lazy"
-                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center center', display: 'block' }}
-              />
-            </div>
-          </Reveal>
         </div>
       </section>
 
