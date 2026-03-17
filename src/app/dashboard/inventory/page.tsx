@@ -35,6 +35,7 @@ const ITEM_TYPES: { value: InventoryType; label: string }[] = [
   { value: 'jump_ring', label: 'Jump Ring' },
   { value: 'charm', label: 'Charm' },
   { value: 'connector', label: 'Connector' },
+  { value: 'clasp', label: 'Clasp' },
   { value: 'other', label: 'Other' },
 ];
 

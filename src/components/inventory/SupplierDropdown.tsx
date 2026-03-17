@@ -135,7 +135,9 @@ export default function SupplierDropdown({ tenantId, value, onChange, initialNam
         disabled={loading}
       >
         <option value="">Select supplier...</option>
-        {suppliers.map((s) => (
+        {suppliers
+          .filter((s, i, arr) => arr.findIndex((x) => x.name.toLowerCase() === s.name.toLowerCase()) === i)
+          .map((s) => (
           <option key={s.id} value={s.id}>
             {s.is_sunstone ? '✦ ' : ''}{s.name}
           </option>

@@ -12,11 +12,12 @@ export interface AddOnsSectionProps {
 const TYPE_LABELS: Record<string, string> = {
   connector: 'Connectors',
   charm: 'Charms',
+  clasp: 'Clasps',
   jump_ring: 'Jump Rings',
   other: 'Other',
 };
 
-const TYPE_ORDER: InventoryType[] = ['connector', 'charm', 'jump_ring', 'other'];
+const TYPE_ORDER: InventoryType[] = ['connector', 'charm', 'clasp', 'jump_ring', 'other'];
 
 const cardBase = 'bg-[var(--surface-raised)] border border-[var(--border-strong)] text-left cursor-pointer transition-all duration-200 hover:shadow-[0_8px_20px_-4px_rgba(0,0,0,0.15)] hover:-translate-y-px active:scale-[0.97]';
 const cardSecondary = `${cardBase} rounded-xl p-5 min-h-[100px] shadow-[var(--shadow-card)]`;
