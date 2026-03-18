@@ -16,7 +16,7 @@ export function generateMidSeed(tenantId: string): { data: SeedData; tenantOverr
 
   // ── Tax Profiles ────────────────────────────────────────────────────────
   const taxProfile = {
-    id: uuid(), tenant_id: tenantId, name: 'Default Tax', rate: 7.75,
+    id: uuid(), tenant_id: tenantId, name: 'Default Tax', rate: 0.0775,
     is_default: true, created_at: daysAgo(240), updated_at: daysAgo(240),
   };
 
@@ -202,7 +202,7 @@ export function generateMidSeed(tenantId: string): { data: SeedData; tenantOverr
       const warrantyAmt = hasWarranty ? 15 : 0;
       subtotal += warrantyAmt;
 
-      const taxAmt = Math.round(subtotal * (taxProfile.rate / 100) * 100) / 100;
+      const taxAmt = Math.round(subtotal * taxProfile.rate * 100) / 100;
       const tipAmt = Math.random() > 0.4 ? Math.round(subtotal * randomAmount(0.10, 0.25) * 100) / 100 : 0;
       const feeRate = 0.015;
       const feeAmt = Math.round(subtotal * feeRate * 100) / 100;
@@ -337,7 +337,7 @@ export function generateMidSeed(tenantId: string): { data: SeedData; tenantOverr
       subscription_tier: 'pro',
       subscription_status: 'active',
       trial_ends_at: null,
-      default_tax_rate: 7.75,
+      default_tax_rate: 0.0775,
       warranty_enabled: true,
       warranty_per_item_default: 0,
       warranty_per_invoice_default: 15,

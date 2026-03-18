@@ -122,6 +122,43 @@ export async function POST(request: NextRequest) {
     await insertBatch('tax_profiles', data.taxProfiles);
     // Upsert product_types — belt-and-suspenders against tenant_id+name unique constraint
     await upsertBatch('product_types', data.productTypes, 'tenant_id,name');
+
+    // ── Remap product_type_id references ─────────────────────────────────────
+    // Because ignoreDuplicates preserves existing DB rows (with their original
+    // UUIDs), seed-generated UUIDs for default product_types are discarded.
+    // We must query actual DB rows and remap all FK references.
+    const { data: actualPTs, error: ptFetchErr } = await supabase
+      .from('product_types')
+      .select('id, name')
+      .eq('tenant_id', tenantId);
+    if (ptFetchErr) {
+      throw new Error(`Failed to fetch product_types: ${ptFetchErr.message}`);
+    }
+    const ptNameToId: Record<string, string> = {};
+    for (const pt of actualPTs || []) {
+      ptNameToId[pt.name] = pt.id;
+    }
+    // Build seed-id → actual-id mapping using product type names
+    const seedIdToActualId: Record<string, string> = {};
+    for (const seedPt of data.productTypes) {
+      const actualId = ptNameToId[seedPt.name];
+      if (actualId && actualId !== seedPt.id) {
+        seedIdToActualId[seedPt.id] = actualId;
+      }
+    }
+    // Remap sale_items.product_type_id
+    for (const item of data.saleItems) {
+      if (item.product_type_id && seedIdToActualId[item.product_type_id]) {
+        item.product_type_id = seedIdToActualId[item.product_type_id];
+      }
+    }
+    // Remap chain_product_prices.product_type_id
+    for (const cpp of data.chainProductPrices) {
+      if (cpp.product_type_id && seedIdToActualId[cpp.product_type_id]) {
+        cpp.product_type_id = seedIdToActualId[cpp.product_type_id];
+      }
+    }
+
     await insertBatch('pricing_tiers', data.pricingTiers);
     await insertBatch('inventory_items', data.inventoryItems);
     await insertBatch('chain_product_prices', data.chainProductPrices);

@@ -15,7 +15,7 @@ export function generateNewbieSeed(tenantId: string): { data: SeedData; tenantOv
 
   // ── Tax Profiles ────────────────────────────────────────────────────────
   const taxProfile = {
-    id: uuid(), tenant_id: tenantId, name: 'Default Tax', rate: 8.25,
+    id: uuid(), tenant_id: tenantId, name: 'Default Tax', rate: 0.0825,
     is_default: true, created_at: daysAgo(90), updated_at: daysAgo(90),
   };
 
@@ -142,7 +142,7 @@ export function generateNewbieSeed(tenantId: string): { data: SeedData; tenantOv
         });
       }
 
-      const taxAmt = Math.round(subtotal * (taxProfile.rate / 100) * 100) / 100;
+      const taxAmt = Math.round(subtotal * taxProfile.rate * 100) / 100;
       const tipAmt = Math.random() > 0.5 ? Math.round(subtotal * randomAmount(0.10, 0.25) * 100) / 100 : 0;
       const feeRate = 0.015; // Pro trial = 1.5%
       const feeAmt = Math.round(subtotal * feeRate * 100) / 100;
@@ -202,7 +202,7 @@ export function generateNewbieSeed(tenantId: string): { data: SeedData; tenantOv
       subscription_tier: 'pro',
       subscription_status: 'trialing',
       trial_ends_at: daysFromNow(20),
-      default_tax_rate: 8.25,
+      default_tax_rate: 0.0825,
       warranty_enabled: false,
       warranty_per_item_default: 0,
       warranty_per_invoice_default: 0,

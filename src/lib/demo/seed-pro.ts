@@ -16,11 +16,11 @@ export function generateProSeed(tenantId: string): { data: SeedData; tenantOverr
 
   // ── Tax Profiles ────────────────────────────────────────────────────────
   const taxDefault = {
-    id: uuid(), tenant_id: tenantId, name: 'Default Tax', rate: 8.00,
+    id: uuid(), tenant_id: tenantId, name: 'Default Tax', rate: 0.08,
     is_default: true, created_at: daysAgo(730), updated_at: daysAgo(730),
   };
   const taxEvent = {
-    id: uuid(), tenant_id: tenantId, name: 'Event Tax (Out of State)', rate: 6.50,
+    id: uuid(), tenant_id: tenantId, name: 'Event Tax (Out of State)', rate: 0.065,
     is_default: false, created_at: daysAgo(400), updated_at: daysAgo(400),
   };
 
@@ -286,7 +286,7 @@ export function generateProSeed(tenantId: string): { data: SeedData; tenantOverr
       subtotal += warrantyAmt;
 
       const taxRate = event.tax_profile_id === taxEvent.id ? taxEvent.rate : taxDefault.rate;
-      const taxAmt = Math.round(subtotal * (taxRate / 100) * 100) / 100;
+      const taxAmt = Math.round(subtotal * taxRate * 100) / 100;
       const tipAmt = Math.random() > 0.35 ? Math.round(subtotal * randomAmount(0.10, 0.25) * 100) / 100 : 0;
       const feeRate = 0; // Business plan = 0%
       const total = Math.round((subtotal + taxAmt + tipAmt) * 100) / 100;
@@ -472,7 +472,7 @@ export function generateProSeed(tenantId: string): { data: SeedData; tenantOverr
       subscription_tier: 'business',
       subscription_status: 'active',
       trial_ends_at: null,
-      default_tax_rate: 8.00,
+      default_tax_rate: 0.08,
       warranty_enabled: true,
       warranty_per_item_default: 0,
       warranty_per_invoice_default: 15,
