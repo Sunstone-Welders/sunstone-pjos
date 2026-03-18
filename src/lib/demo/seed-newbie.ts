@@ -51,6 +51,32 @@ export function generateNewbieSeed(tenantId: string): { data: SeedData; tenantOv
 
   const inventoryItems = [...goldChains, ...silverChains];
 
+  // ── Chain Product Prices (flat pricing — beginner-friendly prices) ─────
+  const chainProductPrices: any[] = [];
+  for (const chain of inventoryItems) {
+    const isGold = chain.material.includes('Gold');
+    for (const pt of productTypes) {
+      let sellPrice: number;
+      if (pt.name === 'Necklace') {
+        sellPrice = isGold ? randomAmount(3, 5) : randomAmount(2.50, 4);
+      } else if (pt.name === 'Bracelet') {
+        sellPrice = isGold ? randomAmount(25, 35) : randomAmount(20, 30);
+      } else if (pt.name === 'Anklet') {
+        sellPrice = isGold ? randomAmount(30, 40) : randomAmount(25, 35);
+      } else if (pt.name === 'Ring') {
+        sellPrice = isGold ? randomAmount(20, 30) : randomAmount(15, 25);
+      } else { // Hand Chain
+        sellPrice = isGold ? randomAmount(30, 40) : randomAmount(25, 35);
+      }
+      chainProductPrices.push({
+        id: uuid(), inventory_item_id: chain.id, product_type_id: pt.id,
+        tenant_id: tenantId, sell_price: sellPrice,
+        default_inches: pt.default_inches, is_active: true,
+        created_at: daysAgo(90), updated_at: daysAgo(randomInt(1, 30)),
+      });
+    }
+  }
+
   // ── Clients (28 over 90 days) ──────────────────────────────────────────
   const clients = Array.from({ length: 28 }, (_, i) => {
     const { first, last } = uniqueName();
@@ -183,7 +209,7 @@ export function generateNewbieSeed(tenantId: string): { data: SeedData; tenantOv
       productTypes,
       pricingTiers: [],
       inventoryItems,
-      chainProductPrices: [],
+      chainProductPrices,
       clients,
       clientPhoneNumbers,
       clientTagAssignments: [],

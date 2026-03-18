@@ -122,6 +122,27 @@ export function generateProSeed(tenantId: string): { data: SeedData; tenantOverr
   const chainItems = chainInventory;
   const charmItems = charmInventory;
 
+  // ── Chain Product Prices (derived from pricing tiers) ─────────────────
+  const chainProductPrices: any[] = [];
+  for (const chain of chainInventory) {
+    const tier = pricingTiers.find((t) => t.id === chain.pricing_tier_id) || pricingTiers[0];
+    for (const pt of productTypes) {
+      let sellPrice: number;
+      if (pt.name === 'Bracelet') sellPrice = tier.bracelet_price;
+      else if (pt.name === 'Anklet') sellPrice = tier.anklet_price;
+      else if (pt.name === 'Ring') sellPrice = tier.ring_price;
+      else if (pt.name === 'Necklace') sellPrice = tier.necklace_price_per_inch;
+      else sellPrice = tier.hand_chain_price; // Hand Chain
+
+      chainProductPrices.push({
+        id: uuid(), inventory_item_id: chain.id, product_type_id: pt.id,
+        tenant_id: tenantId, sell_price: sellPrice,
+        default_inches: pt.default_inches, is_active: true,
+        created_at: daysAgo(730), updated_at: daysAgo(randomInt(1, 90)),
+      });
+    }
+  }
+
   // ── Clients (215 over 2 years) ─────────────────────────────────────────
   const clients = Array.from({ length: 215 }, () => {
     const { first, last } = uniqueName();
@@ -454,7 +475,7 @@ export function generateProSeed(tenantId: string): { data: SeedData; tenantOverr
       productTypes,
       pricingTiers,
       inventoryItems,
-      chainProductPrices: [], // tier pricing, not per-product
+      chainProductPrices,
       clients,
       clientPhoneNumbers,
       clientTagAssignments: [],
