@@ -25,7 +25,7 @@ import { Badge } from '@/components/ui/Badge';
 import ChainPricingConfig, { type PriceConfigRow } from '@/components/inventory/ChainPricingConfig';
 import SupplierDropdown from '@/components/inventory/SupplierDropdown';
 import MaterialDropdown from '@/components/inventory/MaterialDropdown';
-import type { InventoryItem, InventoryType, InventoryUnit, PricingMode, Material, TenantPricingMode, ReorderHistory } from '@/types';
+import type { InventoryItem, InventoryType, InventoryUnit, PricingMode, Material, TenantPricingMode, ReorderHistory, Supplier } from '@/types';
 import { Skeleton } from '@/components/ui';
 import SunnyTutorial from '@/components/SunnyTutorial';
 import ReorderModal from '@/components/inventory/ReorderModal';
@@ -76,6 +76,7 @@ export default function InventoryPage() {
   const [reorderHistory, setReorderHistory] = useState<ReorderHistory[]>([]);
   const [showReorderHistory, setShowReorderHistory] = useState(false);
   const [receivingId, setReceivingId] = useState<string | null>(null);
+  const [autoLinking, setAutoLinking] = useState(false);
 
   // Scroll position preservation across modal open/close
   const savedScrollRef = useRef<number>(0);
@@ -174,6 +175,30 @@ export default function InventoryPage() {
   };
 
   // â”€â”€â”€ Filter items â”€â”€â”€
+  const handleAutoLink = async () => {
+    setAutoLinking(true);
+    try {
+      const res = await fetch('/api/shopify/auto-link', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.linked > 0) {
+          toast.success(`Linked ${data.linked} item${data.linked > 1 ? 's' : ''} to Sunstone catalog`);
+          loadItems();
+        } else if (data.skipped > 0) {
+          toast.info('No confident matches found. Link items manually in the edit form.');
+        } else {
+          toast.info('All Sunstone items are already linked.');
+        }
+      } else {
+        toast.error(data.error || 'Auto-link failed');
+      }
+    } catch {
+      toast.error('Auto-link failed');
+    } finally {
+      setAutoLinking(false);
+    }
+  };
+
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const matchesSearch =
@@ -316,6 +341,14 @@ export default function InventoryPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleAutoLink}
+            disabled={autoLinking}
+          >
+            {autoLinking ? 'Linking...' : 'Link Sunstone Products'}
+          </Button>
           <Button
             variant="secondary"
             size="sm"
@@ -789,6 +822,14 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
     (editingItem as any)?.pricing_tier_id || null
   );
 
+  // Sunstone product linking
+  const [sunstoneProductId, setSunstoneProductId] = useState<string | null>(
+    editingItem?.sunstone_product_id || null
+  );
+  const [isSunstoneSupplier, setIsSunstoneSupplier] = useState(false);
+  const [catalogProducts, setCatalogProducts] = useState<any[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+
   // Validation
   const [validationTriggered, setValidationTriggered] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -821,6 +862,65 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
       setUnit('each');
     }
   };
+
+  // Detect if initial supplier is Sunstone (for editing existing items)
+  useEffect(() => {
+    if (!supplierId) {
+      setIsSunstoneSupplier(false);
+      return;
+    }
+    const check = async () => {
+      const { data } = await supabase
+        .from('suppliers')
+        .select('is_sunstone')
+        .eq('id', supplierId)
+        .single();
+      setIsSunstoneSupplier(data?.is_sunstone || false);
+    };
+    check();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only on mount — subsequent changes handled by onSelect
+
+  // Load Sunstone catalog when supplier is Sunstone
+  useEffect(() => {
+    if (!isSunstoneSupplier) {
+      setCatalogProducts([]);
+      return;
+    }
+    const loadCatalog = async () => {
+      setCatalogLoading(true);
+      try {
+        const { data } = await supabase
+          .from('sunstone_catalog_cache')
+          .select('products')
+          .limit(1)
+          .single();
+        if (data?.products) {
+          const active = (data.products as any[]).filter((p: any) => p.status === 'ACTIVE');
+          setCatalogProducts(active);
+
+          // Auto-link: if no sunstone_product_id set, try to match by name
+          if (!sunstoneProductId && name.trim()) {
+            const lower = name.trim().toLowerCase();
+            const baseName = lower.split(/\s*[\u2014\u2013-]\s*/)[0].trim();
+            const matches = active.filter((p: any) => {
+              const title = (p.title || '').toLowerCase();
+              return title === baseName || title.startsWith(baseName + ' ') || title.includes(baseName);
+            });
+            if (matches.length === 1) {
+              setSunstoneProductId(matches[0].id);
+            }
+          }
+        }
+      } catch {
+        // catalog may not be synced yet
+      } finally {
+        setCatalogLoading(false);
+      }
+    };
+    loadCatalog();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSunstoneSupplier]);
 
   // â”€â”€â”€ Validation â”€â”€â”€
   const validate = (): boolean => {
@@ -897,6 +997,7 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
         notes: notes.trim() || null,
         pricing_mode: type === 'chain' ? pricingMode : 'per_product',
         pricing_tier_id: type === 'chain' ? pricingTierId : null,
+        sunstone_product_id: isSunstoneSupplier ? sunstoneProductId : null,
       };
 
       let savedItemId: string;
@@ -1052,7 +1153,42 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
               value={supplierId}
               initialName={editingItem?.supplier}
               onChange={(id) => setSupplierId(id)}
+              onSelect={(supplier) => {
+                setSupplierText(supplier?.name || '');
+                setIsSunstoneSupplier(supplier?.is_sunstone || false);
+                if (!supplier?.is_sunstone) {
+                  setSunstoneProductId(null);
+                  setCatalogProducts([]);
+                }
+              }}
             />
+
+            {/* Sunstone Product Link */}
+            {isSunstoneSupplier && (
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-[var(--text-primary)]">
+                  Sunstone Product
+                </label>
+                <select
+                  value={sunstoneProductId || ''}
+                  onChange={(e) => setSunstoneProductId(e.target.value || null)}
+                  className="w-full h-10 px-3 rounded-xl border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)]"
+                  disabled={catalogLoading}
+                >
+                  <option value="">
+                    {catalogLoading ? 'Loading catalog...' : catalogProducts.length === 0 ? 'No catalog synced' : 'Select product...'}
+                  </option>
+                  {catalogProducts.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  Link to Sunstone catalog for one-touch reordering
+                </p>
+              </div>
+            )}
 
             {/* SKU */}
             <Input

@@ -20,11 +20,13 @@ interface SupplierDropdownProps {
   tenantId: string;
   value: string | null;          // supplier_id
   onChange: (id: string | null) => void;
+  /** Called with the full supplier object when selection changes */
+  onSelect?: (supplier: Supplier | null) => void;
   /** Fallback: resolve a saved supplier name to its ID when the dropdown loads */
   initialName?: string | null;
 }
 
-export default function SupplierDropdown({ tenantId, value, onChange, initialName }: SupplierDropdownProps) {
+export default function SupplierDropdown({ tenantId, value, onChange, onSelect, initialName }: SupplierDropdownProps) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -129,6 +131,8 @@ export default function SupplierDropdown({ tenantId, value, onChange, initialNam
             setShowAdd(true);
           } else {
             onChange(val || null);
+            const selected = val ? suppliers.find((s) => s.id === val) || null : null;
+            onSelect?.(selected);
           }
         }}
         className="w-full h-10 px-3 rounded-xl border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)]"

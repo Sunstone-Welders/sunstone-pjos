@@ -131,6 +131,64 @@ export async function POST(request: NextRequest) {
     }
 
     const kitDef = KIT_DATA[kit as KitType];
+
+    // ── Find or create the Sunstone supplier for this tenant ──────────────
+    let sunstoneSupplier: { id: string } | null = null;
+    {
+      const { data: existing } = await supabase
+        .from('suppliers')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('is_sunstone', true)
+        .limit(1)
+        .single();
+
+      if (existing) {
+        sunstoneSupplier = existing;
+      } else {
+        const { data: created } = await supabase
+          .from('suppliers')
+          .insert({
+            tenant_id: tenantId,
+            name: 'Sunstone',
+            is_sunstone: true,
+            sort_order: 0,
+          })
+          .select('id')
+          .single();
+        sunstoneSupplier = created;
+      }
+    }
+
+    const sunstoneSupId = sunstoneSupplier?.id || null;
+
+    // ── Load Shopify catalog for auto-matching sunstone_product_id ────────
+    const catalogProducts: any[] = [];
+    try {
+      const { data: cache } = await supabase
+        .from('sunstone_catalog_cache')
+        .select('products')
+        .limit(1)
+        .single();
+      if (cache?.products) {
+        for (const p of cache.products as any[]) {
+          if (p.status === 'ACTIVE') catalogProducts.push(p);
+        }
+      }
+    } catch { /* catalog may not be synced yet */ }
+
+    // Match helper: find a single confident catalog product by item name
+    const matchCatalogProduct = (itemName: string): string | null => {
+      if (catalogProducts.length === 0) return null;
+      const lower = itemName.toLowerCase().trim();
+      const baseName = lower.split(/\s*[—–-]\s*/)[0].trim();
+      const matches = catalogProducts.filter((p: any) => {
+        const title = (p.title || '').toLowerCase();
+        return title === baseName || title.startsWith(baseName + ' ') || title.includes(baseName);
+      });
+      return matches.length === 1 ? matches[0].id : null;
+    };
+
     const items: any[] = [];
 
     // Insert chains
@@ -143,6 +201,8 @@ export async function POST(request: NextRequest) {
         unit: 'in',
         quantity_on_hand: kitDef.chainLength,
         supplier: 'Sunstone',
+        supplier_id: sunstoneSupId,
+        sunstone_product_id: matchCatalogProduct(chain.name),
         pricing_mode: 'per_product',
         cost_per_unit: 0,
         sell_price: 0,
@@ -161,6 +221,8 @@ export async function POST(request: NextRequest) {
         unit: 'each',
         quantity_on_hand: jr.quantity,
         supplier: 'Sunstone',
+        supplier_id: sunstoneSupId,
+        sunstone_product_id: matchCatalogProduct(jr.name),
         pricing_mode: 'per_product',
         cost_per_unit: 0,
         sell_price: 0,
@@ -179,6 +241,8 @@ export async function POST(request: NextRequest) {
         unit: 'each',
         quantity_on_hand: 1,
         supplier: 'Sunstone',
+        supplier_id: sunstoneSupId,
+        sunstone_product_id: matchCatalogProduct(conn.name),
         pricing_mode: 'per_product',
         cost_per_unit: 0,
         sell_price: 0,
