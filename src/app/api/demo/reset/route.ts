@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
 
   try {
     // ── DELETE phase (FK order — children first) ────────────────────────────
+    // Required: tables we seed — must succeed or throw
     const deleteTable = async (table: string) => {
       const { error } = await supabase
         .from(table)
@@ -41,28 +42,37 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    // warranty_claims → delete by tenant_id
+    // Best-effort: tables that may hold user-session data but aren't seeded
+    // and may not exist in PostgREST schema cache — warn only
+    const tryDeleteTable = async (table: string) => {
+      const { error } = await supabase
+        .from(table)
+        .delete()
+        .eq('tenant_id', tenantId);
+      if (error) console.warn(`[demo-reset] skip ${table}:`, error.message);
+    };
+
+    // -- Children of sales (must delete before sales)
     await deleteTable('warranty_claims');
     await deleteTable('warranties');
     await deleteTable('gift_card_redemptions');
-    await deleteTable('cash_drawer_transactions');
-    await deleteTable('cash_drawer_sessions');
     await deleteTable('sale_items');
     await deleteTable('sales');
-    await deleteTable('checkout_sessions');
+    // -- Other seeded tables' children / session data
+    await tryDeleteTable('checkout_sessions');
     await deleteTable('gift_cards');
-    await deleteTable('waivers');
-    await deleteTable('queue_entries');
+    await tryDeleteTable('waivers');
+    await tryDeleteTable('queue_entries');
     await deleteTable('party_rsvps');
     await deleteTable('party_scheduled_messages');
     await deleteTable('party_requests');
-    await deleteTable('conversations');
+    await tryDeleteTable('conversations');
     await deleteTable('client_phone_numbers');
-    await deleteTable('client_tag_assignments');
+    await tryDeleteTable('client_tag_assignments');
     await deleteTable('clients');
     await deleteTable('events');
-    await deleteTable('chain_product_prices');
-    await deleteTable('inventory_movements');
+    await tryDeleteTable('chain_product_prices');
+    await tryDeleteTable('inventory_movements');
     await deleteTable('inventory_items');
     await deleteTable('pricing_tiers');
     await deleteTable('product_types');
