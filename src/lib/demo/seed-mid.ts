@@ -59,7 +59,7 @@ export function generateMidSeed(tenantId: string): { data: SeedData; tenantOverr
       unit: 'each', cost_per_unit: randomAmount(2.00, 8.00),
       sell_price: randomAmount(15, 35), quantity_on_hand: randomInt(10, 40),
       reorder_threshold: 5, is_active: true, notes: null,
-      pricing_mode: 'flat', pricing_tier_id: null,
+      pricing_mode: 'per_product', pricing_tier_id: null,
       created_at: daysAgo(240), updated_at: daysAgo(randomInt(1, 60)),
     })),
   ];

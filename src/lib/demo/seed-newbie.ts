@@ -35,7 +35,7 @@ export function generateNewbieSeed(tenantId: string): { data: SeedData; tenantOv
     sku: null, unit: 'ft', cost_per_unit: randomAmount(3.50, 6.00),
     sell_price: randomAmount(25, 45), quantity_on_hand: randomAmount(15, 40),
     reorder_threshold: 5, is_active: true, notes: null,
-    pricing_mode: 'flat', pricing_tier_id: null,
+    pricing_mode: 'per_product', pricing_tier_id: null,
     created_at: daysAgo(90), updated_at: daysAgo(randomInt(1, 30)),
   }));
 
@@ -45,7 +45,7 @@ export function generateNewbieSeed(tenantId: string): { data: SeedData; tenantOv
     sku: null, unit: 'ft', cost_per_unit: randomAmount(2.00, 4.00),
     sell_price: randomAmount(20, 35), quantity_on_hand: randomAmount(15, 40),
     reorder_threshold: 5, is_active: true, notes: null,
-    pricing_mode: 'flat', pricing_tier_id: null,
+    pricing_mode: 'per_product', pricing_tier_id: null,
     created_at: daysAgo(90), updated_at: daysAgo(randomInt(1, 30)),
   }));
 

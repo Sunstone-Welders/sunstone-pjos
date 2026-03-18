@@ -91,7 +91,7 @@ export function generateProSeed(tenantId: string): { data: SeedData; tenantOverr
     material: c.material, supplier: 'Sunstone Supply', supplier_id: null, sku: null,
     unit: 'ft', cost_per_unit: randomAmount(...c.costRange),
     sell_price: 0, quantity_on_hand: randomAmount(25, 80), reorder_threshold: 10,
-    is_active: true, notes: null, pricing_mode: 'tier', pricing_tier_id: c.tier.id,
+    is_active: true, notes: null, pricing_mode: 'per_product', pricing_tier_id: c.tier.id,
     created_at: daysAgo(730), updated_at: daysAgo(randomInt(1, 90)),
   }));
 
@@ -102,7 +102,7 @@ export function generateProSeed(tenantId: string): { data: SeedData; tenantOverr
     unit: 'each', cost_per_unit: randomAmount(2.00, 10.00),
     sell_price: randomAmount(18, 45), quantity_on_hand: randomInt(15, 50),
     reorder_threshold: 5, is_active: true, notes: null,
-    pricing_mode: 'flat', pricing_tier_id: null,
+    pricing_mode: 'per_product', pricing_tier_id: null,
     created_at: daysAgo(730), updated_at: daysAgo(randomInt(1, 90)),
   }));
 
@@ -114,7 +114,7 @@ export function generateProSeed(tenantId: string): { data: SeedData; tenantOverr
     supplier: 'Sunstone Supply', supplier_id: null, sku: null,
     unit: 'each', cost_per_unit: randomAmount(0.15, 0.50),
     sell_price: 0, quantity_on_hand: randomInt(200, 500), reorder_threshold: 50,
-    is_active: true, notes: null, pricing_mode: 'flat', pricing_tier_id: null,
+    is_active: true, notes: null, pricing_mode: 'per_product', pricing_tier_id: null,
     created_at: daysAgo(730), updated_at: daysAgo(randomInt(1, 90)),
   }));
 
