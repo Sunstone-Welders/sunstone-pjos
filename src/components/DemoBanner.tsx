@@ -4,13 +4,17 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTenant } from '@/hooks/use-tenant';
 import { getPersonaKey, PERSONAS } from '@/lib/demo/personas';
+import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 
 export default function DemoBanner() {
   const { tenant } = useTenant();
+  const router = useRouter();
   const [resetting, setResetting] = useState(false);
+  const [switching, setSwitching] = useState(false);
 
   if (!tenant) return null;
 
@@ -18,6 +22,19 @@ export default function DemoBanner() {
   if (!personaKey) return null;
 
   const persona = PERSONAS[personaKey];
+
+  async function handleSwitch() {
+    setSwitching(true);
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      router.push('/demo');
+      router.refresh();
+    } catch (err) {
+      console.error('Demo switch failed:', err);
+      setSwitching(false);
+    }
+  }
 
   async function handleReset() {
     if (!window.confirm('Reset all demo data? This will restore the original sample data for this account.')) {
@@ -48,10 +65,22 @@ export default function DemoBanner() {
 
   return (
     <div className="shrink-0 flex items-center justify-between px-4 h-9 bg-amber-500 text-white text-sm font-medium z-50">
+      {/* Left: Switch Demo */}
+      <button
+        onClick={handleSwitch}
+        disabled={switching || resetting}
+        className="px-3 py-1 rounded text-xs font-semibold bg-white/20 hover:bg-white/30 transition-colors disabled:opacity-50 flex items-center gap-1"
+      >
+        {switching ? 'Switching...' : '\u2190 Switch Demo'}
+      </button>
+
+      {/* Center: label */}
       <span>DEMO MODE — {persona.name}</span>
+
+      {/* Right: Reset */}
       <button
         onClick={handleReset}
-        disabled={resetting}
+        disabled={resetting || switching}
         className="px-3 py-1 rounded text-xs font-semibold bg-white/20 hover:bg-white/30 transition-colors disabled:opacity-50"
       >
         {resetting ? 'Resetting...' : 'Reset Demo Data'}
