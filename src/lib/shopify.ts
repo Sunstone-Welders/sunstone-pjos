@@ -23,6 +23,7 @@ export interface SunstoneProduct {
   imageUrl: string | null;
   imageAlt: string | null;
   variants: {
+    id: string;
     title: string;
     price: string;
     compareAtPrice: string | null;
@@ -186,6 +187,7 @@ export async function fetchAllProducts(): Promise<SunstoneProduct[]> {
         imageUrl: firstImage?.url || null,
         imageAlt: firstImage?.altText || null,
         variants: (node.variants?.edges || []).map((v: any) => ({
+          id: v.node.id,
           title: v.node.title,
           price: v.node.price || '0',
           compareAtPrice: v.node.compareAtPrice || null,
@@ -270,6 +272,7 @@ export async function fetchProductsByCollection(collectionHandle: string): Promi
       imageUrl: firstImage?.url || null,
       imageAlt: firstImage?.altText || null,
       variants: (node.variants?.edges || []).map((v: any) => ({
+        id: v.node.id,
         title: v.node.title,
         price: v.node.price || '0',
         compareAtPrice: v.node.compareAtPrice || null,

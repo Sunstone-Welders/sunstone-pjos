@@ -145,6 +145,32 @@ export interface InventoryItem {
   // Chain-specific
   pricing_mode: PricingMode | null;
   pricing_tier_id: string | null;
+  // Sunstone supply linkage
+  sunstone_product_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReorderHistory {
+  id: string;
+  tenant_id: string;
+  shopify_draft_order_id: string | null;
+  shopify_order_id: string | null;
+  shopify_order_name: string | null;
+  invoice_url: string | null;
+  status: 'draft' | 'checkout_sent' | 'completed' | 'cancelled';
+  items: {
+    inventory_item_id: string | null;
+    variant_id: string;
+    name: string;
+    quantity: number;
+    unit_price: number;
+  }[];
+  total_amount: number;
+  notes: string | null;
+  ordered_by: string | null;
+  received_at: string | null;
+  received_by: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -42,7 +42,7 @@ export async function GET() {
     );
 
     const redirectUri = `${appUrl}/api/shopify/callback`;
-    const scopes = 'read_products,read_inventory';
+    const scopes = 'read_products,read_inventory,write_draft_orders,write_orders';
 
     const authUrl =
       `https://${domain}/admin/oauth/authorize` +

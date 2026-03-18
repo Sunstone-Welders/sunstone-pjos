@@ -384,7 +384,7 @@ async function generateCards(
       // Inventory items (all active)
       db
         .from('inventory_items')
-        .select('id, name, quantity_on_hand, reorder_threshold')
+        .select('id, name, quantity_on_hand, reorder_threshold, sunstone_product_id')
         .eq('tenant_id', tenantId)
         .eq('is_active', true),
 
@@ -858,9 +858,11 @@ async function generateCards(
         priority: lowItems.some((i: any) => i.quantity_on_hand === 0) ? 2 : 15,
         data: {
           items: lowItems.map((i: any) => ({
+            id: i.id,
             name: i.name,
             stock: i.quantity_on_hand,
             threshold: i.reorder_threshold,
+            sunstone_product_id: i.sunstone_product_id || null,
             status:
               i.quantity_on_hand === 0
                 ? 'critical'

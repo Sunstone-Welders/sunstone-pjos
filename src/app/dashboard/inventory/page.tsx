@@ -25,9 +25,10 @@ import { Badge } from '@/components/ui/Badge';
 import ChainPricingConfig, { type PriceConfigRow } from '@/components/inventory/ChainPricingConfig';
 import SupplierDropdown from '@/components/inventory/SupplierDropdown';
 import MaterialDropdown from '@/components/inventory/MaterialDropdown';
-import type { InventoryItem, InventoryType, InventoryUnit, PricingMode, Material, TenantPricingMode } from '@/types';
+import type { InventoryItem, InventoryType, InventoryUnit, PricingMode, Material, TenantPricingMode, ReorderHistory } from '@/types';
 import { Skeleton } from '@/components/ui';
 import SunnyTutorial from '@/components/SunnyTutorial';
+import ReorderModal from '@/components/inventory/ReorderModal';
 
 // â”€â”€â”€ Constants â”€â”€â”€
 const ITEM_TYPES: { value: InventoryType; label: string }[] = [
@@ -69,6 +70,12 @@ export default function InventoryPage() {
   // First-time product types prompt
   const [showProductTypesPrompt, setShowProductTypesPrompt] = useState(false);
   const [hasProductTypes, setHasProductTypes] = useState<boolean | null>(null);
+
+  // Reorder
+  const [reorderItem, setReorderItem] = useState<InventoryItem | null>(null);
+  const [reorderHistory, setReorderHistory] = useState<ReorderHistory[]>([]);
+  const [showReorderHistory, setShowReorderHistory] = useState(false);
+  const [receivingId, setReceivingId] = useState<string | null>(null);
 
   // Scroll position preservation across modal open/close
   const savedScrollRef = useRef<number>(0);
@@ -131,6 +138,40 @@ export default function InventoryPage() {
     };
     checkProductTypes();
   }, [tenant, supabase]);
+
+  // Load reorder history
+  const loadReorderHistory = useCallback(async () => {
+    try {
+      const res = await fetch('/api/reorders');
+      if (res.ok) {
+        const data = await res.json();
+        setReorderHistory(data.reorders || []);
+      }
+    } catch { /* non-critical */ }
+  }, []);
+
+  useEffect(() => {
+    if (showReorderHistory) loadReorderHistory();
+  }, [showReorderHistory, loadReorderHistory]);
+
+  const handleMarkReceived = async (reorderId: string) => {
+    setReceivingId(reorderId);
+    try {
+      const res = await fetch(`/api/reorders/${reorderId}/receive`, { method: 'PATCH' });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || 'Marked as received');
+        loadReorderHistory();
+        loadItems();
+      } else {
+        toast.error(data.error || 'Failed to mark as received');
+      }
+    } catch {
+      toast.error('Failed to mark as received');
+    } finally {
+      setReceivingId(null);
+    }
+  };
 
   // â”€â”€â”€ Filter items â”€â”€â”€
   const filteredItems = useMemo(() => {
@@ -275,6 +316,13 @@ export default function InventoryPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowReorderHistory(!showReorderHistory)}
+          >
+            Reorder History
+          </Button>
           <Button variant="primary" size="sm" onClick={handleAddClick}>
             + Add Item
           </Button>
@@ -436,6 +484,20 @@ export default function InventoryPage() {
 
                 {/* Actions */}
                 <div className="hidden sm:flex items-center gap-1 justify-end">
+                  {item.sunstone_product_id && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setReorderItem(item);
+                      }}
+                      className="text-[var(--text-tertiary)] hover:text-[var(--accent-primary)] p-1.5 rounded-lg hover:bg-[var(--accent-50)] transition-colors"
+                      title="Reorder from Sunstone"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                      </svg>
+                    </button>
+                  )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -566,6 +628,96 @@ export default function InventoryPage() {
               setShowForm(false);
               setEditingItem(null);
             }
+          }}
+        />
+      )}
+
+      {/* Reorder History Panel */}
+      {showReorderHistory && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Reorder History</CardTitle>
+              <button
+                onClick={() => setShowReorderHistory(false)}
+                className="p-1.5 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded-lg hover:bg-[var(--surface-subtle)]"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {reorderHistory.length === 0 ? (
+              <p className="text-sm text-[var(--text-tertiary)] text-center py-6">
+                No reorders yet. Use the cart icon on any Sunstone-linked item to place your first reorder.
+              </p>
+            ) : (
+              <div className="divide-y divide-[var(--border-subtle)]">
+                {reorderHistory.map((r) => (
+                  <div key={r.id} className="py-3 flex items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-[var(--text-primary)]">
+                          {r.shopify_order_name || 'Draft'}
+                        </span>
+                        <Badge
+                          variant={r.status === 'completed' ? 'success' : r.status === 'cancelled' ? 'secondary' : 'warning'}
+                          className="text-[10px]"
+                        >
+                          {r.status === 'completed' ? 'Received' : r.status === 'cancelled' ? 'Cancelled' : 'Pending'}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                        {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {' — '}
+                        {(r.items as any[]).map((i: any) => `${i.name} x${i.quantity}`).join(', ')}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-semibold text-[var(--text-primary)]">
+                        ${Number(r.total_amount).toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {r.invoice_url && r.status !== 'completed' && (
+                        <a
+                          href={r.invoice_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-[var(--accent-primary)] hover:underline"
+                        >
+                          Checkout
+                        </a>
+                      )}
+                      {r.status !== 'completed' && r.status !== 'cancelled' && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleMarkReceived(r.id)}
+                          disabled={receivingId === r.id}
+                        >
+                          {receivingId === r.id ? 'Restocking...' : 'Mark Received'}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Reorder Modal */}
+      {reorderItem && (
+        <ReorderModal
+          isOpen={!!reorderItem}
+          onClose={() => setReorderItem(null)}
+          item={reorderItem}
+          onReorderCreated={() => {
+            if (showReorderHistory) loadReorderHistory();
           }}
         />
       )}

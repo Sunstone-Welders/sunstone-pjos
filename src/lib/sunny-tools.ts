@@ -614,6 +614,21 @@ export const SUNNY_TOOL_DEFINITIONS = [
       required: ['query'],
     },
   },
+  // 37. create_reorder
+  {
+    name: 'create_reorder',
+    description: 'Create a supply reorder from Sunstone for the artist. Searches their inventory for items linked to Sunstone products, then creates a Shopify draft order. The artist completes checkout on the Sunstone store. Use this when an artist wants to restock chains or supplies, or when you notice they are running low.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        inventory_item_id: { type: 'string', description: 'UUID of the specific inventory item to reorder (if known)' },
+        search_name: { type: 'string', description: 'Name to search in their inventory (e.g. "Chloe", "Bryce") — used if inventory_item_id not provided' },
+        quantity: { type: 'number', description: 'Quantity to order. If not specified, suggests a smart default based on usage.' },
+        confirmed: { type: 'boolean', description: 'Set to true after the artist confirms the reorder preview' },
+      },
+      required: ['search_name'],
+    },
+  },
 ];
 
 // ============================================================================
@@ -657,6 +672,7 @@ export function getSunnyToolStatusLabel(name: string): string {
     list_pricing_tiers: 'Fetching pricing tiers...',
     assign_pricing_tier: 'Assigning pricing tier...',
     search_sunstone_catalog: 'Searching Sunstone catalog...',
+    create_reorder: 'Creating Sunstone reorder...',
   };
   return labels[name] || 'Working...';
 }
@@ -2565,6 +2581,203 @@ export async function executeSunnyTool(
             message: targetTierId
               ? `Assigned ${itemIds.length} chain(s) to the pricing tier.`
               : `Removed ${itemIds.length} chain(s) from their pricing tier.`,
+          },
+        };
+      }
+
+      case 'create_reorder': {
+        // Step 1: Find the inventory item (by ID or search)
+        let inventoryItem: any = null;
+
+        if (input.inventory_item_id) {
+          const { data } = await serviceClient
+            .from('inventory_items')
+            .select('id, name, type, unit, quantity_on_hand, reorder_threshold, sunstone_product_id')
+            .eq('id', input.inventory_item_id)
+            .eq('tenant_id', tenantId)
+            .single();
+          inventoryItem = data;
+        } else if (input.search_name) {
+          const searchTerm = input.search_name.toLowerCase();
+          const { data: items } = await serviceClient
+            .from('inventory_items')
+            .select('id, name, type, unit, quantity_on_hand, reorder_threshold, sunstone_product_id')
+            .eq('tenant_id', tenantId)
+            .eq('is_active', true)
+            .not('sunstone_product_id', 'is', null);
+
+          if (items && items.length > 0) {
+            inventoryItem = items.find((i: any) => i.name.toLowerCase().includes(searchTerm))
+              || items.find((i: any) => i.name.toLowerCase().startsWith(searchTerm.split(' ')[0]));
+          }
+        }
+
+        if (!inventoryItem) {
+          return {
+            result: {
+              error: 'No matching inventory item found that is linked to a Sunstone product. The artist may need to link the item to a Sunstone product in their inventory settings first.',
+              hint: 'Ask the artist which specific item they want to reorder.',
+            },
+            isError: true,
+          };
+        }
+
+        if (!inventoryItem.sunstone_product_id) {
+          return {
+            result: {
+              error: `"${inventoryItem.name}" is not linked to a Sunstone product. The artist needs to set the Sunstone Product ID in their inventory settings.`,
+            },
+            isError: true,
+          };
+        }
+
+        // Step 2: Find the Shopify product from catalog cache
+        const { data: cache } = await serviceClient
+          .from('sunstone_catalog_cache')
+          .select('products')
+          .limit(1)
+          .single();
+
+        const products = (cache?.products || []) as any[];
+        const shopifyProduct = products.find((p: any) => p.id === inventoryItem.sunstone_product_id);
+
+        if (!shopifyProduct) {
+          return {
+            result: {
+              error: `Sunstone product not found in catalog for "${inventoryItem.name}". The catalog may need to be synced.`,
+            },
+            isError: true,
+          };
+        }
+
+        // Step 3: Determine quantity
+        let suggestedQty = input.quantity || 0;
+        if (!suggestedQty) {
+          // Smart suggestion: last 30 days usage
+          const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+          const { data: movements } = await serviceClient
+            .from('inventory_movements')
+            .select('quantity')
+            .eq('inventory_item_id', inventoryItem.id)
+            .eq('type', 'sale')
+            .gte('created_at', thirtyDaysAgo);
+
+          if (movements && movements.length > 0) {
+            const totalSold = movements.reduce((sum: number, m: any) => sum + Math.abs(m.quantity), 0);
+            suggestedQty = Math.ceil((totalSold / 30) * 30);
+          }
+          if (!suggestedQty) {
+            suggestedQty = inventoryItem.type === 'chain' ? 100 : inventoryItem.type === 'jump_ring' ? 50 : 10;
+          }
+        }
+
+        const defaultVariant = shopifyProduct.variants?.[0];
+        const unitPrice = defaultVariant ? parseFloat(defaultVariant.price || '0') : 0;
+        const estimatedTotal = unitPrice * suggestedQty;
+
+        // Step 4: Preview or confirm
+        if (!input.confirmed) {
+          return {
+            result: {
+              preview: true,
+              item_name: inventoryItem.name,
+              current_stock: inventoryItem.quantity_on_hand,
+              unit: inventoryItem.unit,
+              product_title: shopifyProduct.title,
+              variant: defaultVariant?.title || 'Default',
+              unit_price: `$${unitPrice.toFixed(2)}`,
+              suggested_quantity: suggestedQty,
+              estimated_total: `$${estimatedTotal.toFixed(2)}`,
+              product_url: shopifyProduct.url,
+              message: `Ready to reorder ${suggestedQty} ${inventoryItem.unit} of ${shopifyProduct.title} at $${unitPrice.toFixed(2)} each (est. $${estimatedTotal.toFixed(2)} total). Say "yes" or "confirm" to proceed, or specify a different quantity.`,
+            },
+          };
+        }
+
+        // Step 5: Create the draft order via internal API
+        // Note: We call shopifyAdminQuery directly since we're server-side
+        const { shopifyAdminQuery: shopifyQuery } = await import('@/lib/shopify');
+
+        const draftOrderMutation = `
+          mutation draftOrderCreate($input: DraftOrderInput!) {
+            draftOrderCreate(input: $input) {
+              draftOrder {
+                id
+                invoiceUrl
+                name
+                totalPriceSet { shopMoney { amount } }
+              }
+              userErrors { field message }
+            }
+          }
+        `;
+
+        const { data: tenant } = await serviceClient
+          .from('tenants')
+          .select('name')
+          .eq('id', tenantId)
+          .single();
+
+        const orderInput = {
+          lineItems: [{
+            variantId: defaultVariant.id,
+            quantity: suggestedQty,
+          }],
+          note: `Reorder from Sunstone Studio — ${tenant?.name || 'Unknown'}`,
+          tags: ['sunstone-studio-reorder', 'sunny-created'],
+        };
+
+        let draftData;
+        try {
+          draftData = await shopifyQuery(draftOrderMutation, { input: orderInput });
+        } catch (shopifyErr: any) {
+          return {
+            result: {
+              error: `Shopify order creation failed: ${shopifyErr.message}. The platform admin may need to re-authorize the Shopify connection.`,
+            },
+            isError: true,
+          };
+        }
+
+        const draftResult = draftData.draftOrderCreate;
+        if (draftResult.userErrors?.length > 0) {
+          return {
+            result: {
+              error: `Shopify error: ${draftResult.userErrors.map((e: any) => e.message).join('; ')}`,
+            },
+            isError: true,
+          };
+        }
+
+        const draftOrder = draftResult.draftOrder;
+        const totalAmount = parseFloat(draftOrder.totalPriceSet?.shopMoney?.amount || '0');
+
+        // Log to reorder_history
+        await serviceClient.from('reorder_history').insert({
+          tenant_id: tenantId,
+          shopify_draft_order_id: draftOrder.id,
+          shopify_order_name: draftOrder.name,
+          invoice_url: draftOrder.invoiceUrl,
+          status: 'draft',
+          items: [{
+            inventory_item_id: inventoryItem.id,
+            variant_id: defaultVariant.id,
+            name: shopifyProduct.title,
+            quantity: suggestedQty,
+            unit_price: unitPrice,
+          }],
+          total_amount: totalAmount,
+          notes: `Sunny-initiated reorder for ${inventoryItem.name}`,
+          ordered_by: userId,
+        });
+
+        return {
+          result: {
+            success: true,
+            order_name: draftOrder.name,
+            invoice_url: draftOrder.invoiceUrl,
+            total: `$${totalAmount.toFixed(2)}`,
+            message: `Order ${draftOrder.name} created! Total: $${totalAmount.toFixed(2)}. Complete checkout here: ${draftOrder.invoiceUrl}`,
           },
         };
       }
