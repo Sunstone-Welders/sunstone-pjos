@@ -24,6 +24,27 @@ let cachedToken: SFToken | null = null;
 // ── Auth ──────────────────────────────────────────────────────────────────
 
 async function authenticate(): Promise<SFToken> {
+  // Diagnostic: log which env vars are present (never log values)
+  console.log('[SF Auth] Config check:', {
+    SF_LOGIN_URL: SF_LOGIN_URL,
+    SF_CLIENT_ID: !!SF_CLIENT_ID,
+    SF_CLIENT_SECRET: !!SF_CLIENT_SECRET,
+    SF_USERNAME: !!SF_USERNAME,
+    SF_PASSWORD: !!SF_PASSWORD,
+    SF_SECURITY_TOKEN: SF_SECURITY_TOKEN ? 'set' : 'empty',
+  });
+
+  if (!SF_CLIENT_ID || !SF_CLIENT_SECRET || !SF_USERNAME || !SF_PASSWORD) {
+    throw new Error(
+      `Salesforce env vars missing: ${[
+        !SF_CLIENT_ID && 'SF_CLIENT_ID',
+        !SF_CLIENT_SECRET && 'SF_CLIENT_SECRET',
+        !SF_USERNAME && 'SF_USERNAME',
+        !SF_PASSWORD && 'SF_PASSWORD',
+      ].filter(Boolean).join(', ')}`
+    );
+  }
+
   const params = new URLSearchParams({
     grant_type: 'password',
     client_id: SF_CLIENT_ID,
