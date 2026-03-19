@@ -14,6 +14,18 @@ import {
   sfCreateAccount,
 } from '@/lib/salesforce';
 
+// ── Normalize SF payment method fields to consistent frontend format ─────
+
+function normalizePaymentMethods(raw: any[]): any[] {
+  return raw.map((card: any) => ({
+    id: card.id || card.Id || card.cardId || '',
+    brand: card.brand || card.Brand__c || card.cardType || 'Card',
+    last4: card.last4 || card.Last_4__c || card.lastFour || '',
+    expirationMonth: card.expirationMonth || card.Expiration_Month__c || card.expMonth || '',
+    expirationYear: card.expirationYear || card.Expiration_Year__c || card.expYear || '',
+  }));
+}
+
 // ── GET: Search / resolve account ────────────────────────────────────────
 
 export async function GET() {
@@ -50,7 +62,7 @@ export async function GET() {
       let paymentMethods: any[] = [];
       try {
         const pmResult = await sfGetPaymentMethods(tenant.sf_account_id);
-        paymentMethods = pmResult?.paymentMethods || pmResult?.cards || [];
+        paymentMethods = normalizePaymentMethods(pmResult?.paymentMethods || pmResult?.cards || []);
       } catch (err) {
         console.warn('[SF Match] getPaymentMethods error:', err);
       }
@@ -105,7 +117,7 @@ export async function GET() {
       let paymentMethods: any[] = [];
       try {
         const pmResult = await sfGetPaymentMethods(match.accountId);
-        paymentMethods = pmResult?.paymentMethods || pmResult?.cards || [];
+        paymentMethods = normalizePaymentMethods(pmResult?.paymentMethods || pmResult?.cards || []);
       } catch (err) {
         console.warn('[SF Match] getPaymentMethods error:', err);
       }
@@ -198,7 +210,7 @@ export async function POST(request: NextRequest) {
       let paymentMethods: any[] = [];
       try {
         const pmResult = await sfGetPaymentMethods(accountId);
-        paymentMethods = pmResult?.paymentMethods || pmResult?.cards || [];
+        paymentMethods = normalizePaymentMethods(pmResult?.paymentMethods || pmResult?.cards || []);
       } catch (err) {
         console.warn('[SF Match] getPaymentMethods error:', err);
       }

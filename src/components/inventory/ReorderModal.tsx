@@ -582,7 +582,20 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
       const addData = await addRes.json();
 
       if (!addData.success) {
-        setPaymentError(addData.error || 'Failed to save card.');
+        const rawErr = (addData.error || 'Failed to save card.').toLowerCase();
+        let friendlyMsg = addData.error || 'Failed to save card.';
+        if (rawErr.includes('duplicate') || rawErr.includes('already exists')) {
+          friendlyMsg = 'This card is already saved to your account. Please select it from your saved cards.';
+        } else if (rawErr.includes('invalid card') || rawErr.includes('card number')) {
+          friendlyMsg = 'The card number appears to be invalid. Please double-check and try again.';
+        } else if (rawErr.includes('expired')) {
+          friendlyMsg = 'This card appears to be expired. Please use a different card.';
+        } else if (rawErr.includes('declined') || rawErr.includes('do not honor')) {
+          friendlyMsg = 'Your card was declined. Please try a different card or contact your bank.';
+        } else if (rawErr.includes('authentication') || rawErr.includes('authorize')) {
+          friendlyMsg = 'We couldn\'t authorize this card. Please try again or use a different card.';
+        }
+        setPaymentError(friendlyMsg);
         setStep('payment');
         return;
       }
