@@ -1,133 +1,84 @@
 // ============================================================================
 // Salesforce API Client — src/lib/salesforce.ts
 // ============================================================================
-// Username-Password OAuth flow with token caching. Provides SOQL query,
-// create, update, and get helpers for SF REST API v59.0.
+// Uses jsforce for OAuth + API calls. Provides SOQL query, create, update,
+// get, and Apex REST helpers for the Studio Reorder API.
 // ============================================================================
 
-const SF_LOGIN_URL = process.env.SF_LOGIN_URL || 'https://login.salesforce.com';
-const SF_CLIENT_ID = process.env.SF_CLIENT_ID!;
-const SF_CLIENT_SECRET = process.env.SF_CLIENT_SECRET!;
-const SF_USERNAME = process.env.SF_USERNAME!;
-const SF_PASSWORD = process.env.SF_PASSWORD!;
-const SF_SECURITY_TOKEN = process.env.SF_SECURITY_TOKEN || '';
-const SF_API_VERSION = 'v59.0';
+import jsforce from 'jsforce';
 
-interface SFToken {
-  accessToken: string;
-  instanceUrl: string;
-  expiresAt: number;
-}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let cachedConnection: any = null;
+let connectionExpiresAt = 0;
 
-let cachedToken: SFToken | null = null;
+// ── Connection ───────────────────────────────────────────────────────────
 
-// ── Auth ──────────────────────────────────────────────────────────────────
+async function getConnection(): Promise<any> {
+  // Return cached connection if still fresh
+  if (cachedConnection && connectionExpiresAt > Date.now()) {
+    return cachedConnection;
+  }
 
-async function authenticate(): Promise<SFToken> {
-  // Diagnostic: log which env vars are present (never log values)
-  console.log('[SF Auth] Config check:', {
-    SF_LOGIN_URL: SF_LOGIN_URL,
-    SF_CLIENT_ID: !!SF_CLIENT_ID,
-    SF_CLIENT_SECRET: !!SF_CLIENT_SECRET,
-    SF_USERNAME: !!SF_USERNAME,
-    SF_PASSWORD: !!SF_PASSWORD,
-    SF_SECURITY_TOKEN: SF_SECURITY_TOKEN ? 'set' : 'empty',
-  });
+  const loginUrl = process.env.SF_LOGIN_URL || 'https://login.salesforce.com';
+  const username = process.env.SF_USERNAME || '';
+  const password = process.env.SF_PASSWORD || '';
+  const securityToken = process.env.SF_SECURITY_TOKEN || '';
 
-  if (!SF_CLIENT_ID || !SF_CLIENT_SECRET || !SF_USERNAME || !SF_PASSWORD) {
+  if (!username || !password) {
     throw new Error(
-      `Salesforce env vars missing: ${[
-        !SF_CLIENT_ID && 'SF_CLIENT_ID',
-        !SF_CLIENT_SECRET && 'SF_CLIENT_SECRET',
-        !SF_USERNAME && 'SF_USERNAME',
-        !SF_PASSWORD && 'SF_PASSWORD',
+      `Salesforce credentials missing: ${[
+        !username && 'SF_USERNAME',
+        !password && 'SF_PASSWORD',
       ].filter(Boolean).join(', ')}`
     );
   }
 
-  const params = new URLSearchParams({
-    grant_type: 'password',
-    client_id: SF_CLIENT_ID,
-    client_secret: SF_CLIENT_SECRET,
-    username: SF_USERNAME,
-    password: `${SF_PASSWORD}${SF_SECURITY_TOKEN}`,
+  console.log('[SF Auth] Connecting via jsforce:', {
+    loginUrl,
+    username: !!username,
+    password: !!password,
+    securityToken: securityToken ? 'set' : 'empty',
   });
 
-  const res = await fetch(`${SF_LOGIN_URL}/services/oauth2/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString(),
-  });
+  const conn = new jsforce.Connection({ loginUrl });
+  await conn.login(username, password + securityToken);
 
-  if (!res.ok) {
-    const text = await res.text();
-    console.error('[SF Auth] Response status:', res.status);
-    console.error('[SF Auth] Response body:', text);
-    throw new Error(`Salesforce authentication failed: ${res.status} — ${text}`);
-  }
+  console.log('[SF Auth] Login successful, instance:', conn.instanceUrl);
 
-  const data = await res.json();
-  const token: SFToken = {
-    accessToken: data.access_token,
-    instanceUrl: data.instance_url,
-    // Cache for 1 hour (SF sessions last longer but we refresh early)
-    expiresAt: Date.now() + 55 * 60 * 1000,
-  };
+  cachedConnection = conn;
+  // Cache for 55 minutes (SF sessions last longer but we refresh early)
+  connectionExpiresAt = Date.now() + 55 * 60 * 1000;
 
-  cachedToken = token;
-  return token;
+  return conn;
 }
 
-async function getToken(): Promise<SFToken> {
-  if (cachedToken && cachedToken.expiresAt > Date.now()) {
-    return cachedToken;
-  }
-  return authenticate();
+/**
+ * Clear cached connection (used on auth failure for retry).
+ */
+function clearConnection() {
+  cachedConnection = null;
+  connectionExpiresAt = 0;
 }
 
-// ── API Helpers ───────────────────────────────────────────────────────────
-
-async function sfFetch(
-  path: string,
-  options: RequestInit = {},
-  retry = true
-): Promise<any> {
-  const token = await getToken();
-  const url = `${token.instanceUrl}/services/data/${SF_API_VERSION}${path}`;
-
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token.accessToken}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-
-  // Auto-refresh on 401 and retry once
-  if (res.status === 401 && retry) {
-    cachedToken = null;
-    return sfFetch(path, options, false);
-  }
-
-  if (!res.ok) {
-    const body = await res.text();
-    console.error(`[SF API] ${res.status} ${path}:`, body);
-    throw new Error(`Salesforce API error ${res.status}: ${body}`);
-  }
-
-  // Some operations (204 No Content) return no body
-  if (res.status === 204) return null;
-
-  return res.json();
-}
+// ── API Helpers ──────────────────────────────────────────────────────────
 
 /**
  * Run a SOQL query and return the records array.
  */
 export async function sfQuery<T = Record<string, any>>(soql: string): Promise<T[]> {
-  const data = await sfFetch(`/query?q=${encodeURIComponent(soql)}`);
-  return (data?.records || []) as T[];
+  const conn = await getConnection();
+  try {
+    const result = await conn.query(soql);
+    return result.records || [];
+  } catch (err: any) {
+    if (err.errorCode === 'INVALID_SESSION_ID') {
+      clearConnection();
+      const retryConn = await getConnection();
+      const result = await retryConn.query(soql);
+      return result.records || [];
+    }
+    throw err;
+  }
 }
 
 /**
@@ -137,28 +88,47 @@ export async function sfCreate(
   objectType: string,
   fields: Record<string, any>
 ): Promise<string> {
-  const data = await sfFetch(`/sobjects/${objectType}`, {
-    method: 'POST',
-    body: JSON.stringify(fields),
-  });
-  if (!data?.id) {
-    throw new Error(`SF create ${objectType} returned no id`);
+  const conn = await getConnection();
+  try {
+    const result = await conn.sobject(objectType).create(fields);
+    if (!result.success || !result.id) {
+      throw new Error(`SF create ${objectType} failed: ${JSON.stringify(result)}`);
+    }
+    return result.id;
+  } catch (err: any) {
+    if (err.errorCode === 'INVALID_SESSION_ID') {
+      clearConnection();
+      const retryConn = await getConnection();
+      const result = await retryConn.sobject(objectType).create(fields);
+      if (!result.success || !result.id) {
+        throw new Error(`SF create ${objectType} failed: ${JSON.stringify(result)}`);
+      }
+      return result.id;
+    }
+    throw err;
   }
-  return data.id as string;
 }
 
 /**
- * Update a record by Id. Returns null on success.
+ * Update a record by Id. Returns void on success.
  */
 export async function sfUpdate(
   objectType: string,
   id: string,
   fields: Record<string, any>
 ): Promise<void> {
-  await sfFetch(`/sobjects/${objectType}/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(fields),
-  });
+  const conn = await getConnection();
+  try {
+    await conn.sobject(objectType).update({ Id: id, ...fields });
+  } catch (err: any) {
+    if (err.errorCode === 'INVALID_SESSION_ID') {
+      clearConnection();
+      const retryConn = await getConnection();
+      await retryConn.sobject(objectType).update({ Id: id, ...fields });
+      return;
+    }
+    throw err;
+  }
 }
 
 /**
@@ -169,56 +139,69 @@ export async function sfGet<T = Record<string, any>>(
   id: string,
   fields?: string[]
 ): Promise<T> {
-  const fieldParam = fields?.length ? `?fields=${fields.join(',')}` : '';
-  return sfFetch(`/sobjects/${objectType}/${id}${fieldParam}`) as Promise<T>;
+  const conn = await getConnection();
+  try {
+    if (fields?.length) {
+      const result = await conn.sobject(objectType).retrieve(id);
+      // jsforce returns all fields; pick only requested ones if specified
+      const filtered: any = {};
+      for (const f of fields) {
+        filtered[f] = (result as any)[f];
+      }
+      return filtered as T;
+    }
+    return (await conn.sobject(objectType).retrieve(id)) as T;
+  } catch (err: any) {
+    if (err.errorCode === 'INVALID_SESSION_ID') {
+      clearConnection();
+      const retryConn = await getConnection();
+      if (fields?.length) {
+        const result = await retryConn.sobject(objectType).retrieve(id);
+        const filtered: any = {};
+        for (const f of fields) {
+          filtered[f] = (result as any)[f];
+        }
+        return filtered as T;
+      }
+      return (await retryConn.sobject(objectType).retrieve(id)) as T;
+    }
+    throw err;
+  }
 }
 
-// ── Apex REST (Studio Reorder API) ────────────────────────────────────────
+// ── Apex REST (Studio Reorder API) ───────────────────────────────────────
 
 /**
  * Call the custom SF Apex REST endpoint: /services/apexrest/studio/reorder
  */
 export async function sfApexRest(action: string, data: Record<string, any> = {}): Promise<any> {
-  const token = await getToken();
-  const url = `${token.instanceUrl}/services/apexrest/studio/reorder`;
+  const conn = await getConnection();
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token.accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ action, ...data }),
-  });
-
-  // Auto-refresh on 401 and retry once
-  if (res.status === 401) {
-    cachedToken = null;
-    const retryToken = await getToken();
-    const retryRes = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${retryToken.accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ action, ...data }),
+  const doRequest = async (c: any) => {
+    const result = await c.requestPost('/services/apexrest/studio/reorder', {
+      action,
+      ...data,
     });
-    if (!retryRes.ok) {
-      const body = await retryRes.text();
-      console.error(`[SF ApexRest] ${retryRes.status}:`, body);
-      throw new Error(`SF Apex REST error ${retryRes.status}: ${body}`);
+    // Apex REST returns a JSON string — parse if needed
+    if (typeof result === 'string') {
+      try { return JSON.parse(result); } catch { return result; }
     }
-    return retryRes.json();
-  }
+    return result;
+  };
 
-  if (!res.ok) {
-    const body = await res.text();
-    console.error(`[SF ApexRest] ${res.status}:`, body);
-    throw new Error(`SF Apex REST error ${res.status}: ${body}`);
+  try {
+    return await doRequest(conn);
+  } catch (err: any) {
+    if (err.errorCode === 'INVALID_SESSION_ID') {
+      clearConnection();
+      const retryConn = await getConnection();
+      return await doRequest(retryConn);
+    }
+    throw err;
   }
-
-  return res.json();
 }
+
+// ── Convenience wrappers ─────────────────────────────────────────────────
 
 /**
  * Find SF Account by Contact email. Returns account info + payment methods flag.
