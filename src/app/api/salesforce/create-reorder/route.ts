@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase, createServiceRoleClient } from '@/lib/supabase/server';
 import { sfQuery, sfCreate, sfUpdate, sfGet } from '@/lib/salesforce';
+import { buildSfSkuFromItemName, extractChainNameFromItemName } from '@/lib/sf-product-match';
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -67,44 +68,96 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No Salesforce account linked. Match your account first.' }, { status: 400 });
     }
 
-    // Match SF Product2 records
+    // ── Match SF Product2 records ──────────────────────────────────────
     const items = reorder.items as any[];
-    const skus = items.map((i: any) => i.variant_id).filter(Boolean);
 
-    let sfProducts: any[] = [];
-    if (skus.length > 0) {
-      const skuList = skus.map((s: string) => `'${s.replace(/'/g, "\\'")}'`).join(',');
-      sfProducts = await sfQuery<any>(
-        `SELECT Id, Name, ProductCode FROM Product2 WHERE ProductCode IN (${skuList})`
-      );
-    }
+    // Build a map of item index → matched SF Product2
+    const sfProductByItem = new Map<number, any>();
 
-    // Fall back to name match for unmatched items
-    const matchedSkus = new Set(sfProducts.map((p: any) => p.ProductCode));
-    const unmatchedItems = items.filter((i: any) => !matchedSkus.has(i.variant_id));
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      let sfProd: any = null;
 
-    if (unmatchedItems.length > 0) {
-      for (const item of unmatchedItems) {
-        const nameClean = item.name.replace(/'/g, "\\'").split(' — ')[0];
-        const nameMatches = await sfQuery<any>(
-          `SELECT Id, Name, ProductCode FROM Product2 WHERE Name LIKE '%${nameClean}%' LIMIT 1`
+      // Strategy 1: Build SF SKU from product+variant title
+      const sfSku = buildSfSkuFromItemName(item.name || '');
+      if (sfSku) {
+        const skuClean = sfSku.replace(/'/g, "\\'");
+        const byName = await sfQuery(
+          `SELECT Id, Name, ProductCode FROM Product2 WHERE Name = '${skuClean}' LIMIT 1`
         );
-        if (nameMatches.length > 0) {
-          sfProducts.push(nameMatches[0]);
+        if (byName.length > 0) {
+          sfProd = byName[0];
+          console.log(`[SF Reorder] SKU match: "${item.name}" → ${sfSku} → ${sfProd.Id}`);
         }
+      }
+
+      // Strategy 2: Fuzzy match on Product2.Name using chain name + material keywords
+      if (!sfProd) {
+        const chainName = extractChainNameFromItemName(item.name || '');
+        if (chainName) {
+          const chainClean = chainName.replace(/'/g, "\\'");
+          const fuzzy = await sfQuery(
+            `SELECT Id, Name, ProductCode FROM Product2 WHERE Name LIKE 'pj${chainClean}%' LIMIT 10`
+          );
+          if (fuzzy.length > 0) {
+            // If we have the built SKU, try partial match
+            if (sfSku) {
+              const partial = fuzzy.find((p: any) => sfSku.startsWith(p.Name) || p.Name.startsWith(sfSku));
+              sfProd = partial || fuzzy[0];
+            } else {
+              sfProd = fuzzy[0];
+            }
+            console.log(`[SF Reorder] Fuzzy match: "${item.name}" → ${sfProd.Name} (${sfProd.Id})`);
+          }
+        }
+      }
+
+      // Strategy 3: Fall back to ProductCode match (Shopify numeric SKU)
+      if (!sfProd && item.variant_id) {
+        const varIdClean = (item.variant_id as string).replace(/'/g, "\\'");
+        const byCode = await sfQuery(
+          `SELECT Id, Name, ProductCode FROM Product2 WHERE ProductCode = '${varIdClean}' LIMIT 1`
+        );
+        if (byCode.length > 0) {
+          sfProd = byCode[0];
+          console.log(`[SF Reorder] ProductCode match: "${item.name}" → ${sfProd.Name}`);
+        }
+      }
+
+      // Strategy 4: Broad name search as last resort
+      if (!sfProd) {
+        const nameClean = (item.name || '').replace(/'/g, "\\'").split(' — ')[0].split(',')[0].trim();
+        if (nameClean) {
+          const broad = await sfQuery(
+            `SELECT Id, Name, ProductCode FROM Product2 WHERE Name LIKE '%${nameClean}%' LIMIT 1`
+          );
+          if (broad.length > 0) {
+            sfProd = broad[0];
+            console.log(`[SF Reorder] Broad name match: "${item.name}" → ${sfProd.Name}`);
+          }
+        }
+      }
+
+      if (sfProd) {
+        sfProductByItem.set(i, sfProd);
+      } else {
+        console.warn(`[SF Reorder] No SF product match for: "${item.name}" (tried SKU: ${sfSku})`);
       }
     }
 
-    // Get PricebookEntry IDs
-    const sfProductIds = sfProducts.map((p: any) => `'${p.Id}'`).join(',');
-    let pricebookEntries: any[] = [];
-    if (sfProductIds) {
-      pricebookEntries = await sfQuery<any>(
-        `SELECT Id, Product2Id, UnitPrice FROM PricebookEntry WHERE Product2Id IN (${sfProductIds}) AND Pricebook2.IsStandard = true`
-      );
-    }
+    // Get PricebookEntry IDs for all matched products
+    const uniqueProductIds = [...new Set([...sfProductByItem.values()].map((p: any) => p.Id))];
+    const pbeByProductId = new Map<string, any>();
 
-    const pbeByProductId = new Map(pricebookEntries.map((e: any) => [e.Product2Id, e]));
+    if (uniqueProductIds.length > 0) {
+      const productIdList = uniqueProductIds.map((id) => `'${id}'`).join(',');
+      const pricebookEntries = await sfQuery(
+        `SELECT Id, Product2Id, UnitPrice FROM PricebookEntry WHERE Product2Id IN (${productIdList}) AND Pricebook2.IsStandard = true AND IsActive = true`
+      );
+      for (const pbe of pricebookEntries) {
+        pbeByProductId.set((pbe as any).Product2Id, pbe);
+      }
+    }
 
     // Create Opportunity (Quote Sent — NOT Closed Won until payment succeeds)
     const today = new Date().toISOString().split('T')[0];
@@ -152,10 +205,9 @@ export async function POST(request: NextRequest) {
     const quoteId = await sfCreate('Quote', quoteFields);
 
     // Create QuoteLineItems
-    for (const item of items) {
-      const sfProd = sfProducts.find(
-        (p: any) => p.ProductCode === item.variant_id || p.Name.includes(item.name.split(' — ')[0])
-      );
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const sfProd = sfProductByItem.get(i);
 
       if (sfProd && pbeByProductId.has(sfProd.Id)) {
         const pbe = pbeByProductId.get(sfProd.Id);
@@ -166,7 +218,7 @@ export async function POST(request: NextRequest) {
           UnitPrice: item.unit_price,
         });
       } else {
-        console.warn(`[SF Reorder] No SF product match for item: ${item.name}`);
+        console.warn(`[SF Reorder] Skipping line item — no PBE for: ${item.name} (Product2: ${sfProd?.Id || 'none'})`);
       }
     }
 
