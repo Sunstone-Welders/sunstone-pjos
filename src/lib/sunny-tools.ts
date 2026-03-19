@@ -2688,85 +2688,25 @@ export async function executeSunnyTool(
               unit_price: `$${unitPrice.toFixed(2)}`,
               suggested_quantity: suggestedQty,
               estimated_total: `$${estimatedTotal.toFixed(2)}`,
-              product_url: shopifyProduct.url,
               message: `Ready to reorder ${suggestedQty} ${inventoryItem.unit} of ${shopifyProduct.title} at $${unitPrice.toFixed(2)} each (est. $${estimatedTotal.toFixed(2)} total). Say "yes" or "confirm" to proceed, or specify a different quantity.`,
             },
           };
         }
 
-        // Step 5: Create the draft order via internal API
-        // Note: We call shopifyAdminQuery directly since we're server-side
-        const { shopifyAdminQuery: shopifyQuery } = await import('@/lib/shopify');
+        // Step 5: Create a draft reorder record (artist completes payment in-app)
+        const variantLabel = defaultVariant?.title !== 'Default Title' ? ` — ${defaultVariant?.title}` : '';
 
-        const draftOrderMutation = `
-          mutation draftOrderCreate($input: DraftOrderInput!) {
-            draftOrderCreate(input: $input) {
-              draftOrder {
-                id
-                invoiceUrl
-                name
-                totalPriceSet { shopMoney { amount } }
-              }
-              userErrors { field message }
-            }
-          }
-        `;
-
-        const { data: tenant } = await serviceClient
-          .from('tenants')
-          .select('name')
-          .eq('id', tenantId)
-          .single();
-
-        const orderInput = {
-          lineItems: [{
-            variantId: defaultVariant.id,
-            quantity: suggestedQty,
-          }],
-          note: `Reorder from Sunstone Studio — ${tenant?.name || 'Unknown'}`,
-          tags: ['sunstone-studio-reorder', 'sunny-created'],
-        };
-
-        let draftData;
-        try {
-          draftData = await shopifyQuery(draftOrderMutation, { input: orderInput });
-        } catch (shopifyErr: any) {
-          return {
-            result: {
-              error: `Shopify order creation failed: ${shopifyErr.message}. The platform admin may need to re-authorize the Shopify connection.`,
-            },
-            isError: true,
-          };
-        }
-
-        const draftResult = draftData.draftOrderCreate;
-        if (draftResult.userErrors?.length > 0) {
-          return {
-            result: {
-              error: `Shopify error: ${draftResult.userErrors.map((e: any) => e.message).join('; ')}`,
-            },
-            isError: true,
-          };
-        }
-
-        const draftOrder = draftResult.draftOrder;
-        const totalAmount = parseFloat(draftOrder.totalPriceSet?.shopMoney?.amount || '0');
-
-        // Log to reorder_history
         await serviceClient.from('reorder_history').insert({
           tenant_id: tenantId,
-          shopify_draft_order_id: draftOrder.id,
-          shopify_order_name: draftOrder.name,
-          invoice_url: draftOrder.invoiceUrl,
           status: 'draft',
           items: [{
             inventory_item_id: inventoryItem.id,
-            variant_id: defaultVariant.id,
-            name: shopifyProduct.title,
+            variant_id: defaultVariant?.id || defaultVariant?.sku || '',
+            name: `${shopifyProduct.title}${variantLabel}`,
             quantity: suggestedQty,
             unit_price: unitPrice,
           }],
-          total_amount: totalAmount,
+          total_amount: estimatedTotal,
           notes: `Sunny-initiated reorder for ${inventoryItem.name}`,
           ordered_by: userId,
         });
@@ -2774,10 +2714,10 @@ export async function executeSunnyTool(
         return {
           result: {
             success: true,
-            order_name: draftOrder.name,
-            invoice_url: draftOrder.invoiceUrl,
-            total: `$${totalAmount.toFixed(2)}`,
-            message: `Order ${draftOrder.name} created! Total: $${totalAmount.toFixed(2)}. Complete checkout here: ${draftOrder.invoiceUrl}`,
+            item: `${shopifyProduct.title}${variantLabel}`,
+            quantity: suggestedQty,
+            estimated_total: `$${estimatedTotal.toFixed(2)}`,
+            message: `I've added ${suggestedQty} ${inventoryItem.unit} of ${shopifyProduct.title} to your reorder draft (est. $${estimatedTotal.toFixed(2)}). Open the Inventory page and click "Reorder History" to review and complete payment.`,
           },
         };
       }

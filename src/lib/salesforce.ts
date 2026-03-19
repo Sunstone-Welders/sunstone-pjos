@@ -1,0 +1,152 @@
+// ============================================================================
+// Salesforce API Client — src/lib/salesforce.ts
+// ============================================================================
+// Username-Password OAuth flow with token caching. Provides SOQL query,
+// create, update, and get helpers for SF REST API v59.0.
+// ============================================================================
+
+const SF_LOGIN_URL = process.env.SF_LOGIN_URL || 'https://login.salesforce.com';
+const SF_CLIENT_ID = process.env.SF_CLIENT_ID!;
+const SF_CLIENT_SECRET = process.env.SF_CLIENT_SECRET!;
+const SF_USERNAME = process.env.SF_USERNAME!;
+const SF_PASSWORD = process.env.SF_PASSWORD!;
+const SF_SECURITY_TOKEN = process.env.SF_SECURITY_TOKEN || '';
+const SF_API_VERSION = 'v59.0';
+
+interface SFToken {
+  accessToken: string;
+  instanceUrl: string;
+  expiresAt: number;
+}
+
+let cachedToken: SFToken | null = null;
+
+// ── Auth ──────────────────────────────────────────────────────────────────
+
+async function authenticate(): Promise<SFToken> {
+  const params = new URLSearchParams({
+    grant_type: 'password',
+    client_id: SF_CLIENT_ID,
+    client_secret: SF_CLIENT_SECRET,
+    username: SF_USERNAME,
+    password: `${SF_PASSWORD}${SF_SECURITY_TOKEN}`,
+  });
+
+  const res = await fetch(`${SF_LOGIN_URL}/services/oauth2/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error('[SF Auth] Failed:', res.status, text);
+    throw new Error(`Salesforce authentication failed: ${res.status}`);
+  }
+
+  const data = await res.json();
+  const token: SFToken = {
+    accessToken: data.access_token,
+    instanceUrl: data.instance_url,
+    // Cache for 1 hour (SF sessions last longer but we refresh early)
+    expiresAt: Date.now() + 55 * 60 * 1000,
+  };
+
+  cachedToken = token;
+  return token;
+}
+
+async function getToken(): Promise<SFToken> {
+  if (cachedToken && cachedToken.expiresAt > Date.now()) {
+    return cachedToken;
+  }
+  return authenticate();
+}
+
+// ── API Helpers ───────────────────────────────────────────────────────────
+
+async function sfFetch(
+  path: string,
+  options: RequestInit = {},
+  retry = true
+): Promise<any> {
+  const token = await getToken();
+  const url = `${token.instanceUrl}/services/data/${SF_API_VERSION}${path}`;
+
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token.accessToken}`,
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+  // Auto-refresh on 401 and retry once
+  if (res.status === 401 && retry) {
+    cachedToken = null;
+    return sfFetch(path, options, false);
+  }
+
+  if (!res.ok) {
+    const body = await res.text();
+    console.error(`[SF API] ${res.status} ${path}:`, body);
+    throw new Error(`Salesforce API error ${res.status}: ${body}`);
+  }
+
+  // Some operations (204 No Content) return no body
+  if (res.status === 204) return null;
+
+  return res.json();
+}
+
+/**
+ * Run a SOQL query and return the records array.
+ */
+export async function sfQuery<T = Record<string, any>>(soql: string): Promise<T[]> {
+  const data = await sfFetch(`/query?q=${encodeURIComponent(soql)}`);
+  return (data?.records || []) as T[];
+}
+
+/**
+ * Create a record and return the new Id.
+ */
+export async function sfCreate(
+  objectType: string,
+  fields: Record<string, any>
+): Promise<string> {
+  const data = await sfFetch(`/sobjects/${objectType}`, {
+    method: 'POST',
+    body: JSON.stringify(fields),
+  });
+  if (!data?.id) {
+    throw new Error(`SF create ${objectType} returned no id`);
+  }
+  return data.id as string;
+}
+
+/**
+ * Update a record by Id. Returns null on success.
+ */
+export async function sfUpdate(
+  objectType: string,
+  id: string,
+  fields: Record<string, any>
+): Promise<void> {
+  await sfFetch(`/sobjects/${objectType}/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(fields),
+  });
+}
+
+/**
+ * Get a single record by Id with specific fields.
+ */
+export async function sfGet<T = Record<string, any>>(
+  objectType: string,
+  id: string,
+  fields?: string[]
+): Promise<T> {
+  const fieldParam = fields?.length ? `?fields=${fields.join(',')}` : '';
+  return sfFetch(`/sobjects/${objectType}/${id}${fieldParam}`) as Promise<T>;
+}

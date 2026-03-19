@@ -105,6 +105,9 @@ export interface Tenant {
   auto_sms_receipt: boolean;
   receipt_footer: string;
   receipt_tagline: string;
+  // Salesforce + Supply Reorder
+  sf_account_id: string | null;
+  stripe_reorder_customer_id: string | null;
   // Timestamps
   created_at: string;
   updated_at: string;
@@ -158,7 +161,7 @@ export interface ReorderHistory {
   shopify_order_id: string | null;
   shopify_order_name: string | null;
   invoice_url: string | null;
-  status: 'draft' | 'checkout_sent' | 'completed' | 'cancelled';
+  status: 'draft' | 'checkout_sent' | 'completed' | 'cancelled' | 'pending_payment' | 'confirmed' | 'processing' | 'shipped' | 'sf_pending';
   items: {
     inventory_item_id: string | null;
     variant_id: string;
@@ -171,6 +174,16 @@ export interface ReorderHistory {
   ordered_by: string | null;
   received_at: string | null;
   received_by: string | null;
+  // Salesforce fields
+  sf_opportunity_id: string | null;
+  sf_quote_id: string | null;
+  sf_order_id: string | null;
+  tracking_number: string | null;
+  shipping_carrier: string | null;
+  shipping_status: string | null;
+  stripe_payment_intent_id: string | null;
+  tax_amount: number;
+  shipping_amount: number;
   created_at: string;
   updated_at: string;
 }

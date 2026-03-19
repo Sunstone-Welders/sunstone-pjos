@@ -688,55 +688,68 @@ export default function InventoryPage() {
               </p>
             ) : (
               <div className="divide-y divide-[var(--border-subtle)]">
-                {reorderHistory.map((r) => (
-                  <div key={r.id} className="py-3 flex items-center gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-[var(--text-primary)]">
-                          {r.shopify_order_name || 'Draft'}
-                        </span>
-                        <Badge
-                          variant={r.status === 'completed' ? 'success' : r.status === 'cancelled' ? 'secondary' : 'warning'}
-                          className="text-[10px]"
-                        >
-                          {r.status === 'completed' ? 'Received' : r.status === 'cancelled' ? 'Cancelled' : 'Pending'}
-                        </Badge>
+                {reorderHistory.map((r) => {
+                  const statusLabel = r.status === 'completed' ? 'Received'
+                    : r.status === 'cancelled' ? 'Cancelled'
+                    : r.status === 'shipped' ? 'Shipped'
+                    : r.status === 'confirmed' || r.status === 'processing' ? 'Processing'
+                    : r.status === 'pending_payment' ? 'Awaiting Payment'
+                    : r.status === 'sf_pending' ? 'Processing'
+                    : 'Pending';
+                  const statusVariant = r.status === 'completed' ? 'success'
+                    : r.status === 'cancelled' ? 'secondary'
+                    : r.status === 'shipped' ? 'success'
+                    : r.status === 'pending_payment' ? 'warning'
+                    : 'warning';
+                  return (
+                    <div key={r.id} className="py-3 flex items-center gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-[var(--text-primary)]">
+                            {r.shopify_order_name || (r.sf_opportunity_id ? 'SF Order' : 'Order')}
+                          </span>
+                          <Badge variant={statusVariant as any} className="text-[10px]">
+                            {statusLabel}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                          {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {' — '}
+                          {(r.items as any[]).map((i: any) => `${i.name} x${i.quantity}`).join(', ')}
+                        </p>
+                        {r.tracking_number && (
+                          <p className="text-xs mt-0.5">
+                            <a
+                              href={`https://www.google.com/search?q=${encodeURIComponent(r.tracking_number)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[var(--accent-primary)] hover:underline"
+                            >
+                              Track: {r.tracking_number}
+                            </a>
+                          </p>
+                        )}
                       </div>
-                      <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
-                        {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        {' — '}
-                        {(r.items as any[]).map((i: any) => `${i.name} x${i.quantity}`).join(', ')}
-                      </p>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">
+                          ${Number(r.total_amount).toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'pending_payment' && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleMarkReceived(r.id)}
+                            disabled={receivingId === r.id}
+                          >
+                            {receivingId === r.id ? 'Restocking...' : 'Mark Received'}
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-semibold text-[var(--text-primary)]">
-                        ${Number(r.total_amount).toFixed(2)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {r.invoice_url && r.status !== 'completed' && (
-                        <a
-                          href={r.invoice_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-[var(--accent-primary)] hover:underline"
-                        >
-                          Checkout
-                        </a>
-                      )}
-                      {r.status !== 'completed' && r.status !== 'cancelled' && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleMarkReceived(r.id)}
-                          disabled={receivingId === r.id}
-                        >
-                          {receivingId === r.id ? 'Restocking...' : 'Mark Received'}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
