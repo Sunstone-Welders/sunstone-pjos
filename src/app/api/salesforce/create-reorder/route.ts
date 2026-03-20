@@ -277,11 +277,18 @@ export async function POST(request: NextRequest) {
     }, 0);
     await sfUpdate('Opportunity', oppId, { Amount: lineItemTotal });
 
-    // Try to sync Quote (may fail if API user lacks IsSyncing permission)
+    // Sync Quote → Opportunity via SyncedQuoteId (standard API approach)
     try {
-      await sfUpdate('Quote', quoteId, { IsSyncing: true });
+      await sfUpdate('Opportunity', oppId, { SyncedQuoteId: quoteId });
+      console.log('[SF Reorder] Set SyncedQuoteId on Opportunity');
     } catch (syncErr: any) {
-      console.warn('[SF Reorder] Could not set IsSyncing on Quote (permission issue) — continuing without sync:', syncErr.message);
+      console.warn('[SF Reorder] SyncedQuoteId failed — trying IsSyncing fallback:', syncErr.message);
+      // Fallback: set IsSyncing directly on the Quote
+      try {
+        await sfUpdate('Quote', quoteId, { IsSyncing: true });
+      } catch (isSyncErr: any) {
+        console.warn('[SF Reorder] IsSyncing also failed (permission issue) — continuing without sync:', isSyncErr.message);
+      }
     }
 
     // Wait for sync (or fallback read), then read back tax/shipping
