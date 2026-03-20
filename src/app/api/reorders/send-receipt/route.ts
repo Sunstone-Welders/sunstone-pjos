@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
       cardLabel: cardLabel || '',
       shippingStreet,
       shippingCityState,
+      shippingMethod: reorder.shipping_method || '',
       orderDate,
       businessName: tenant?.name || '',
     });
@@ -148,107 +149,177 @@ function buildReceiptHTML(data: {
   cardLabel: string;
   shippingStreet: string;
   shippingCityState: string;
+  shippingMethod: string;
   orderDate: string;
   businessName: string;
 }) {
-  const { items, subtotal, tax, shipping, total, cardLabel, shippingStreet, shippingCityState, orderDate, businessName } = data;
+  const { items, subtotal, tax, shipping, total, cardLabel, shippingStreet, shippingCityState, shippingMethod, orderDate, businessName } = data;
 
-  const itemRows = items.map((item: any) => {
+  const itemRows = items.map((item: any, idx: number) => {
     const lineTotal = (item.unit_price || 0) * (item.quantity || 0);
+    const bgColor = idx % 2 === 1 ? ' background-color: #FAFAF8;' : '';
     return `
-      <tr>
-        <td style="padding: 10px 0; border-bottom: 1px solid #f3f4f6; font-size: 14px; color: #374151;">
-          ${escapeHtml(item.name)} &times; ${item.quantity}
-        </td>
-        <td style="padding: 10px 0; border-bottom: 1px solid #f3f4f6; font-size: 14px; color: #374151; text-align: right; white-space: nowrap;">
-          $${lineTotal.toFixed(2)}
-        </td>
-      </tr>`;
+              <tr>
+                <td style="padding: 12px 16px; font-size: 14px; color: #1D1D1D;${bgColor}">
+                  ${escapeHtml(item.name)} <span style="color: #888;">&times; ${item.quantity}</span>
+                </td>
+                <td style="padding: 12px 16px; font-size: 14px; color: #1D1D1D; text-align: right; white-space: nowrap;${bgColor}">
+                  $${lineTotal.toFixed(2)}
+                </td>
+              </tr>`;
   }).join('');
 
   const taxRow = tax > 0 ? `
-    <tr>
-      <td style="padding: 6px 0; font-size: 14px; color: #6b7280;">Tax</td>
-      <td style="padding: 6px 0; font-size: 14px; color: #374151; text-align: right;">$${tax.toFixed(2)}</td>
-    </tr>` : '';
+              <tr>
+                <td style="padding: 6px 16px; font-size: 14px; color: #6B6B6B;">Tax</td>
+                <td style="padding: 6px 16px; font-size: 14px; color: #1D1D1D; text-align: right;">$${tax.toFixed(2)}</td>
+              </tr>` : '';
 
   const shippingRow = shipping > 0 ? `
-    <tr>
-      <td style="padding: 6px 0; font-size: 14px; color: #6b7280;">Shipping</td>
-      <td style="padding: 6px 0; font-size: 14px; color: #374151; text-align: right;">$${shipping.toFixed(2)}</td>
-    </tr>` : '';
+              <tr>
+                <td style="padding: 6px 16px; font-size: 14px; color: #6B6B6B;">Shipping</td>
+                <td style="padding: 6px 16px; font-size: 14px; color: #1D1D1D; text-align: right;">$${shipping.toFixed(2)}</td>
+              </tr>` : '';
 
-  const paymentRow = cardLabel ? `
-    <tr>
-      <td colspan="2" style="padding: 10px 0 0 0; font-size: 13px; color: #9ca3af;">
-        Payment: ${escapeHtml(cardLabel)}
-      </td>
-    </tr>` : '';
+  const paymentSection = cardLabel ? `
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top: 8px;">
+              <tr>
+                <td style="padding: 0 16px; font-size: 13px; color: #999;">
+                  Payment: ${escapeHtml(cardLabel)}
+                </td>
+              </tr>
+            </table>` : '';
 
   const shippingSection = shippingStreet ? `
-    <table role="presentation" width="100%" style="margin-top: 24px;">
-      <tr>
-        <td style="padding: 16px; background-color: #f9fafb; border-radius: 8px;">
-          <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Shipping To</p>
-          <p style="margin: 0; font-size: 14px; color: #374151; line-height: 1.5;">
-            ${escapeHtml(shippingStreet)}${shippingCityState ? `<br>${escapeHtml(shippingCityState)}` : ''}
-          </p>
-        </td>
-      </tr>
-    </table>` : '';
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top: 28px;">
+              <tr>
+                <td style="padding: 20px; background-color: #FFF8F5; border-radius: 8px;">
+                  <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #7A234A; text-transform: uppercase; letter-spacing: 0.08em;">Shipping To</p>
+                  <p style="margin: 0; font-size: 14px; color: #1D1D1D; line-height: 1.6;">
+                    ${escapeHtml(shippingStreet)}${shippingCityState ? `<br>${escapeHtml(shippingCityState)}` : ''}
+                  </p>${shippingMethod ? `
+                  <p style="margin: 8px 0 0 0; font-size: 13px; color: #6B6B6B;">
+                    Method: ${escapeHtml(shippingMethod)}
+                  </p>` : ''}
+                </td>
+              </tr>
+            </table>` : '';
+
+  const businessLine = businessName
+    ? `<p style="margin: 0 0 20px 0; font-size: 14px; color: #6B6B6B; font-family: Arial, Helvetica, sans-serif;">${escapeHtml(businessName)} &mdash; ${orderDate}</p>`
+    : `<p style="margin: 0 0 20px 0; font-size: 14px; color: #6B6B6B; font-family: Arial, Helvetica, sans-serif;">${orderDate}</p>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin: 0; padding: 0; background-color: #f9fafb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; padding: 32px 16px;">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Confirmed</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #FAF7F0; font-family: Arial, Helvetica, sans-serif; -webkit-font-smoothing: antialiased;">
+  <!--[if mso]><table role="presentation" width="100%" bgcolor="#FAF7F0"><tr><td><![endif]-->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#FAF7F0" style="background-color: #FAF7F0;">
     <tr>
-      <td align="center">
-        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width: 560px; width: 100%; background-color: #ffffff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden;">
+      <td align="center" style="padding: 40px 16px;">
+
+        <!-- Main Card -->
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%; background-color: #FFFFFF; border-radius: 12px; overflow: hidden;">
 
           <!-- Header -->
           <tr>
-            <td style="padding: 32px 32px 20px 32px; text-align: center; border-bottom: 1px solid #f3f4f6;">
-              <p style="margin: 0 0 4px 0; font-size: 20px; font-weight: 700; color: #7A234A;">Sunstone</p>
-              <p style="margin: 0; font-size: 13px; color: #9ca3af;">Supply Order Confirmation</p>
+            <td style="padding: 36px 40px 24px 40px; text-align: center;">
+              <p style="margin: 0; font-size: 26px; font-weight: 700; color: #7A234A; font-family: Arial, Helvetica, sans-serif; letter-spacing: -0.02em;">Sunstone</p>
+              <p style="margin: 6px 0 0 0; font-size: 13px; color: #999; font-family: Arial, Helvetica, sans-serif; letter-spacing: 0.02em;">Supply Order Confirmation</p>
             </td>
           </tr>
 
-          <!-- Body -->
+          <!-- Rose Divider -->
           <tr>
-            <td style="padding: 28px 32px;">
-              <p style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #111827;">Your order has been placed!</p>
-              ${businessName ? `<p style="margin: 0 0 16px 0; font-size: 14px; color: #6b7280;">${escapeHtml(businessName)} &mdash; ${orderDate}</p>` : `<p style="margin: 0 0 16px 0; font-size: 14px; color: #6b7280;">${orderDate}</p>`}
+            <td style="padding: 0 40px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="border-bottom: 2px solid #7A234A; font-size: 0; line-height: 0;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-              <p style="margin: 0 0 6px 0; font-size: 14px; color: #374151;">
-                <span style="display: inline-block; padding: 2px 10px; background-color: #ecfdf5; color: #065f46; border-radius: 9999px; font-size: 12px; font-weight: 600;">Confirmed &mdash; Preparing to Ship</span>
-              </p>
+          <!-- Status Badge -->
+          <tr>
+            <td style="padding: 24px 40px 0 40px; text-align: center;">
+              <table role="presentation" cellpadding="0" cellspacing="0" align="center">
+                <tr>
+                  <td style="padding: 6px 18px; background-color: #ECFDF5; border-radius: 20px; font-size: 13px; font-weight: 600; color: #065F46; font-family: Arial, Helvetica, sans-serif;">
+                    Confirmed &mdash; Preparing to Ship
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-              <!-- Items table -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top: 20px;">
+          <!-- Order Info -->
+          <tr>
+            <td style="padding: 24px 40px 0 40px;">
+              <p style="margin: 0 0 4px 0; font-size: 20px; font-weight: 700; color: #1D1D1D; font-family: Arial, Helvetica, sans-serif;">Your order has been placed!</p>
+              ${businessLine}
+            </td>
+          </tr>
+
+          <!-- Line Items -->
+          <tr>
+            <td style="padding: 0 24px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 ${itemRows}
+
+                <!-- Spacer before totals -->
+                <tr>
+                  <td colspan="2" style="padding: 0; border-bottom: 1px solid #EBEBEB; font-size: 0; line-height: 0;">&nbsp;</td>
+                </tr>
+
                 <!-- Subtotal -->
                 <tr>
-                  <td style="padding: 12px 0 6px 0; font-size: 14px; color: #6b7280;">Subtotal</td>
-                  <td style="padding: 12px 0 6px 0; font-size: 14px; color: #374151; text-align: right;">$${subtotal.toFixed(2)}</td>
+                  <td style="padding: 12px 16px 4px 16px; font-size: 14px; color: #6B6B6B;">Subtotal</td>
+                  <td style="padding: 12px 16px 4px 16px; font-size: 14px; color: #1D1D1D; text-align: right;">$${subtotal.toFixed(2)}</td>
                 </tr>
                 ${taxRow}
                 ${shippingRow}
+
+                <!-- Total Divider -->
+                <tr>
+                  <td colspan="2" style="padding: 8px 16px 0 16px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="border-bottom: 2px solid #1D1D1D; font-size: 0; line-height: 0;">&nbsp;</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
                 <!-- Total -->
                 <tr>
-                  <td style="padding: 12px 0 6px 0; border-top: 2px solid #111827; font-size: 16px; font-weight: 700; color: #111827;">Total Charged</td>
-                  <td style="padding: 12px 0 6px 0; border-top: 2px solid #111827; font-size: 16px; font-weight: 700; color: #7A234A; text-align: right;">$${total.toFixed(2)}</td>
+                  <td style="padding: 12px 16px 4px 16px; font-size: 18px; font-weight: 700; color: #1D1D1D; font-family: Arial, Helvetica, sans-serif;">Total Charged</td>
+                  <td style="padding: 12px 16px 4px 16px; font-size: 18px; font-weight: 700; color: #7A234A; text-align: right; font-family: Arial, Helvetica, sans-serif;">$${total.toFixed(2)}</td>
                 </tr>
-                ${paymentRow}
               </table>
 
-              ${shippingSection}
+              ${paymentSection}
+            </td>
+          </tr>
 
-              <!-- Shipping note -->
-              <table role="presentation" width="100%" style="margin-top: 24px;">
+          <!-- Shipping Address -->
+          <tr>
+            <td style="padding: 0 40px;">
+              ${shippingSection}
+            </td>
+          </tr>
+
+          <!-- Processing Note -->
+          <tr>
+            <td style="padding: 28px 40px 0 40px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td style="padding: 16px; background-color: #fefce8; border-radius: 8px; border: 1px solid #fef08a;">
-                    <p style="margin: 0; font-size: 13px; color: #854d0e; line-height: 1.5;">
+                  <td style="padding: 16px 20px; background-color: #FEFCE8; border-radius: 8px; border: 1px solid #FEF08A;">
+                    <p style="margin: 0; font-size: 13px; color: #854D0E; line-height: 1.6; font-family: Arial, Helvetica, sans-serif;">
                       Orders typically ship within 1&ndash;2 business days. You&rsquo;ll receive tracking information once your order ships.
                     </p>
                   </td>
@@ -259,20 +330,39 @@ function buildReceiptHTML(data: {
 
           <!-- Footer -->
           <tr>
-            <td style="padding: 20px 32px 28px 32px; border-top: 1px solid #f3f4f6; text-align: center;">
-              <p style="margin: 0 0 4px 0; font-size: 13px; color: #9ca3af;">
-                Questions? Contact us at 385-999-5240 or support@sunstonewelders.com
+            <td style="padding: 32px 40px 16px 40px; text-align: center;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="border-bottom: 1px solid #EBEBEB; font-size: 0; line-height: 0;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 40px 12px 40px; text-align: center;">
+              <p style="margin: 0; font-size: 13px; color: #888; font-family: Arial, Helvetica, sans-serif; line-height: 1.6;">
+                Questions? Contact us at 385-999-5240
               </p>
-              <p style="margin: 0; font-size: 12px; color: #d1d5db;">
+              <p style="margin: 2px 0 0 0; font-size: 13px; font-family: Arial, Helvetica, sans-serif;">
+                <a href="mailto:support@sunstonewelders.com" style="color: #7A234A; text-decoration: none;">support@sunstonewelders.com</a>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 40px 32px 40px; text-align: center;">
+              <p style="margin: 0; font-size: 12px; color: #C4C4C4; font-family: Arial, Helvetica, sans-serif;">
                 Powered by Sunstone Studio
               </p>
             </td>
           </tr>
 
         </table>
+        <!-- End Main Card -->
+
       </td>
     </tr>
   </table>
+  <!--[if mso]></td></tr></table><![endif]-->
 </body>
 </html>`;
 }
