@@ -20,6 +20,14 @@ import { Input } from '@/components/ui/Input';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
 import type { InventoryItem } from '@/types';
 import type { SunstoneProduct } from '@/lib/shopify';
+import {
+  detectCartCategory,
+  getShippingOptions,
+  getProcessingDisclaimer,
+  type ShippingRatesConfig,
+  type ShippingOption,
+  type CartCategory,
+} from '@/lib/shipping-rules';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -96,8 +104,15 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
     street: '', city: '', state: '', postalCode: '', country: 'US',
   });
 
-  // Shipping method
-  const [shippingMethod, setShippingMethod] = useState('UPS Ground');
+  // Shipping method + dynamic options
+  const [shippingMethod, setShippingMethod] = useState('USPS Priority Mail');
+  const [shippingRates, setShippingRates] = useState<ShippingRatesConfig | null>(null);
+  const [taxRates, setTaxRates] = useState<Record<string, number> | null>(null);
+  const [defaultTaxRate, setDefaultTaxRate] = useState(0.07);
+  const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
+  const [cartCategory, setCartCategory] = useState<CartCategory>('standard');
+  const [estimatedShipping, setEstimatedShipping] = useState(0);
+  const [estimatedTax, setEstimatedTax] = useState(0);
 
   // Account resolution
   const [accountStatus, setAccountStatus] = useState<AccountStatus>('loading');
@@ -234,6 +249,54 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
+  // ── Fetch shipping config on modal open ─────────────────────────────
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const loadConfig = async () => {
+      try {
+        const res = await fetch('/api/reorders/shipping-config');
+        if (res.ok) {
+          const data = await res.json();
+          setShippingRates(data.shippingRates || null);
+          setTaxRates(data.taxRates || null);
+          setDefaultTaxRate(data.defaultTaxRate || 0.07);
+        }
+      } catch {
+        // Use hardcoded defaults in shipping-rules.ts
+      }
+    };
+    loadConfig();
+  }, [isOpen]);
+
+  // ── Recompute shipping options when product/state/rates change ─────
+
+  useEffect(() => {
+    if (!product) return;
+    const variantLabel = product.variants?.[selectedVariantIdx]?.title || '';
+    const itemName = `${product.title} ${variantLabel}`;
+    const category = detectCartCategory([itemName]);
+    setCartCategory(category);
+
+    const state = shippingAddress.state.trim().toUpperCase();
+    const options = getShippingOptions(category, state, shippingRates);
+    setShippingOptions(options);
+
+    // Auto-reset method if current selection is no longer valid
+    const validValues = options.map((o) => o.value);
+    if (!validValues.includes(shippingMethod)) {
+      const defaultOpt = options[0];
+      if (defaultOpt) {
+        setShippingMethod(defaultOpt.value);
+        setEstimatedShipping(defaultOpt.estimatedCost);
+      }
+    } else {
+      const selected = options.find((o) => o.value === shippingMethod);
+      setEstimatedShipping(selected?.estimatedCost ?? 0);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product, selectedVariantIdx, shippingAddress.state, shippingRates, shippingMethod]);
+
   // ── Confirm a fuzzy match ──────────────────────────────────────────
 
   const handleConfirmMatch = async (accountId: string) => {
@@ -356,6 +419,17 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
   const selectedVariant = product?.variants?.[selectedVariantIdx];
   const unitPrice = selectedVariant ? parseFloat(selectedVariant.price) : 0;
   const estimatedSubtotal = unitPrice * quantity;
+  const estimatedTotal = estimatedSubtotal + estimatedTax + estimatedShipping;
+
+  // ── Recompute estimated tax when subtotal/state/taxRates change ────
+
+  useEffect(() => {
+    if (!taxRates) return;
+    const state = shippingAddress.state.trim().toUpperCase();
+    const rate = taxRates[state] ?? defaultTaxRate;
+    setEstimatedTax(Math.round(estimatedSubtotal * rate * 100) / 100);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estimatedSubtotal, shippingAddress.state, taxRates, defaultTaxRate]);
 
   const handleResync = async () => {
     setResyncing(true);
@@ -443,7 +517,8 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
           }],
           total_amount: estimatedSubtotal,
           tax_amount: 0,
-          shipping_amount: 0,
+          shipping_amount: estimatedShipping,
+          shipping_method: shippingMethod,
           notes: `Shipping to: ${shippingAddress.street}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.postalCode}`,
           ordered_by: null,
         })
@@ -456,7 +531,7 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
       }
 
       setReorderId(reorder.id);
-      setTotals({ subtotal: estimatedSubtotal, tax: 0, shipping: 0, total: estimatedSubtotal });
+      setTotals({ subtotal: estimatedSubtotal, tax: estimatedTax, shipping: estimatedShipping, total: estimatedTotal });
       setStep('payment');
     } catch {
       toast.error('Failed to prepare order');
@@ -632,7 +707,11 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
     setChargedCard(null);
     setShowNewCardForm(false);
     setNewCard({ nameOnCard: '', cardNumber: '', expirationMonth: '', expirationYear: '', cvv: '' });
-    setShippingMethod('UPS Ground');
+    setShippingMethod('USPS Priority Mail');
+    setShippingRates(null);
+    setShippingOptions([]);
+    setEstimatedShipping(0);
+    setEstimatedTax(0);
     onClose();
   };
 
@@ -1028,19 +1107,39 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
             )}
 
             {/* Shipping Method */}
-            <div>
+            <div className="space-y-2">
               <label className="text-sm font-medium text-[var(--text-primary)] mb-1 block">Shipping Method</label>
               <select
                 value={shippingMethod}
-                onChange={(e) => setShippingMethod(e.target.value)}
+                onChange={(e) => {
+                  setShippingMethod(e.target.value);
+                  const opt = shippingOptions.find((o) => o.value === e.target.value);
+                  setEstimatedShipping(opt?.estimatedCost ?? 0);
+                }}
                 className="w-full min-h-[48px] rounded-xl border border-[var(--border-default)] bg-[var(--surface-base)] px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]"
               >
-                <option value="UPS Ground">UPS Ground</option>
-                <option value="UPS 2nd Day Air">UPS 2nd Day Air</option>
-                <option value="UPS Next Day Air">UPS Next Day Air</option>
-                <option value="USPS Priority Mail">USPS Priority Mail</option>
-                <option value="Will Call / Pickup">Will Call / Pickup</option>
+                {shippingOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}{opt.estimatedCost > 0 ? ` — $${opt.estimatedCost.toFixed(2)}` : ' — FREE'}
+                  </option>
+                ))}
               </select>
+              {/* Restriction note */}
+              {(() => {
+                const selected = shippingOptions.find((o) => o.value === shippingMethod);
+                return selected?.note ? (
+                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <svg className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                    </svg>
+                    <span className="text-xs text-amber-800">{selected.note}</span>
+                  </div>
+                ) : null;
+              })()}
+              {/* Processing disclaimer */}
+              <p className="text-xs text-[var(--text-tertiary)]">
+                {getProcessingDisclaimer(shippingMethod)}
+              </p>
             </div>
 
             {/* Totals */}
@@ -1049,9 +1148,25 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
                 <span className="text-sm text-[var(--text-secondary)]">Subtotal</span>
                 <span className="text-sm font-medium text-[var(--text-primary)]">${estimatedSubtotal.toFixed(2)}</span>
               </div>
-              <div className="flex items-center justify-between text-xs text-[var(--text-tertiary)]">
-                <span>Tax + shipping calculated at checkout</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-[var(--text-secondary)]">Tax (est.)</span>
+                <span className="text-sm font-medium text-[var(--text-primary)]">${estimatedTax.toFixed(2)}</span>
               </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-[var(--text-secondary)]">Shipping ({shippingMethod})</span>
+                <span className="text-sm font-medium text-[var(--text-primary)]">
+                  {estimatedShipping > 0 ? `$${estimatedShipping.toFixed(2)}` : 'FREE'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between border-t border-[var(--border-subtle)] pt-2">
+                <span className="text-sm font-semibold text-[var(--text-primary)]">Estimated Total</span>
+                <span className="text-sm font-bold" style={{ color: 'var(--accent-primary)' }}>
+                  ${estimatedTotal.toFixed(2)}
+                </span>
+              </div>
+              <p className="text-xs text-[var(--text-tertiary)] text-center">
+                Tax + shipping finalized by Sunstone
+              </p>
             </div>
 
             {/* Store link */}
@@ -1076,9 +1191,25 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
                 <span className="text-[var(--text-secondary)]">Subtotal</span>
                 <span className="text-[var(--text-primary)]">${totals.subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-xs text-[var(--text-tertiary)]">
-                <span>Tax + shipping finalized by Sunstone</span>
+              <div className="flex justify-between">
+                <span className="text-[var(--text-secondary)]">Tax (est.)</span>
+                <span className="text-[var(--text-primary)]">${estimatedTax.toFixed(2)}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--text-secondary)]">Shipping (est.)</span>
+                <span className="text-[var(--text-primary)]">
+                  {estimatedShipping > 0 ? `$${estimatedShipping.toFixed(2)}` : 'FREE'}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-[var(--border-subtle)] pt-1.5">
+                <span className="font-semibold text-[var(--text-primary)]">Estimated Total</span>
+                <span className="font-bold" style={{ color: 'var(--accent-primary)' }}>
+                  ${estimatedTotal.toFixed(2)}
+                </span>
+              </div>
+              <p className="text-xs text-[var(--text-tertiary)] text-center">
+                Tax + shipping finalized by Sunstone
+              </p>
             </div>
 
             {paymentError && (
