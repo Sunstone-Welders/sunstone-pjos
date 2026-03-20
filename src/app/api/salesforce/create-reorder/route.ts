@@ -233,10 +233,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Sync Quote
-    await sfUpdate('Quote', quoteId, { IsSyncing: true });
+    // Update Opportunity Amount to match line item totals
+    const lineItemTotal = items.reduce((sum, item, i) => {
+      const sfProd = sfProductByItem.get(i);
+      if (sfProd && pbeByProductId.has(sfProd.Id)) {
+        return sum + (item.quantity * item.unit_price);
+      }
+      return sum;
+    }, 0);
+    await sfUpdate('Opportunity', oppId, { Amount: lineItemTotal });
 
-    // Wait for sync, then read back tax/shipping
+    // Try to sync Quote (may fail if API user lacks IsSyncing permission)
+    try {
+      await sfUpdate('Quote', quoteId, { IsSyncing: true });
+    } catch (syncErr: any) {
+      console.warn('[SF Reorder] Could not set IsSyncing on Quote (permission issue) — continuing without sync:', syncErr.message);
+    }
+
+    // Wait for sync (or fallback read), then read back tax/shipping
     await sleep(3000);
 
     let sfTax = reorder.tax_amount;
