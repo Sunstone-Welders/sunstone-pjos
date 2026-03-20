@@ -220,6 +220,18 @@ export async function POST(request: NextRequest) {
     const shippingState = stateZip[0] || '';
     const shippingPostalCode = stateZip[1] || '';
 
+    // Map display shipping labels → valid SF picklist values
+    const SF_SHIPPING_MAP: Record<string, string> = {
+      'UPS Ground': 'UPS Ground',
+      'UPS Next Day Air': 'UPS Next Day Air',
+      'Will Call / Pickup': 'Ship On Customer Account',
+    };
+    const sfShippingValue = shippingMethod ? SF_SHIPPING_MAP[shippingMethod] || null : null;
+    // Methods not in the SF picklist go into Description instead
+    const shippingNote = shippingMethod && !sfShippingValue
+      ? `\nShipping method requested: ${shippingMethod}`
+      : '';
+
     // Create Quote (Accepted) — include ContactId for validation rules
     const quoteFields: Record<string, any> = {
       Name: `Q-${oppName}`,
@@ -238,8 +250,8 @@ export async function POST(request: NextRequest) {
       BillingState: shippingState,
       BillingPostalCode: shippingPostalCode,
       BillingCountry: 'US',
-      Description: 'Auto-created from Sunstone Studio reorder',
-      ...(shippingMethod ? { Shipping_Method__c: shippingMethod } : {}),
+      Description: `Auto-created from Sunstone Studio reorder${shippingNote}`,
+      ...(sfShippingValue ? { Shipping_Method__c: sfShippingValue } : {}),
     };
 
     // Add ContactId if provided (required for Closed Won validation)
@@ -247,7 +259,20 @@ export async function POST(request: NextRequest) {
       quoteFields.ContactId = contactId;
     }
 
-    const quoteId = await sfCreate('Quote', quoteFields);
+    // Try creating Quote — if Shipping_Method__c is rejected, retry without it
+    let quoteId: string;
+    try {
+      quoteId = await sfCreate('Quote', quoteFields);
+    } catch (quoteErr: any) {
+      if (sfShippingValue && quoteErr.message?.includes('Shipping_Method__c')) {
+        console.warn(`[SF Reorder] Shipping_Method__c "${sfShippingValue}" rejected — retrying without it`);
+        delete quoteFields.Shipping_Method__c;
+        quoteFields.Description = `Auto-created from Sunstone Studio reorder\nShipping method requested: ${shippingMethod}`;
+        quoteId = await sfCreate('Quote', quoteFields);
+      } else {
+        throw quoteErr;
+      }
+    }
 
     // Create QuoteLineItems
     for (let i = 0; i < items.length; i++) {
@@ -326,8 +351,8 @@ export async function POST(request: NextRequest) {
         ShippingPostalCode: shippingPostalCode,
         ShippingCountry: 'US',
         Direct_Order__c: true,
-        ...(shippingMethod ? { Shipping_Method__c: shippingMethod } : {}),
-        Description: 'Sunstone Studio App Order',
+        ...(sfShippingValue ? { Shipping_Method__c: sfShippingValue } : {}),
+        Description: `Sunstone Studio App Order${shippingNote}`,
       });
 
       sfOrderId = orderId;

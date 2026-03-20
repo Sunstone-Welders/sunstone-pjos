@@ -214,7 +214,14 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
           setSfContactId(data.contactId || null);
           setAccountStatus('resolved');
           if (data.shippingAddress) {
-            setShippingAddress(data.shippingAddress);
+            const sa = data.shippingAddress;
+            setShippingAddress((prev) => ({
+              street: sa.street?.trim() || prev.street,
+              city: sa.city?.trim() || prev.city,
+              state: sa.state?.trim() || prev.state,
+              postalCode: sa.postalCode?.trim() || prev.postalCode,
+              country: sa.country?.trim() || prev.country || 'US',
+            }));
           }
           if (data.paymentMethods?.length > 0) {
             setPaymentMethods(data.paymentMethods);
@@ -313,7 +320,14 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
         setSfContactId(data.contactId || null);
         setAccountStatus('resolved');
         if (data.shippingAddress) {
-          setShippingAddress(data.shippingAddress);
+          const sa = data.shippingAddress;
+          setShippingAddress((prev) => ({
+            street: sa.street?.trim() || prev.street,
+            city: sa.city?.trim() || prev.city,
+            state: sa.state?.trim() || prev.state,
+            postalCode: sa.postalCode?.trim() || prev.postalCode,
+            country: sa.country?.trim() || prev.country || 'US',
+          }));
         }
         if (data.paymentMethods?.length > 0) {
           setPaymentMethods(data.paymentMethods);
@@ -1329,7 +1343,7 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
                   className="flex-1 text-white font-semibold"
                   style={{ backgroundColor: '#7A234A' }}
                 >
-                  Pay ${totals.subtotal.toFixed(2)}
+                  Pay ${totals.total.toFixed(2)}
                 </Button>
               ) : showNewCardForm || paymentMethods.length === 0 ? (
                 <Button
@@ -1337,7 +1351,7 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
                   className="flex-1 text-white font-semibold"
                   style={{ backgroundColor: '#7A234A' }}
                 >
-                  Save Card & Pay ${totals.subtotal.toFixed(2)}
+                  Save Card & Pay ${totals.total.toFixed(2)}
                 </Button>
               ) : null}
             </div>
