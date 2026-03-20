@@ -96,6 +96,9 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
     street: '', city: '', state: '', postalCode: '', country: 'US',
   });
 
+  // Shipping method
+  const [shippingMethod, setShippingMethod] = useState('UPS Ground');
+
   // Account resolution
   const [accountStatus, setAccountStatus] = useState<AccountStatus>('loading');
   const [sfAccountId, setSfAccountId] = useState<string | null>(null);
@@ -244,7 +247,11 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
       const data = await res.json();
       if (data.success) {
         setSfAccountId(data.accountId);
+        setSfContactId(data.contactId || null);
         setAccountStatus('resolved');
+        if (data.shippingAddress) {
+          setShippingAddress(data.shippingAddress);
+        }
         if (data.paymentMethods?.length > 0) {
           setPaymentMethods(data.paymentMethods);
           setSelectedCardId(data.paymentMethods[0].id);
@@ -472,7 +479,7 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
       const sfRes = await fetch('/api/salesforce/create-reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reorderId, contactId: sfContactId }),
+        body: JSON.stringify({ reorderId, contactId: sfContactId, shippingMethod }),
       });
 
       const sfData = await sfRes.json();
@@ -625,6 +632,7 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
     setChargedCard(null);
     setShowNewCardForm(false);
     setNewCard({ nameOnCard: '', cardNumber: '', expirationMonth: '', expirationYear: '', cvv: '' });
+    setShippingMethod('UPS Ground');
     onClose();
   };
 
@@ -1019,6 +1027,22 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
               </div>
             )}
 
+            {/* Shipping Method */}
+            <div>
+              <label className="text-sm font-medium text-[var(--text-primary)] mb-1 block">Shipping Method</label>
+              <select
+                value={shippingMethod}
+                onChange={(e) => setShippingMethod(e.target.value)}
+                className="w-full min-h-[48px] rounded-xl border border-[var(--border-default)] bg-[var(--surface-base)] px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]"
+              >
+                <option value="UPS Ground">UPS Ground</option>
+                <option value="UPS 2nd Day Air">UPS 2nd Day Air</option>
+                <option value="UPS Next Day Air">UPS Next Day Air</option>
+                <option value="USPS Priority Mail">USPS Priority Mail</option>
+                <option value="Will Call / Pickup">Will Call / Pickup</option>
+              </select>
+            </div>
+
             {/* Totals */}
             <div className="bg-[var(--surface-raised)] rounded-xl p-4 space-y-2">
               <div className="flex items-center justify-between">
@@ -1245,12 +1269,17 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
                   <span className="text-[var(--text-primary)]">${sfResult.tax.toFixed(2)}</span>
                 </div>
               )}
-              {sfResult && sfResult.shipping > 0 && (
+              {sfResult && sfResult.shipping > 0 ? (
                 <div className="flex justify-between">
                   <span className="text-[var(--text-secondary)]">Shipping</span>
                   <span className="text-[var(--text-primary)]">${sfResult.shipping.toFixed(2)}</span>
                 </div>
-              )}
+              ) : sfResult && sfResult.shipping === 0 ? (
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-secondary)]">Shipping</span>
+                  <span className="text-[var(--text-tertiary)] italic">Calculated by Sunstone</span>
+                </div>
+              ) : null}
               {sfResult && sfResult.grandTotal > 0 && (
                 <div className="flex justify-between border-t border-[var(--border-subtle)] pt-2">
                   <span className="font-semibold text-[var(--text-primary)]">Total{chargedCard ? ' charged' : ''}</span>

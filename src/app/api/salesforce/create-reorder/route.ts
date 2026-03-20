@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { reorderId, contactId } = body;
+    const { reorderId, contactId, shippingMethod } = body;
 
     if (!reorderId) {
       return NextResponse.json({ error: 'Missing reorderId' }, { status: 400 });
@@ -200,12 +200,19 @@ export async function POST(request: NextRequest) {
       Pricebook2Id: standardPricebookId,
       Status: 'Accepted',
       Direct_Order__c: true,
+      ShippingName: tenant?.name || '',
       ShippingStreet: shippingStreet,
       ShippingCity: shippingCity,
       ShippingState: shippingState,
       ShippingPostalCode: shippingPostalCode,
       ShippingCountry: 'US',
+      BillingStreet: shippingStreet,
+      BillingCity: shippingCity,
+      BillingState: shippingState,
+      BillingPostalCode: shippingPostalCode,
+      BillingCountry: 'US',
       Description: 'Auto-created from Sunstone Studio reorder',
+      ...(shippingMethod ? { Shipping_Method__c: shippingMethod } : {}),
     };
 
     // Add ContactId if provided (required for Closed Won validation)

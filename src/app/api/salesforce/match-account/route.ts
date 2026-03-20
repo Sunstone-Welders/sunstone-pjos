@@ -12,6 +12,8 @@ import {
   sfSearchAccounts,
   sfGetPaymentMethods,
   sfCreateAccount,
+  sfQuery,
+  sfGet,
 } from '@/lib/salesforce';
 
 // ── Normalize SF payment method fields to consistent frontend format ─────
@@ -24,6 +26,41 @@ function normalizePaymentMethods(raw: any[]): any[] {
     expirationMonth: card.expirationMonth || card.Expiration_Month__c || card.expMonth || '',
     expirationYear: card.expirationYear || card.Expiration_Year__c || card.expYear || '',
   }));
+}
+
+// ── Helpers: look up ContactId + ShippingAddress for an Account ──────────
+
+async function getContactIdForAccount(accountId: string): Promise<string | null> {
+  try {
+    const contacts = await sfQuery(
+      `SELECT Id FROM Contact WHERE AccountId = '${accountId.replace(/'/g, "\\'")}' LIMIT 1`
+    );
+    return contacts.length > 0 ? (contacts[0] as any).Id : null;
+  } catch (err) {
+    console.warn('[SF Match] getContactIdForAccount error:', err);
+    return null;
+  }
+}
+
+async function getShippingAddressForAccount(accountId: string): Promise<any | null> {
+  try {
+    const acct = await sfGet<any>('Account', accountId, [
+      'ShippingStreet', 'ShippingCity', 'ShippingState', 'ShippingPostalCode', 'ShippingCountry',
+    ]);
+    if (acct.ShippingStreet || acct.ShippingCity) {
+      return {
+        street: acct.ShippingStreet || '',
+        city: acct.ShippingCity || '',
+        state: acct.ShippingState || '',
+        postalCode: acct.ShippingPostalCode || '',
+        country: acct.ShippingCountry || 'US',
+      };
+    }
+    return null;
+  } catch (err) {
+    console.warn('[SF Match] getShippingAddressForAccount error:', err);
+    return null;
+  }
 }
 
 // ── GET: Search / resolve account ────────────────────────────────────────
@@ -58,7 +95,7 @@ export async function GET() {
       .single();
 
     if (tenant?.sf_account_id) {
-      // Already linked — fetch payment methods and return
+      // Already linked — fetch payment methods, contactId, and shipping address
       let paymentMethods: any[] = [];
       try {
         const pmResult = await sfGetPaymentMethods(tenant.sf_account_id);
@@ -67,9 +104,16 @@ export async function GET() {
         console.warn('[SF Match] getPaymentMethods error:', err);
       }
 
+      const [contactId, shippingAddress] = await Promise.all([
+        getContactIdForAccount(tenant.sf_account_id),
+        getShippingAddressForAccount(tenant.sf_account_id),
+      ]);
+
       return NextResponse.json({
         resolved: true,
         accountId: tenant.sf_account_id,
+        contactId,
+        shippingAddress,
         paymentMethods,
       });
     }
@@ -113,7 +157,7 @@ export async function GET() {
         .update({ sf_account_id: match.accountId })
         .eq('id', member.tenant_id);
 
-      // Fetch payment methods
+      // Fetch payment methods + contactId
       let paymentMethods: any[] = [];
       try {
         const pmResult = await sfGetPaymentMethods(match.accountId);
@@ -122,10 +166,13 @@ export async function GET() {
         console.warn('[SF Match] getPaymentMethods error:', err);
       }
 
+      const contactId = await getContactIdForAccount(match.accountId);
+
       return NextResponse.json({
         resolved: true,
         accountId: match.accountId,
         accountName: match.accountName,
+        contactId,
         shippingAddress: {
           street: match.shippingStreet || '',
           city: match.city || '',
@@ -206,7 +253,7 @@ export async function POST(request: NextRequest) {
         .update({ sf_account_id: accountId })
         .eq('id', member.tenant_id);
 
-      // Fetch payment methods
+      // Fetch payment methods, contactId, and shipping address
       let paymentMethods: any[] = [];
       try {
         const pmResult = await sfGetPaymentMethods(accountId);
@@ -215,9 +262,16 @@ export async function POST(request: NextRequest) {
         console.warn('[SF Match] getPaymentMethods error:', err);
       }
 
+      const [contactId, shippingAddress] = await Promise.all([
+        getContactIdForAccount(accountId),
+        getShippingAddressForAccount(accountId),
+      ]);
+
       return NextResponse.json({
         success: true,
         accountId,
+        contactId,
+        shippingAddress,
         paymentMethods,
       });
     }

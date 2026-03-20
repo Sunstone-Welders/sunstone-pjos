@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     // Load the reorder record
     const { data: reorder } = await serviceClient
       .from('reorder_history')
-      .select('sf_opportunity_id, sf_account_id, status')
+      .select('sf_opportunity_id, status')
       .eq('id', reorderHistoryId)
       .eq('tenant_id', member.tenant_id)
       .single();
