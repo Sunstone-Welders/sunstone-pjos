@@ -13,7 +13,7 @@
 
 'use client';
 
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useTenant } from '@/hooks/use-tenant';
@@ -25,7 +25,7 @@ import { Badge } from '@/components/ui/Badge';
 import ChainPricingConfig, { type PriceConfigRow } from '@/components/inventory/ChainPricingConfig';
 import SupplierDropdown from '@/components/inventory/SupplierDropdown';
 import MaterialDropdown from '@/components/inventory/MaterialDropdown';
-import type { InventoryItem, InventoryType, InventoryUnit, PricingMode, Material, TenantPricingMode, ReorderHistory, Supplier } from '@/types';
+import type { InventoryItem, InventoryItemVariant, InventoryType, InventoryUnit, PricingMode, Material, TenantPricingMode, ReorderHistory, Supplier } from '@/types';
 import { Skeleton } from '@/components/ui';
 import SunnyTutorial from '@/components/SunnyTutorial';
 import ReorderModal from '@/components/inventory/ReorderModal';
@@ -79,6 +79,10 @@ export default function InventoryPage() {
   const [activeTab, setActiveTab] = useState<'inventory' | 'catalog' | 'history'>('inventory');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
+  // Variant expansion
+  const [expandedItemIds, setExpandedItemIds] = useState<Set<string>>(new Set());
+  const [itemVariants, setItemVariants] = useState<Record<string, InventoryItemVariant[]>>({});
+
   // Reorder
   const [reorderItem, setReorderItem] = useState<InventoryItem | null>(null);
   const [reorderHistory, setReorderHistory] = useState<ReorderHistory[]>([]);
@@ -128,6 +132,25 @@ export default function InventoryPage() {
       console.error(error);
     } else {
       setItems(data || []);
+
+      // Fetch variants for items with has_variants
+      const variantItemIds = (data || []).filter((i: any) => i.has_variants).map((i: any) => i.id);
+      if (variantItemIds.length > 0) {
+        const { data: vData } = await supabase
+          .from('inventory_item_variants')
+          .select('*')
+          .in('inventory_item_id', variantItemIds)
+          .order('sort_order')
+          .order('name');
+        if (vData) {
+          const variantMap: Record<string, InventoryItemVariant[]> = {};
+          for (const v of vData as InventoryItemVariant[]) {
+            if (!variantMap[v.inventory_item_id]) variantMap[v.inventory_item_id] = [];
+            variantMap[v.inventory_item_id].push(v);
+          }
+          setItemVariants(variantMap);
+        }
+      }
     }
     setLoading(false);
 
@@ -353,6 +376,16 @@ export default function InventoryPage() {
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
   }, [openMenuId]);
+
+  // ─── Toggle variant row expansion ───
+  const toggleExpand = (itemId: string) => {
+    setExpandedItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
 
   // â"€â"€â"€ Handle Add Button â"€â"€â"€
   const handleAddClick = () => {
@@ -673,9 +706,13 @@ export default function InventoryPage() {
                 : pending.shippingStatus === 'preparing' ? 'Preparing to Ship'
                 : 'Processing';
 
+              const isExpanded = expandedItemIds.has(item.id);
+              const variants = item.has_variants ? (itemVariants[item.id] || []) : [];
+              const hasLowVariant = variants.some((v) => v.is_active && v.quantity_on_hand <= v.reorder_threshold);
+
               return (
+              <React.Fragment key={item.id}>
               <div
-                key={item.id}
                 className={`px-4 py-3 sm:grid sm:grid-cols-[1fr_100px_100px_100px_80px] sm:gap-4 sm:items-center cursor-pointer hover:bg-[var(--surface-raised)] transition-colors ${
                   !item.is_active ? 'opacity-50' : ''
                 }`}
@@ -689,6 +726,18 @@ export default function InventoryPage() {
                 {/* Item info */}
                 <div className="mb-2 sm:mb-0">
                   <div className="flex items-center gap-2 flex-wrap">
+                    {/* Expand/collapse for variant items */}
+                    {item.has_variants && variants.length > 0 && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleExpand(item.id); }}
+                        className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-transform"
+                        title={isExpanded ? 'Collapse' : 'Expand variants'}
+                      >
+                        <svg className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                        </svg>
+                      </button>
+                    )}
                     <span className="text-sm font-medium text-[var(--text-primary)]">
                       {item.name}
                     </span>
@@ -782,12 +831,15 @@ export default function InventoryPage() {
                 <div className="hidden sm:block text-right">
                   <span
                     className={`text-sm ${
-                      item.quantity_on_hand <= item.reorder_threshold
+                      (item.has_variants ? hasLowVariant : item.quantity_on_hand <= item.reorder_threshold)
                         ? 'text-[var(--error-600)] font-semibold'
                         : 'text-[var(--text-primary)]'
                     }`}
                   >
                     {item.quantity_on_hand}
+                    {item.has_variants && variants.length > 0 && (
+                      <span className="text-[var(--text-tertiary)] text-xs ml-0.5">total</span>
+                    )}
                     <span className="text-[var(--text-tertiary)] text-xs ml-0.5">
                       {item.unit === 'in' ? 'in' : item.unit === 'ft' ? 'ft' : ''}
                     </span>
@@ -871,12 +923,12 @@ export default function InventoryPage() {
                   </span>
                   <span
                     className={`text-sm ${
-                      item.quantity_on_hand <= item.reorder_threshold
+                      (item.has_variants ? hasLowVariant : item.quantity_on_hand <= item.reorder_threshold)
                         ? 'text-[var(--error-600)]'
                         : 'text-[var(--text-secondary)]'
                     }`}
                   >
-                    {item.quantity_on_hand} {item.unit}
+                    {item.quantity_on_hand} {item.has_variants && variants.length > 0 ? 'total' : item.unit}
                   </span>
                   <div className="flex items-center gap-1 ml-auto">
                     {isShippedOrDelivered && (
@@ -940,6 +992,53 @@ export default function InventoryPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Expanded variant child rows */}
+              {isExpanded && variants.length > 0 && variants.map((v) => (
+                <div
+                  key={v.id}
+                  className="px-4 py-2 sm:grid sm:grid-cols-[1fr_100px_100px_100px_80px] sm:gap-4 sm:items-center bg-[var(--surface-raised)]/50"
+                >
+                  <div className="mb-1 sm:mb-0 pl-7">
+                    <span className="text-sm text-[var(--text-secondary)]">
+                      {v.name}
+                    </span>
+                    {v.sku && (
+                      <span className="text-xs text-[var(--text-tertiary)] ml-2">
+                        SKU: {v.sku}
+                      </span>
+                    )}
+                    {!v.is_active && (
+                      <span className="text-[10px] text-[var(--text-tertiary)] ml-1">(inactive)</span>
+                    )}
+                  </div>
+                  <div className="hidden sm:block text-right">
+                    <span className="text-sm text-[var(--text-tertiary)]">
+                      ${Number(v.cost_per_unit).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="hidden sm:block text-right">
+                    <span className="text-sm text-[var(--text-secondary)]">
+                      ${Number(v.sell_price).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="hidden sm:block text-right">
+                    <span className={`text-sm ${
+                      v.is_active && v.quantity_on_hand <= v.reorder_threshold
+                        ? 'text-[var(--error-600)] font-semibold'
+                        : 'text-[var(--text-secondary)]'
+                    }`}>
+                      {v.quantity_on_hand}
+                    </span>
+                  </div>
+                  <div className="hidden sm:block text-right">
+                    {v.is_active && v.quantity_on_hand <= v.reorder_threshold && (
+                      <span className="text-[10px] text-[var(--error-600)] font-medium">Low</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              </React.Fragment>
               );
             })}
           </div>
@@ -1294,9 +1393,40 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
   const [catalogDropdownOpen, setCatalogDropdownOpen] = useState(false);
   const catalogDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Variant system
+  const [hasVariants, setHasVariants] = useState(editingItem?.has_variants || false);
+  const [variants, setVariants] = useState<InventoryItemVariant[]>([]);
+  const [variantsLoaded, setVariantsLoaded] = useState(false);
+  const [deletedVariantIds, setDeletedVariantIds] = useState<string[]>([]);
+
   // Validation
   const [validationTriggered, setValidationTriggered] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Load variants for existing items with has_variants
+  useEffect(() => {
+    if (!editingItem?.has_variants || !editingItem?.id || variantsLoaded) return;
+    const loadVariants = async () => {
+      const { data } = await supabase
+        .from('inventory_item_variants')
+        .select('*')
+        .eq('inventory_item_id', editingItem.id)
+        .order('sort_order')
+        .order('name');
+      if (data) setVariants(data as InventoryItemVariant[]);
+      setVariantsLoaded(true);
+    };
+    loadVariants();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingItem?.id, editingItem?.has_variants]);
+
+  // Auto-sum variant quantities → parent quantity when has_variants
+  useEffect(() => {
+    if (hasVariants && variants.length > 0) {
+      const total = variants.reduce((sum, v) => sum + Number(v.quantity_on_hand), 0);
+      setQuantity(total);
+    }
+  }, [hasVariants, variants]);
 
   // Load materials for name resolution on save
   useEffect(() => {
@@ -1574,14 +1704,111 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
         }
       }
     } else {
-      // Non-chain: block save if no sell price
-      if (sellPrice <= 0) {
+      // Non-chain: block save if no sell price (unless item has variants — each variant has its own price)
+      if (sellPrice <= 0 && !hasVariants) {
         toast.error('A sell price is required for non-chain items.');
         return false;
       }
     }
 
+    // Validate variants
+    if (hasVariants && variants.length > 0) {
+      const emptyNames = variants.filter((v) => !v.name.trim());
+      if (emptyNames.length > 0) {
+        toast.error('All variants must have a name.');
+        return false;
+      }
+    }
+
     return true;
+  };
+
+  // ─── Variant helpers ───
+  const addVariant = () => {
+    const newVariant: InventoryItemVariant = {
+      id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      tenant_id: tenant.id,
+      inventory_item_id: editingItem?.id || '',
+      name: '',
+      sku: null,
+      cost_per_unit: parseFloat(costPerUnit) || 0,
+      sell_price: sellPrice || 0,
+      quantity_on_hand: 0,
+      reorder_threshold: 0,
+      sort_order: variants.length,
+      is_active: true,
+      sunstone_variant_id: null,
+      created_at: '',
+      updated_at: '',
+    };
+    setVariants((prev) => [...prev, newVariant]);
+  };
+
+  const addMonthVariants = () => {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+    const existingNames = new Set(variants.map((v) => v.name.toLowerCase()));
+    const newVariants: InventoryItemVariant[] = months
+      .filter((m) => !existingNames.has(m.toLowerCase()))
+      .map((m, i) => ({
+        id: `new-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+        tenant_id: tenant.id,
+        inventory_item_id: editingItem?.id || '',
+        name: m,
+        sku: null,
+        cost_per_unit: parseFloat(costPerUnit) || 0,
+        sell_price: sellPrice || 0,
+        quantity_on_hand: 0,
+        reorder_threshold: 0,
+        sort_order: variants.length + i,
+        is_active: true,
+        sunstone_variant_id: null,
+        created_at: '',
+        updated_at: '',
+      }));
+    if (newVariants.length === 0) {
+      toast('All months already exist');
+      return;
+    }
+    setVariants((prev) => [...prev, ...newVariants]);
+    toast.success(`Added ${newVariants.length} month variant${newVariants.length !== 1 ? 's' : ''}`);
+  };
+
+  const updateVariant = (id: string, field: keyof InventoryItemVariant, value: any) => {
+    setVariants((prev) => prev.map((v) => v.id === id ? { ...v, [field]: value } : v));
+  };
+
+  const removeVariant = (id: string) => {
+    if (!id.startsWith('new-')) {
+      setDeletedVariantIds((prev) => [...prev, id]);
+    }
+    setVariants((prev) => prev.filter((v) => v.id !== id));
+  };
+
+  const moveVariant = (idx: number, direction: -1 | 1) => {
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= variants.length) return;
+    setVariants((prev) => {
+      const arr = [...prev];
+      [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+      return arr.map((v, i) => ({ ...v, sort_order: i }));
+    });
+  };
+
+  const handleToggleHasVariants = (enabled: boolean) => {
+    if (!enabled && variants.length > 0) {
+      if (!window.confirm('This will remove all variants. Stock from variants will be combined into the parent item.')) return;
+      const totalStock = variants.reduce((sum, v) => sum + Number(v.quantity_on_hand), 0);
+      setQuantity(totalStock);
+      // Mark existing DB variants for deletion
+      for (const v of variants) {
+        if (!v.id.startsWith('new-')) {
+          setDeletedVariantIds((prev) => [...prev, v.id]);
+        }
+      }
+      setVariants([]);
+    }
+    setHasVariants(enabled);
   };
 
   // â"€â"€â"€ Save â"€â"€â"€
@@ -1619,6 +1846,7 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
         pricing_tier_id: type === 'chain' ? pricingTierId : null,
         sunstone_product_id: isSunstoneSupplier ? sunstoneProductId : null,
         sunstone_variant_id: isSunstoneSupplier ? sunstoneVariantId : null,
+        has_variants: type !== 'chain' ? hasVariants : false,
       };
 
       let savedItemId: string;
@@ -1670,6 +1898,53 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
             toast.warning('Item saved, but chain pricing may not have saved fully.');
           }
         }
+      }
+
+      // Save variants (if applicable)
+      if (hasVariants && type !== 'chain') {
+        // Delete removed variants
+        if (deletedVariantIds.length > 0) {
+          await supabase
+            .from('inventory_item_variants')
+            .delete()
+            .in('id', deletedVariantIds);
+        }
+
+        // Upsert variants
+        for (const v of variants) {
+          const variantData = {
+            tenant_id: tenant.id,
+            inventory_item_id: savedItemId,
+            name: v.name.trim(),
+            sku: v.sku?.trim() || null,
+            cost_per_unit: Number(v.cost_per_unit) || 0,
+            sell_price: Number(v.sell_price) || 0,
+            quantity_on_hand: Number(v.quantity_on_hand) || 0,
+            reorder_threshold: Number(v.reorder_threshold) || 0,
+            sort_order: v.sort_order,
+            is_active: v.is_active,
+            sunstone_variant_id: v.sunstone_variant_id || null,
+          };
+
+          if (v.id.startsWith('new-')) {
+            // Insert new variant
+            await supabase
+              .from('inventory_item_variants')
+              .insert(variantData);
+          } else {
+            // Update existing variant
+            await supabase
+              .from('inventory_item_variants')
+              .update({ ...variantData, updated_at: new Date().toISOString() })
+              .eq('id', v.id);
+          }
+        }
+      } else if (!hasVariants && deletedVariantIds.length > 0) {
+        // Clean up variants when toggled off
+        await supabase
+          .from('inventory_item_variants')
+          .delete()
+          .in('id', deletedVariantIds);
       }
 
       toast.success(isEditing ? 'Item updated' : 'Item added');
@@ -2004,11 +2279,17 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
                     value={quantity || ''}
                     onChange={(e) => setQuantity(parseFloat(e.target.value) || 0)}
                     placeholder="0"
-                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] px-4 py-3 text-[var(--text-primary)] text-base  placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] min-h-[48px] pr-12"
+                    readOnly={hasVariants && variants.length > 0}
+                    className={`w-full rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] px-4 py-3 text-[var(--text-primary)] text-base placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] min-h-[48px] pr-12 ${hasVariants && variants.length > 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
                   />
                   {type === 'chain' && (
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-[var(--text-tertiary)]">
                       in
+                    </span>
+                  )}
+                  {hasVariants && variants.length > 0 && (
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-[var(--text-tertiary)]">
+                      auto
                     </span>
                   )}
                 </div>
@@ -2186,6 +2467,155 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
               </div>
             )}
           </div>
+
+          {/* ═══ SECTION 4: Variants (non-chain only) ═══ */}
+          {type !== 'chain' && (
+            <>
+              <div className="border-t border-[var(--border-subtle)]" />
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
+                    Variants
+                  </h3>
+                </div>
+
+                {/* Toggle */}
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hasVariants}
+                    onChange={(e) => handleToggleHasVariants(e.target.checked)}
+                    className="rounded accent-[var(--accent-primary)]"
+                  />
+                  <span className="text-sm text-[var(--text-primary)]">
+                    This item has variants
+                  </span>
+                  <span className="text-xs text-[var(--text-tertiary)]">
+                    (e.g., different colors, months, sizes)
+                  </span>
+                </label>
+
+                {/* Variant editor */}
+                {hasVariants && (
+                  <div className="space-y-3">
+                    {variants.length > 0 && (
+                      <div className="rounded-xl border border-[var(--border-default)] overflow-hidden">
+                        {/* Header */}
+                        <div className="grid grid-cols-[1fr_70px_70px_60px_60px_56px] gap-2 px-3 py-2 bg-[var(--surface-raised)] text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
+                          <div>Name</div>
+                          <div className="text-right">Cost</div>
+                          <div className="text-right">Price</div>
+                          <div className="text-right">Stock</div>
+                          <div className="text-right">Alert</div>
+                          <div></div>
+                        </div>
+
+                        {/* Rows */}
+                        <div className="divide-y divide-[var(--border-subtle)]">
+                          {variants.map((v, idx) => (
+                            <div key={v.id} className="grid grid-cols-[1fr_70px_70px_60px_60px_56px] gap-2 px-3 py-2 items-center">
+                              <input
+                                type="text"
+                                value={v.name}
+                                onChange={(e) => updateVariant(v.id, 'name', e.target.value)}
+                                placeholder="Name"
+                                className="w-full rounded border border-[var(--border-default)] bg-[var(--surface-base)] px-2 py-1.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-primary)] min-h-[36px]"
+                              />
+                              <div className="relative">
+                                <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] text-[var(--text-tertiary)]">$</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={v.cost_per_unit || ''}
+                                  onChange={(e) => updateVariant(v.id, 'cost_per_unit', parseFloat(e.target.value) || 0)}
+                                  className="w-full rounded border border-[var(--border-default)] bg-[var(--surface-base)] pl-5 pr-1 py-1.5 text-sm text-right text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] min-h-[36px]"
+                                />
+                              </div>
+                              <div className="relative">
+                                <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] text-[var(--text-tertiary)]">$</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={v.sell_price || ''}
+                                  onChange={(e) => updateVariant(v.id, 'sell_price', parseFloat(e.target.value) || 0)}
+                                  className="w-full rounded border border-[var(--border-default)] bg-[var(--surface-base)] pl-5 pr-1 py-1.5 text-sm text-right text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] min-h-[36px]"
+                                />
+                              </div>
+                              <input
+                                type="number"
+                                step="1"
+                                min="0"
+                                value={v.quantity_on_hand || ''}
+                                onChange={(e) => updateVariant(v.id, 'quantity_on_hand', parseFloat(e.target.value) || 0)}
+                                className="w-full rounded border border-[var(--border-default)] bg-[var(--surface-base)] px-1 py-1.5 text-sm text-right text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] min-h-[36px]"
+                              />
+                              <input
+                                type="number"
+                                step="1"
+                                min="0"
+                                value={v.reorder_threshold || ''}
+                                onChange={(e) => updateVariant(v.id, 'reorder_threshold', parseFloat(e.target.value) || 0)}
+                                className="w-full rounded border border-[var(--border-default)] bg-[var(--surface-base)] px-1 py-1.5 text-sm text-right text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] min-h-[36px]"
+                              />
+                              <div className="flex items-center gap-0.5 justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => moveVariant(idx, -1)}
+                                  disabled={idx === 0}
+                                  className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-20"
+                                  title="Move up"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => removeVariant(v.id)}
+                                  className="p-1 rounded text-[var(--text-tertiary)] hover:text-red-600"
+                                  title="Remove variant"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={addVariant}
+                        className="text-sm font-medium text-[var(--accent-primary)] hover:underline min-h-[36px]"
+                      >
+                        + Add Variant
+                      </button>
+                      <button
+                        type="button"
+                        onClick={addMonthVariants}
+                        className="text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] min-h-[36px]"
+                      >
+                        Add months (Jan–Dec)
+                      </button>
+                    </div>
+
+                    {hasVariants && variants.length > 0 && (
+                      <p className="text-xs text-[var(--text-tertiary)]">
+                        Total stock: {variants.reduce((sum, v) => sum + Number(v.quantity_on_hand), 0)} (auto-calculated from variants)
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           {/* â"€â"€â"€ Notes â"€â"€â"€ */}
           <div>

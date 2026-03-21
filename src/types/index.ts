@@ -151,6 +151,26 @@ export interface InventoryItem {
   // Sunstone supply linkage
   sunstone_product_id: string | null;
   sunstone_variant_id: string | null;
+  // Variant system
+  has_variants: boolean;
+  variants?: InventoryItemVariant[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventoryItemVariant {
+  id: string;
+  tenant_id: string;
+  inventory_item_id: string;
+  name: string;
+  sku: string | null;
+  cost_per_unit: number;
+  sell_price: number;
+  quantity_on_hand: number;
+  reorder_threshold: number;
+  sort_order: number;
+  is_active: boolean;
+  sunstone_variant_id: string | null;
   created_at: string;
   updated_at: string;
 }
