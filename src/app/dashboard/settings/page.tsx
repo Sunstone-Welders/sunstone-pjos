@@ -12,7 +12,7 @@
 
 'use client';
 
-import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -310,7 +310,9 @@ function SettingsPage() {
   const { tenant, can, isOwner, refetch } = useTenant();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const supabase = createClient();
+  // Stable reference — prevents dependency cycles in effects
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const supabase = useMemo(() => createClient(), []);
 
   // Redirect non-admins
   useEffect(() => {
@@ -2801,7 +2803,8 @@ function CommsSubAccordion({ tenant, onSaved, onProvisioned }: { tenant: any; on
 // ============================================================================
 
 function SunnyPersonalitySection({ tenant, onSaved }: { tenant: any; onSaved: () => void }) {
-  const supabase = createClient();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const supabase = useMemo(() => createClient(), []);
   const [selectedPreset, setSelectedPreset] = useState(tenant?.sunny_tone_preset || 'warm_bubbly');
   const [customText, setCustomText] = useState(tenant?.sunny_tone_custom || '');
   const [saving, setSaving] = useState(false);

@@ -3,6 +3,7 @@
 // ============================================================================
 // Manages suppliers with CRUD. Sunstone is pre-seeded and cannot be
 // deleted. Full contact, address, social, and account fields.
+// Uses shared SupplierFormFields from SupplierDropdown.
 // ============================================================================
 
 'use client';
@@ -10,46 +11,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
 import { toast } from 'sonner';
+import { SupplierFormFields, EMPTY_SUPPLIER_FORM, type SupplierFormData } from '@/components/inventory/SupplierDropdown';
 import type { Supplier } from '@/types';
 
 interface SuppliersSectionProps {
   tenantId: string;
 }
 
-type SupplierForm = {
-  name: string;
-  contact_name: string;
-  contact_email: string;
-  contact_phone: string;
-  website: string;
-  street: string;
-  city: string;
-  state: string;
-  postal_code: string;
-  country: string;
-  instagram: string;
-  facebook: string;
-  tiktok: string;
-  account_number: string;
-  notes: string;
-};
-
-const emptyForm: SupplierForm = {
-  name: '', contact_name: '', contact_email: '', contact_phone: '', website: '',
-  street: '', city: '', state: '', postal_code: '', country: '',
-  instagram: '', facebook: '', tiktok: '', account_number: '', notes: '',
-};
-
-const inputCls = 'w-full h-10 px-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] min-h-[44px]';
-const labelCls = 'block text-xs font-medium text-[var(--text-secondary)] mb-1';
-
 export default function SuppliersSection({ tenantId }: SuppliersSectionProps) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<SupplierForm>(emptyForm);
+  const [editForm, setEditForm] = useState<SupplierFormData>({ ...EMPTY_SUPPLIER_FORM });
   const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState<SupplierForm>(emptyForm);
+  const [addForm, setAddForm] = useState<SupplierFormData>({ ...EMPTY_SUPPLIER_FORM });
   const [saving, setSaving] = useState(false);
 
   // ── Load ────────────────────────────────────────────────────────────
@@ -70,6 +45,16 @@ export default function SuppliersSection({ tenantId }: SuppliersSectionProps) {
     if (tenantId) loadSuppliers();
   }, [tenantId, loadSuppliers]);
 
+  // ── Stable form field change handlers ───────────────────────────────
+
+  const handleAddFieldChange = useCallback((field: keyof SupplierFormData, value: string) => {
+    setAddForm((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
+  const handleEditFieldChange = useCallback((field: keyof SupplierFormData, value: string) => {
+    setEditForm((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
   // ── Add ─────────────────────────────────────────────────────────────
 
   const handleAdd = async () => {
@@ -79,7 +64,7 @@ export default function SuppliersSection({ tenantId }: SuppliersSectionProps) {
       const res = await fetch('/api/suppliers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenant_id: tenantId, ...addForm }),
+        body: JSON.stringify(addForm),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -88,7 +73,7 @@ export default function SuppliersSection({ tenantId }: SuppliersSectionProps) {
       }
       toast.success('Supplier added');
       setShowAdd(false);
-      setAddForm(emptyForm);
+      setAddForm({ ...EMPTY_SUPPLIER_FORM });
       await loadSuppliers();
     } catch {
       toast.error('Failed to add supplier');
@@ -171,138 +156,8 @@ export default function SuppliersSection({ tenantId }: SuppliersSectionProps) {
     if (s.contact_phone) parts.push(s.contact_phone);
     if (s.contact_email) parts.push(s.contact_email);
     if (s.website) parts.push(s.website.replace(/^https?:\/\//, ''));
-    return parts.length > 0 ? parts.join(' · ') : 'No contact info added';
+    return parts.length > 0 ? parts.join(' \u00B7 ') : 'No contact info added';
   };
-
-  // ── Supplier form ──────────────────────────────────────────────────
-
-  const SupplierFormPanel = ({
-    form,
-    setForm,
-    onSave,
-    onCancel,
-    isSunstone,
-  }: {
-    form: SupplierForm;
-    setForm: (f: SupplierForm) => void;
-    onSave: () => void;
-    onCancel: () => void;
-    isSunstone?: boolean;
-  }) => (
-    <div className="p-4 border border-[var(--border-default)] rounded-xl bg-[var(--surface-raised)] space-y-4">
-      {/* Supplier Name */}
-      <div>
-        <label className={labelCls}>Supplier Name *</label>
-        <input
-          type="text"
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          className={inputCls}
-          placeholder="Supplier name"
-          autoFocus
-          disabled={isSunstone}
-        />
-      </div>
-
-      {/* Contact Information */}
-      <div>
-        <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">Contact Information</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>Contact Person</label>
-            <input type="text" value={form.contact_name} onChange={(e) => setForm({ ...form, contact_name: e.target.value })} className={inputCls} placeholder="Jane Smith" />
-          </div>
-          <div>
-            <label className={labelCls}>Email</label>
-            <input type="email" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} className={inputCls} placeholder="jane@supplier.com" />
-          </div>
-          <div>
-            <label className={labelCls}>Phone</label>
-            <input type="tel" value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} className={inputCls} placeholder="555-123-4567" />
-          </div>
-          <div>
-            <label className={labelCls}>Website</label>
-            <input type="text" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} className={inputCls} placeholder="supplier.com" />
-          </div>
-        </div>
-      </div>
-
-      {/* Address */}
-      <div>
-        <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">Address</p>
-        <div className="space-y-3">
-          <div>
-            <label className={labelCls}>Street</label>
-            <input type="text" value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} className={inputCls} placeholder="123 Main St" />
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
-              <label className={labelCls}>City</label>
-              <input type="text" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className={inputCls} placeholder="City" />
-            </div>
-            <div>
-              <label className={labelCls}>State</label>
-              <input type="text" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} className={inputCls} placeholder="CA" />
-            </div>
-            <div>
-              <label className={labelCls}>ZIP</label>
-              <input type="text" value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} className={inputCls} placeholder="90001" />
-            </div>
-            <div>
-              <label className={labelCls}>Country</label>
-              <input type="text" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} className={inputCls} placeholder="US" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Social Media */}
-      <div>
-        <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">Social Media</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div>
-            <label className={labelCls}>Instagram</label>
-            <input type="text" value={form.instagram} onChange={(e) => setForm({ ...form, instagram: e.target.value })} className={inputCls} placeholder="@handle" />
-          </div>
-          <div>
-            <label className={labelCls}>Facebook</label>
-            <input type="text" value={form.facebook} onChange={(e) => setForm({ ...form, facebook: e.target.value })} className={inputCls} placeholder="pagename" />
-          </div>
-          <div>
-            <label className={labelCls}>TikTok</label>
-            <input type="text" value={form.tiktok} onChange={(e) => setForm({ ...form, tiktok: e.target.value })} className={inputCls} placeholder="@handle" />
-          </div>
-        </div>
-      </div>
-
-      {/* Account & Notes */}
-      <div>
-        <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">Account & Notes</p>
-        <div className="space-y-3">
-          <div>
-            <label className={labelCls}>Account Number</label>
-            <input type="text" value={form.account_number} onChange={(e) => setForm({ ...form, account_number: e.target.value })} className={inputCls} placeholder="Your account # with this supplier" />
-          </div>
-          <div>
-            <label className={labelCls}>Notes</label>
-            <textarea
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              className="w-full h-20 px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] resize-none"
-              placeholder="Free shipping over $200, sales rep is John..."
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-subtle)]">
-        <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
-        <Button variant="primary" size="sm" onClick={onSave} disabled={saving || !form.name.trim()}>
-          {saving ? 'Saving...' : 'Save'}
-        </Button>
-      </div>
-    </div>
-  );
 
   // ── Render ──────────────────────────────────────────────────────────
 
@@ -327,13 +182,19 @@ export default function SuppliersSection({ tenantId }: SuppliersSectionProps) {
         {suppliers.map((s) => (
           <div key={s.id}>
             {editingId === s.id ? (
-              <SupplierFormPanel
-                form={editForm}
-                setForm={setEditForm}
-                onSave={handleEdit}
-                onCancel={() => setEditingId(null)}
-                isSunstone={s.is_sunstone}
-              />
+              <div className="p-4 border border-[var(--border-default)] rounded-xl bg-[var(--surface-raised)] space-y-4">
+                <SupplierFormFields
+                  form={editForm}
+                  onChange={handleEditFieldChange}
+                  disableName={s.is_sunstone}
+                />
+                <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-subtle)]">
+                  <Button variant="ghost" size="sm" onClick={() => setEditingId(null)}>Cancel</Button>
+                  <Button variant="primary" size="sm" onClick={handleEdit} disabled={saving || !editForm.name.trim()}>
+                    {saving ? 'Saving...' : 'Save'}
+                  </Button>
+                </div>
+              </div>
             ) : (
               <div className="flex items-center justify-between px-4 py-3 min-h-[56px]">
                 <div className="flex-1 min-w-0">
@@ -376,12 +237,18 @@ export default function SuppliersSection({ tenantId }: SuppliersSectionProps) {
 
       {/* Add form */}
       {showAdd ? (
-        <SupplierFormPanel
-          form={addForm}
-          setForm={setAddForm}
-          onSave={handleAdd}
-          onCancel={() => { setShowAdd(false); setAddForm(emptyForm); }}
-        />
+        <div className="p-4 border border-[var(--border-default)] rounded-xl bg-[var(--surface-raised)] space-y-4">
+          <SupplierFormFields
+            form={addForm}
+            onChange={handleAddFieldChange}
+          />
+          <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-subtle)]">
+            <Button variant="ghost" size="sm" onClick={() => { setShowAdd(false); setAddForm({ ...EMPTY_SUPPLIER_FORM }); }}>Cancel</Button>
+            <Button variant="primary" size="sm" onClick={handleAdd} disabled={saving || !addForm.name.trim()}>
+              {saving ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        </div>
       ) : (
         <Button variant="secondary" size="sm" onClick={() => setShowAdd(true)}>
           + Add Supplier

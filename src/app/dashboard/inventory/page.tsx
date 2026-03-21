@@ -59,7 +59,9 @@ const UNITS: { value: InventoryUnit; label: string }[] = [
 export default function InventoryPage() {
   const { tenant, role } = useTenant();
   const router = useRouter();
-  const supabase = createClient();
+  // Stable reference — prevents dependency cycles in useCallback/useEffect
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const supabase = useMemo(() => createClient(), []);
 
   // â"€â"€â"€ State â"€â"€â"€
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -1346,7 +1348,9 @@ interface InventoryItemFormProps {
 }
 
 function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: InventoryItemFormProps) {
-  const supabase = createClient();
+  // Stable reference — prevents dependency cycles in effects
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const supabase = useMemo(() => createClient(), []);
   const isEditing = !!editingItem;
 
   // â"€â"€â"€ Form State â"€â"€â"€

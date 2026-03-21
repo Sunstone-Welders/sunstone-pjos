@@ -1,20 +1,170 @@
 // ============================================================================
 // SupplierDropdown — Inventory Form Component
 // ============================================================================
-// New file: src/components/inventory/SupplierDropdown.tsx
-//
 // Replaces the free-text supplier field on the inventory form.
-// Loads from suppliers table, Sunstone first. Includes "+ Add Supplier" option.
-// Uses Supabase fallback if API routes are unavailable.
+// Loads from suppliers table, Sunstone first. "+ Add Supplier" opens a full
+// modal form matching the Settings supplier form.
 // ============================================================================
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
 import type { Supplier } from '@/types';
+
+// ── Shared form types + styles ──────────────────────────────────────────
+
+export type SupplierFormData = {
+  name: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string;
+  website: string;
+  street: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+  instagram: string;
+  facebook: string;
+  tiktok: string;
+  account_number: string;
+  notes: string;
+};
+
+export const EMPTY_SUPPLIER_FORM: SupplierFormData = {
+  name: '', contact_name: '', contact_email: '', contact_phone: '', website: '',
+  street: '', city: '', state: '', postal_code: '', country: '',
+  instagram: '', facebook: '', tiktok: '', account_number: '', notes: '',
+};
+
+const inputCls = 'w-full h-10 px-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] min-h-[44px]';
+const labelCls = 'block text-xs font-medium text-[var(--text-secondary)] mb-1';
+
+// ── Shared supplier form fields (used in both modal and settings) ────────
+
+export function SupplierFormFields({
+  form,
+  onChange,
+  disableName,
+}: {
+  form: SupplierFormData;
+  onChange: (field: keyof SupplierFormData, value: string) => void;
+  disableName?: boolean;
+}) {
+  return (
+    <div className="space-y-4">
+      {/* Supplier Name */}
+      <div>
+        <label className={labelCls}>Supplier Name *</label>
+        <input
+          type="text"
+          value={form.name}
+          onChange={(e) => onChange('name', e.target.value)}
+          className={inputCls}
+          placeholder="Supplier name"
+          disabled={disableName}
+        />
+      </div>
+
+      {/* Contact Information */}
+      <div>
+        <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">Contact Information</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Contact Person</label>
+            <input type="text" value={form.contact_name} onChange={(e) => onChange('contact_name', e.target.value)} className={inputCls} placeholder="Jane Smith" />
+          </div>
+          <div>
+            <label className={labelCls}>Email</label>
+            <input type="email" value={form.contact_email} onChange={(e) => onChange('contact_email', e.target.value)} className={inputCls} placeholder="jane@supplier.com" />
+          </div>
+          <div>
+            <label className={labelCls}>Phone</label>
+            <input type="tel" value={form.contact_phone} onChange={(e) => onChange('contact_phone', e.target.value)} className={inputCls} placeholder="555-123-4567" />
+          </div>
+          <div>
+            <label className={labelCls}>Website</label>
+            <input type="text" value={form.website} onChange={(e) => onChange('website', e.target.value)} className={inputCls} placeholder="supplier.com" />
+          </div>
+        </div>
+      </div>
+
+      {/* Address */}
+      <div>
+        <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">Address</p>
+        <div className="space-y-3">
+          <div>
+            <label className={labelCls}>Street</label>
+            <input type="text" value={form.street} onChange={(e) => onChange('street', e.target.value)} className={inputCls} placeholder="123 Main St" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <label className={labelCls}>City</label>
+              <input type="text" value={form.city} onChange={(e) => onChange('city', e.target.value)} className={inputCls} placeholder="City" />
+            </div>
+            <div>
+              <label className={labelCls}>State</label>
+              <input type="text" value={form.state} onChange={(e) => onChange('state', e.target.value)} className={inputCls} placeholder="CA" />
+            </div>
+            <div>
+              <label className={labelCls}>ZIP</label>
+              <input type="text" value={form.postal_code} onChange={(e) => onChange('postal_code', e.target.value)} className={inputCls} placeholder="90001" />
+            </div>
+            <div>
+              <label className={labelCls}>Country</label>
+              <input type="text" value={form.country} onChange={(e) => onChange('country', e.target.value)} className={inputCls} placeholder="US" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Social Media */}
+      <div>
+        <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">Social Media</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className={labelCls}>Instagram</label>
+            <input type="text" value={form.instagram} onChange={(e) => onChange('instagram', e.target.value)} className={inputCls} placeholder="@handle" />
+          </div>
+          <div>
+            <label className={labelCls}>Facebook</label>
+            <input type="text" value={form.facebook} onChange={(e) => onChange('facebook', e.target.value)} className={inputCls} placeholder="pagename" />
+          </div>
+          <div>
+            <label className={labelCls}>TikTok</label>
+            <input type="text" value={form.tiktok} onChange={(e) => onChange('tiktok', e.target.value)} className={inputCls} placeholder="@handle" />
+          </div>
+        </div>
+      </div>
+
+      {/* Account & Notes */}
+      <div>
+        <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">Account & Notes</p>
+        <div className="space-y-3">
+          <div>
+            <label className={labelCls}>Account Number</label>
+            <input type="text" value={form.account_number} onChange={(e) => onChange('account_number', e.target.value)} className={inputCls} placeholder="Your account # with this supplier" />
+          </div>
+          <div>
+            <label className={labelCls}>Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => onChange('notes', e.target.value)}
+              className="w-full h-20 px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] resize-none"
+              placeholder="Free shipping over $200, sales rep is John..."
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main SupplierDropdown component ──────────────────────────────────────
 
 interface SupplierDropdownProps {
   tenantId: string;
@@ -29,13 +179,18 @@ interface SupplierDropdownProps {
 export default function SupplierDropdown({ tenantId, value, onChange, onSelect, initialName }: SupplierDropdownProps) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
-  const [newName, setNewName] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState<SupplierFormData>({ ...EMPTY_SUPPLIER_FORM });
   const [addSaving, setAddSaving] = useState(false);
 
-  const supabase = createClient();
+  // Stable refs to avoid dependency cycles in effects
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
-  const loadSuppliers = async () => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const supabase = useMemo(() => createClient(), []);
+
+  const loadSuppliers = useCallback(async () => {
     try {
       const res = await fetch(`/api/suppliers?tenantId=${tenantId}`);
       if (res.ok) {
@@ -60,62 +215,55 @@ export default function SupplierDropdown({ tenantId, value, onChange, onSelect, 
     } finally {
       setLoading(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId]);
 
   useEffect(() => {
     if (tenantId) loadSuppliers();
-  }, [tenantId]);
+  }, [tenantId, loadSuppliers]);
 
   const handleAdd = async () => {
-    if (!newName.trim()) return;
+    if (!addForm.name.trim()) return;
     setAddSaving(true);
     try {
-      // Try API first
       const res = await fetch('/api/suppliers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenant_id: tenantId, name: newName.trim() }),
+        body: JSON.stringify(addForm),
       });
       if (res.ok) {
         const newSupplier = await res.json();
         await loadSuppliers();
         onChange(newSupplier.id);
-        setShowAdd(false);
-        setNewName('');
+        onSelect?.(newSupplier);
+        setShowAddModal(false);
+        setAddForm({ ...EMPTY_SUPPLIER_FORM });
         toast.success('Supplier added');
         return;
       }
-      throw new Error('API failed');
+      const errData = await res.json().catch(() => ({}));
+      toast.error(errData.error || 'Failed to add supplier');
     } catch {
-      // Fallback: direct Supabase insert
-      const { data, error } = await supabase
-        .from('suppliers')
-        .insert({ tenant_id: tenantId, name: newName.trim() })
-        .select()
-        .single();
-      if (error) {
-        toast.error('Failed to add supplier');
-        return;
-      }
-      await loadSuppliers();
-      onChange(data.id);
-      setShowAdd(false);
-      setNewName('');
-      toast.success('Supplier added');
+      toast.error('Failed to add supplier');
     } finally {
       setAddSaving(false);
     }
   };
 
   // Auto-resolve: if value is null but we have a saved name, match by name
+  // Uses ref for onChange to avoid re-triggering on every render
   useEffect(() => {
     if (!value && initialName && suppliers.length > 0) {
       const match = suppliers.find(
         (s) => s.name.toLowerCase() === initialName.toLowerCase()
       );
-      if (match) onChange(match.id);
+      if (match) onChangeRef.current(match.id);
     }
-  }, [suppliers, value, initialName, onChange]);
+  }, [suppliers, value, initialName]);
+
+  const handleFormChange = useCallback((field: keyof SupplierFormData, val: string) => {
+    setAddForm((prev) => ({ ...prev, [field]: val }));
+  }, []);
 
   return (
     <div className="space-y-2">
@@ -128,7 +276,7 @@ export default function SupplierDropdown({ tenantId, value, onChange, onSelect, 
         onChange={(e) => {
           const val = e.target.value;
           if (val === '__add__') {
-            setShowAdd(true);
+            setShowAddModal(true);
           } else {
             onChange(val || null);
             const selected = val ? suppliers.find((s) => s.id === val) || null : null;
@@ -143,35 +291,29 @@ export default function SupplierDropdown({ tenantId, value, onChange, onSelect, 
           .filter((s, i, arr) => arr.findIndex((x) => x.name.toLowerCase() === s.name.toLowerCase()) === i)
           .map((s) => (
           <option key={s.id} value={s.id}>
-            {s.is_sunstone ? '✦ ' : ''}{s.name}
+            {s.is_sunstone ? '\u2726 ' : ''}{s.name}
           </option>
         ))}
         <option value="__add__">+ Add Supplier</option>
       </select>
 
-      {/* Inline add form */}
-      {showAdd && (
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Supplier name"
-            className="flex-1 h-9 px-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleAdd();
-              if (e.key === 'Escape') setShowAdd(false);
-            }}
-          />
-          <Button variant="primary" size="sm" onClick={handleAdd} disabled={addSaving || !newName.trim()}>
-            {addSaving ? '...' : 'Add'}
+      {/* Full supplier form modal */}
+      <Modal isOpen={showAddModal} onClose={() => { setShowAddModal(false); setAddForm({ ...EMPTY_SUPPLIER_FORM }); }} size="lg">
+        <ModalHeader>
+          Add Supplier
+        </ModalHeader>
+        <ModalBody>
+          <SupplierFormFields form={addForm} onChange={handleFormChange} />
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="ghost" size="sm" onClick={() => { setShowAddModal(false); setAddForm({ ...EMPTY_SUPPLIER_FORM }); }}>
+            Cancel
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setShowAdd(false)}>
-            ✕
+          <Button variant="primary" size="sm" onClick={handleAdd} disabled={addSaving || !addForm.name.trim()}>
+            {addSaving ? 'Saving...' : 'Add Supplier'}
           </Button>
-        </div>
-      )}
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import {
   useEffect,
   useState,
   useCallback,
+  useMemo,
   type ReactNode,
 } from 'react';
 import { createClient } from '@/lib/supabase/client';
@@ -46,7 +47,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [membership, setMembership] = useState<TenantMember | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const supabase = createClient();
+  // Stable reference — prevents dependency cycles in effects
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const supabase = useMemo(() => createClient(), []);
 
   const fetchTenant = useCallback(async () => {
     try {
@@ -138,19 +141,20 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     [isOwner, role]
   );
 
+  // Memoize context value to prevent cascading re-renders of all consumers
+  const contextValue = useMemo(() => ({
+    tenant,
+    membership,
+    isLoading,
+    isAdmin,
+    isOwner,
+    role,
+    can,
+    refetch: fetchTenant,
+  }), [tenant, membership, isLoading, isAdmin, isOwner, role, can, fetchTenant]);
+
   return (
-    <TenantContext.Provider
-      value={{
-        tenant,
-        membership,
-        isLoading,
-        isAdmin,
-        isOwner,
-        role,
-        can,
-        refetch: fetchTenant,
-      }}
-    >
+    <TenantContext.Provider value={contextValue}>
       {children}
     </TenantContext.Provider>
   );

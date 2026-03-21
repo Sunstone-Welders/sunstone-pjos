@@ -3,10 +3,11 @@
 // ============================================================================
 // PATCH to update supplier details.
 // DELETE to remove (blocked for is_sunstone=true).
+// Uses service role client for writes to bypass RLS.
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabase } from '@/lib/supabase/server';
+import { createServerSupabase, createServiceRoleClient } from '@/lib/supabase/server';
 
 export async function PATCH(
   request: NextRequest,
@@ -41,14 +42,18 @@ export async function PATCH(
   if (body.notes !== undefined) updates.notes = body.notes || null;
   updates.updated_at = new Date().toISOString();
 
-  const { data, error } = await supabase
+  const admin = await createServiceRoleClient();
+  const { data, error } = await admin
     .from('suppliers')
     .update(updates)
     .eq('id', id)
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  if (error) {
+    console.error('[Suppliers PATCH] Update error:', error.message, error.code);
+    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+  }
   return NextResponse.json(data);
 }
 
@@ -61,8 +66,10 @@ export async function DELETE(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const admin = await createServiceRoleClient();
+
   // Check if this is the Sunstone supplier
-  const { data: supplier } = await supabase
+  const { data: supplier } = await admin
     .from('suppliers')
     .select('is_sunstone')
     .eq('id', id)
@@ -75,11 +82,14 @@ export async function DELETE(
     );
   }
 
-  const { error } = await supabase
+  const { error } = await admin
     .from('suppliers')
     .delete()
     .eq('id', id);
 
-  if (error) return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  if (error) {
+    console.error('[Suppliers DELETE] Delete error:', error.message, error.code);
+    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+  }
   return NextResponse.json({ success: true });
 }
