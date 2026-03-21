@@ -14,6 +14,7 @@ import {
   sfCreateAccount,
   sfQuery,
   sfGet,
+  sfUpdate,
 } from '@/lib/salesforce';
 
 // ── Normalize SF payment method fields to consistent frontend format ─────
@@ -345,6 +346,14 @@ export async function POST(request: NextRequest) {
         .from('tenants')
         .update({ sf_account_id: result.accountId })
         .eq('id', member.tenant_id);
+
+      // Set Studio audit fields on the newly created Account and Contact
+      try {
+        if (result.accountId) await sfUpdate('Account', result.accountId, { Studio_Created__c: true, Studio_Modified__c: true });
+        if (result.contactId) await sfUpdate('Contact', result.contactId, { Studio_Created__c: true, Studio_Modified__c: true });
+      } catch (auditErr: any) {
+        console.warn('[SF Match] Studio audit fields not available:', auditErr.message);
+      }
 
       return NextResponse.json({
         success: true,

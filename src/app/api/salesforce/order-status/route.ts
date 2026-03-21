@@ -55,12 +55,13 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Query SF for Order tied to this Opportunity
+    // Query SF for Order tied to this Opportunity (SF creates it async after Closed Won)
     const orders = await sfQuery<any>(
-      `SELECT Id, OrderNumber, Status, Shipped__c, Ship_Date__c, Tracking_number__c, Shipping_Method__c, Approved_For_Shippment__c FROM Order WHERE OpportunityId = '${reorder.sf_opportunity_id}' LIMIT 1`
+      `SELECT Id, OrderNumber, Status, Shipped__c, Ship_Date__c, Tracking_number__c, Shipping_Method__c, Approved_For_Shippment__c FROM Order WHERE OpportunityId = '${reorder.sf_opportunity_id}' ORDER BY CreatedDate DESC LIMIT 1`
     );
 
     if (orders.length === 0) {
+      // Order hasn't been created by SF yet — may take a few seconds after Closed Won
       return NextResponse.json({
         status: 'processing',
         label: 'Processing',
