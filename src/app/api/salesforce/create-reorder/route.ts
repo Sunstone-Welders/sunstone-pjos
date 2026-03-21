@@ -243,6 +243,14 @@ export async function POST(request: NextRequest) {
       Description: `Sunstone Studio App Order — placed by ${tenant?.name || 'Artist'}`,
     });
 
+    // ── Persist sf_opportunity_id immediately so the charge route can find it ──
+    // The comprehensive update (tax, shipping, total, quote) happens at the end,
+    // but this early write ensures the charge route never sees a null Opp ID.
+    await serviceClient
+      .from('reorder_history')
+      .update({ sf_opportunity_id: oppId })
+      .eq('id', reorderId);
+
     // Parse shipping from notes
     const noteParts = (reorder.notes || '').replace('Shipping to: ', '').split(', ');
     const shippingStreet = noteParts[0] || '';
@@ -392,8 +400,8 @@ export async function POST(request: NextRequest) {
     const computedTotal = lineItemTotal + sfTax + sfShipping;
     sfGrandTotal = Math.max(sfGrandTotal, computedTotal);
 
-    // ── Update reorder_history (sf_order_id is NULL — SF creates Order on Closed Won) ──
-    await serviceClient
+    // ── Update reorder_history with final totals (sf_opportunity_id was already written above) ──
+    const { error: updateErr } = await serviceClient
       .from('reorder_history')
       .update({
         sf_opportunity_id: oppId,
@@ -404,6 +412,10 @@ export async function POST(request: NextRequest) {
         total_amount: sfGrandTotal,
       })
       .eq('id', reorderId);
+
+    if (updateErr) {
+      console.error('[SF Reorder] Failed to update reorder_history with totals:', updateErr.message);
+    }
 
     return NextResponse.json({
       success: true,
