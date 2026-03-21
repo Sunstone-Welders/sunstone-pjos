@@ -11,7 +11,7 @@
 
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useTenant } from '@/hooks/use-tenant';
 import { toast } from 'sonner';
@@ -177,7 +177,13 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
               setProduct(null);
             } else {
               setProduct(match);
-              setSelectedVariantIdx(0);
+              // Pre-select linked variant if available
+              if (item.sunstone_variant_id) {
+                const variantIdx = match.variants.findIndex((v) => v.id === item.sunstone_variant_id);
+                setSelectedVariantIdx(variantIdx >= 0 ? variantIdx : 0);
+              } else {
+                setSelectedVariantIdx(0);
+              }
               suggestQuantity(match);
             }
           } else {
@@ -429,6 +435,36 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
     }
   };
 
+  // ── Chain variant filtering by linked material ──────────────────────
+
+  const displayVariants = useMemo(() => {
+    if (!product) return [];
+    const allVariants = product.variants || [];
+
+    // If no variant link or legacy item, show all variants
+    if (!item.sunstone_variant_id) return allVariants;
+
+    // Check if this is a chain product
+    const isChain = (product.productType || '').toLowerCase().includes('chain');
+    if (!isChain) return allVariants;
+
+    // Find the linked variant to determine its material
+    const linkedVariant = allVariants.find((v: any) => v.id === item.sunstone_variant_id);
+    if (!linkedVariant || !linkedVariant.title) return allVariants;
+
+    // Parse material from linked variant (first part before " / ")
+    const linkedMaterial = linkedVariant.title.split(' / ')[0].trim().toLowerCase();
+    if (!linkedMaterial) return allVariants;
+
+    // Filter to only variants with the same material
+    const filtered = allVariants.filter((v: any) => {
+      const vMaterial = (v.title || '').split(' / ')[0].trim().toLowerCase();
+      return vMaterial === linkedMaterial;
+    });
+
+    return filtered.length > 0 ? filtered : allVariants;
+  }, [product, item.sunstone_variant_id]);
+
   // ── Helpers ────────────────────────────────────────────────────────
 
   const selectedVariant = product?.variants?.[selectedVariantIdx];
@@ -464,7 +500,12 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
           const match = products.find((p) => p.id === item.sunstone_product_id);
           if (match && match.variants.some((v) => !!v.id)) {
             setProduct(match);
-            setSelectedVariantIdx(0);
+            if (item.sunstone_variant_id) {
+              const variantIdx = match.variants.findIndex((v) => v.id === item.sunstone_variant_id);
+              setSelectedVariantIdx(variantIdx >= 0 ? variantIdx : 0);
+            } else {
+              setSelectedVariantIdx(0);
+            }
             suggestQuantity(match);
           } else {
             setProduct(null);
@@ -868,20 +909,32 @@ export default function ReorderModal({ isOpen, onClose, item, onReorderCreated }
             </div>
 
             {/* Variant selector */}
-            {product.variants.length > 1 && (
+            {displayVariants.length > 1 && (
               <div>
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Variant</label>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                  {item.sunstone_variant_id && (product.productType || '').toLowerCase().includes('chain')
+                    ? 'Length'
+                    : 'Variant'}
+                </label>
                 <select
                   value={selectedVariantIdx}
                   onChange={(e) => setSelectedVariantIdx(Number(e.target.value))}
                   className="w-full rounded-xl border border-[var(--border-default)] bg-[var(--surface-base)] px-4 py-3 text-sm text-[var(--text-primary)] min-h-[48px]"
                 >
-                  {product.variants.map((v, i) => (
-                    <option key={i} value={i}>
-                      {v.title} — ${parseFloat(v.price).toFixed(2)}
-                      {v.sku ? ` (${v.sku})` : ''}
-                    </option>
-                  ))}
+                  {displayVariants.map((v: any) => {
+                    const realIdx = product.variants.indexOf(v);
+                    // For filtered chain variants, show just the length part
+                    const isChainFiltered = item.sunstone_variant_id && (product.productType || '').toLowerCase().includes('chain') && displayVariants.length < product.variants.length;
+                    const label = isChainFiltered && v.title.includes(' / ')
+                      ? v.title.split(' / ').slice(1).join(' / ')
+                      : v.title;
+                    return (
+                      <option key={realIdx} value={realIdx}>
+                        {label} — ${parseFloat(v.price).toFixed(2)}
+                        {v.sku ? ` (${v.sku})` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             )}

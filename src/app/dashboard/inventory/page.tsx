@@ -314,6 +314,28 @@ export default function InventoryPage() {
     ).length;
   }, [items]);
 
+  // Catalog map for showing linked product/variant info on rows
+  const [catalogMap, setCatalogMap] = useState<Map<string, any>>(new Map());
+  useEffect(() => {
+    const loadCatalogMap = async () => {
+      try {
+        const { data } = await supabase
+          .from('sunstone_catalog_cache')
+          .select('products')
+          .limit(1)
+          .single();
+        if (data?.products) {
+          const map = new Map<string, any>();
+          for (const p of data.products as any[]) {
+            map.set(p.id, p);
+          }
+          setCatalogMap(map);
+        }
+      } catch { /* catalog may not exist */ }
+    };
+    loadCatalogMap();
+  }, [supabase]);
+
   // Close overflow menu when clicking outside
   useEffect(() => {
     if (!openMenuId) return;
@@ -660,6 +682,25 @@ export default function InventoryPage() {
                         Track: {pending.trackingNumber}
                       </a>
                     )}
+                    {/* Linked product/variant display */}
+                    {item.sunstone_product_id && catalogMap.size > 0 && (() => {
+                      const cp = catalogMap.get(item.sunstone_product_id);
+                      if (!cp) return null;
+                      let variantLabel = '';
+                      if (item.sunstone_variant_id) {
+                        const v = (cp.variants || []).find((v: any) => v.id === item.sunstone_variant_id);
+                        if (v && v.title !== 'Default Title') {
+                          // For chain variants, show just the material (first part before " / ")
+                          const parts = v.title.split(' / ');
+                          variantLabel = parts[0];
+                        }
+                      }
+                      return (
+                        <span className="text-xs text-[var(--text-tertiary)]">
+                          · Linked: {cp.title}{variantLabel ? ` — ${variantLabel}` : ''}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -1188,6 +1229,10 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
   const [sunstoneProductId, setSunstoneProductId] = useState<string | null>(
     editingItem?.sunstone_product_id || null
   );
+  const [sunstoneVariantId, setSunstoneVariantId] = useState<string | null>(
+    editingItem?.sunstone_variant_id || null
+  );
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [isSunstoneSupplier, setIsSunstoneSupplier] = useState(false);
   const [catalogProducts, setCatalogProducts] = useState<any[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -1245,6 +1290,35 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
     check();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only on mount -- subsequent changes handled by onSelect
+
+  // ── Variant linking helpers ─────────────────────────────────────────
+  const parseVariantMaterial = (variantTitle: string): string => {
+    const parts = variantTitle.split(' / ');
+    return parts[0].trim();
+  };
+
+  const groupVariantsByMaterial = (variants: any[]): Map<string, any[]> => {
+    const map = new Map<string, any[]>();
+    for (const v of variants) {
+      if (!v.title || v.title === 'Default Title') continue;
+      const material = parseVariantMaterial(v.title);
+      if (!map.has(material)) map.set(material, []);
+      map.get(material)!.push(v);
+    }
+    return map;
+  };
+
+  const isChainProduct = (product: any): boolean => {
+    return (product?.productType || '').toLowerCase().includes('chain');
+  };
+
+  // Initialize selectedProduct from editingItem on mount
+  useEffect(() => {
+    if (sunstoneProductId && catalogProducts.length > 0 && !selectedProduct) {
+      const found = catalogProducts.find((p: any) => p.id === sunstoneProductId);
+      if (found) setSelectedProduct(found);
+    }
+  }, [sunstoneProductId, catalogProducts, selectedProduct]);
 
   // Inventory-relevant product types (lowercased for matching)
   const INVENTORY_TYPES = useMemo(() => new Set([
@@ -1327,22 +1401,16 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSunstoneSupplier]);
 
-  // Grouped + search-filtered catalog for the dropdown
+  // Grouped + search-filtered catalog for the dropdown (product-level, not variant-level)
   const groupedCatalog = useMemo(() => {
     const q = catalogSearch.toLowerCase().trim();
-    const groups: Record<string, { product: any; variant: any }[]> = {};
+    const groups: Record<string, any[]> = {};
     for (const p of catalogProducts) {
+      if (q && !(p.title || '').toLowerCase().includes(q)) continue;
       const type = p.productType || 'Other';
-      const variants = (p.variants || []) as any[];
-      for (const v of variants) {
-        const variantLabel = v.title === 'Default Title' ? '' : v.title;
-        const displayText = `${p.title}${variantLabel ? ` — ${variantLabel}` : ''}`;
-        if (q && !displayText.toLowerCase().includes(q)) continue;
-        if (!groups[type]) groups[type] = [];
-        groups[type].push({ product: p, variant: v });
-      }
+      if (!groups[type]) groups[type] = [];
+      groups[type].push(p);
     }
-    // Sort group names alphabetically
     const sorted = Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
     return sorted;
   }, [catalogProducts, catalogSearch]);
@@ -1352,10 +1420,61 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
     if (!sunstoneProductId) return '';
     const p = catalogProducts.find((cp: any) => cp.id === sunstoneProductId);
     if (!p) return '';
-    const v = p.variants?.[0];
-    const price = v?.price ? `$${v.price}` : '';
-    return `${p.title}${price ? ` — ${price}` : ''}`;
+    return p.title;
   }, [sunstoneProductId, catalogProducts]);
+
+  // Handle product selection from dropdown — trigger variant step if needed
+  const handleProductSelect = (product: any) => {
+    setSunstoneProductId(product.id);
+    setSelectedProduct(product);
+    setCatalogDropdownOpen(false);
+    setCatalogSearch('');
+
+    const variants = (product.variants || []) as any[];
+    if (variants.length <= 1) {
+      // Single variant — auto-set
+      setSunstoneVariantId(variants[0]?.id || null);
+      return;
+    }
+
+    if (isChainProduct(product)) {
+      const materialGroups = groupVariantsByMaterial(variants);
+      if (materialGroups.size <= 1) {
+        // Only one material — auto-set to "By the Inch" variant or first
+        const group = [...materialGroups.values()][0] || variants;
+        const byInch = group.find((v: any) => /by the inch/i.test(v.title));
+        setSunstoneVariantId((byInch || group[0])?.id || null);
+        return;
+      }
+      // Multiple material groups — try auto-match by item material
+      const itemMaterial = (materialId ? materialsList.find((m) => m.id === materialId)?.name : null) || '';
+      if (itemMaterial) {
+        for (const [mat, group] of materialGroups) {
+          if (mat.toLowerCase().includes(itemMaterial.toLowerCase()) || itemMaterial.toLowerCase().includes(mat.toLowerCase())) {
+            const byInch = group.find((v: any) => /by the inch/i.test(v.title));
+            setSunstoneVariantId((byInch || group[0])?.id || null);
+            return;
+          }
+        }
+      }
+      // No auto-match — user must pick
+      setSunstoneVariantId(null);
+    } else {
+      // Non-chain with multiple variants — try auto-match by material
+      const itemMaterial = (materialId ? materialsList.find((m) => m.id === materialId)?.name : null) || '';
+      if (itemMaterial) {
+        const match = variants.find((v: any) =>
+          (v.title || '').toLowerCase().includes(itemMaterial.toLowerCase())
+        );
+        if (match) {
+          setSunstoneVariantId(match.id);
+          return;
+        }
+      }
+      // No auto-match — user must pick
+      setSunstoneVariantId(null);
+    }
+  };
 
   // Close catalog dropdown on outside click
   useEffect(() => {
@@ -1445,6 +1564,7 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
         pricing_mode: type === 'chain' ? pricingMode : 'per_product',
         pricing_tier_id: type === 'chain' ? pricingTierId : null,
         sunstone_product_id: isSunstoneSupplier ? sunstoneProductId : null,
+        sunstone_variant_id: isSunstoneSupplier ? sunstoneVariantId : null,
       };
 
       let savedItemId: string;
@@ -1605,6 +1725,8 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
                 setIsSunstoneSupplier(supplier?.is_sunstone || false);
                 if (!supplier?.is_sunstone) {
                   setSunstoneProductId(null);
+                  setSunstoneVariantId(null);
+                  setSelectedProduct(null);
                   setCatalogProducts([]);
                 }
               }}
@@ -1634,7 +1756,7 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
                     {sunstoneProductId ? (
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); setSunstoneProductId(null); }}
+                        onClick={(e) => { e.stopPropagation(); setSunstoneProductId(null); setSunstoneVariantId(null); setSelectedProduct(null); }}
                         className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)]"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1670,34 +1792,31 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
                             {catalogSearch ? 'No matching products' : 'No inventory products found'}
                           </div>
                         ) : (
-                          groupedCatalog.map(([type, entries]) => (
+                          groupedCatalog.map(([type, products]) => (
                             <div key={type}>
                               <div className="px-3 py-1.5 text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider bg-[var(--surface-subtle)] sticky top-0">
                                 {type}
                               </div>
-                              {entries.map(({ product: p, variant: v }) => {
-                                const variantLabel = v.title === 'Default Title' ? '' : v.title;
-                                const price = v.price ? `$${v.price}` : '';
+                              {products.map((p: any) => {
                                 const isSelected = sunstoneProductId === p.id;
+                                const lowestPrice = (p.variants || []).reduce((min: number, v: any) => {
+                                  const vp = parseFloat(v.price);
+                                  return vp > 0 && vp < min ? vp : min;
+                                }, Infinity);
+                                const priceLabel = lowestPrice < Infinity ? `from $${lowestPrice.toFixed(2)}` : '';
                                 return (
                                   <button
-                                    key={`${p.id}-${v.id}`}
+                                    key={p.id}
                                     type="button"
-                                    onClick={() => {
-                                      setSunstoneProductId(p.id);
-                                      setCatalogDropdownOpen(false);
-                                      setCatalogSearch('');
-                                    }}
+                                    onClick={() => handleProductSelect(p)}
                                     className={`w-full text-left px-3 py-2 min-h-[44px] text-sm flex items-center justify-between gap-2 transition-colors ${
                                       isSelected
                                         ? 'bg-[var(--accent-subtle)] text-[var(--accent-primary)]'
                                         : 'text-[var(--text-primary)] hover:bg-[var(--surface-subtle)]'
                                     }`}
                                   >
-                                    <span className="truncate">
-                                      {p.title}{variantLabel ? ` — ${variantLabel}` : ''}
-                                    </span>
-                                    <span className="shrink-0 text-xs text-[var(--text-tertiary)]">{price}</span>
+                                    <span className="truncate">{p.title}</span>
+                                    <span className="shrink-0 text-xs text-[var(--text-tertiary)]">{priceLabel}</span>
                                   </button>
                                 );
                               })}
@@ -1708,6 +1827,91 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
                     </div>
                   )}
                 </div>
+
+                {/* Variant picker — shown after product is selected with multiple options */}
+                {sunstoneProductId && selectedProduct && (() => {
+                  const variants = (selectedProduct.variants || []) as any[];
+                  if (variants.length <= 1) return null;
+
+                  if (isChainProduct(selectedProduct)) {
+                    const materialGroups = groupVariantsByMaterial(variants);
+                    if (materialGroups.size <= 1) return null;
+
+                    return (
+                      <div className="mt-2 space-y-1.5">
+                        <label className="block text-xs font-medium text-[var(--text-secondary)]">Material</label>
+                        <div className="space-y-1">
+                          {[...materialGroups.entries()].map(([material, group]) => {
+                            const lowestPrice = group.reduce((min: number, v: any) => {
+                              const vp = parseFloat(v.price);
+                              return vp > 0 && vp < min ? vp : min;
+                            }, Infinity);
+                            const byInch = group.find((v: any) => /by the inch/i.test(v.title));
+                            const groupVariantId = (byInch || group[0])?.id;
+                            const isSelected = sunstoneVariantId === groupVariantId;
+                            return (
+                              <label
+                                key={material}
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors min-h-[44px] ${
+                                  isSelected
+                                    ? 'border-[var(--accent-primary)] bg-[var(--accent-subtle)]'
+                                    : 'border-[var(--border-default)] hover:bg-[var(--surface-subtle)]'
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="variant-material"
+                                  checked={isSelected}
+                                  onChange={() => setSunstoneVariantId(groupVariantId)}
+                                  className="accent-[var(--accent-primary)]"
+                                />
+                                <span className="text-sm text-[var(--text-primary)] flex-1">{material}</span>
+                                {lowestPrice < Infinity && (
+                                  <span className="text-xs text-[var(--text-tertiary)]">from ${lowestPrice.toFixed(2)}</span>
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Non-chain: show each variant
+                  return (
+                    <div className="mt-2 space-y-1.5">
+                      <label className="block text-xs font-medium text-[var(--text-secondary)]">Variant</label>
+                      <div className="space-y-1">
+                        {variants.filter((v: any) => v.title !== 'Default Title').map((v: any) => {
+                          const isSelected = sunstoneVariantId === v.id;
+                          return (
+                            <label
+                              key={v.id}
+                              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors min-h-[44px] ${
+                                isSelected
+                                  ? 'border-[var(--accent-primary)] bg-[var(--accent-subtle)]'
+                                  : 'border-[var(--border-default)] hover:bg-[var(--surface-subtle)]'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="variant-option"
+                                checked={isSelected}
+                                onChange={() => setSunstoneVariantId(v.id)}
+                                className="accent-[var(--accent-primary)]"
+                              />
+                              <span className="text-sm text-[var(--text-primary)] flex-1">{v.title}</span>
+                              {v.price && (
+                                <span className="text-xs text-[var(--text-tertiary)]">${parseFloat(v.price).toFixed(2)}</span>
+                              )}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <p className="text-xs text-[var(--text-tertiary)]">
                   Link to Sunstone catalog for one-touch reordering
                 </p>

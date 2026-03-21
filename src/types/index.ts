@@ -150,6 +150,7 @@ export interface InventoryItem {
   pricing_tier_id: string | null;
   // Sunstone supply linkage
   sunstone_product_id: string | null;
+  sunstone_variant_id: string | null;
   created_at: string;
   updated_at: string;
 }

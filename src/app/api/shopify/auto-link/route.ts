@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
 
     let linked = 0;
     let skipped = 0;
-    const linkResults: { name: string; productId: string; productTitle: string }[] = [];
+    const linkResults: { name: string; productId: string; productTitle: string; variantId: string | null }[] = [];
 
     if (unlinkItems && unlinkItems.length > 0) {
       for (const item of unlinkItems) {
@@ -119,8 +119,29 @@ export async function POST(request: NextRequest) {
         });
 
         if (matches.length === 1) {
-          const productId = matches[0].id;
+          const product = matches[0];
+          const productId = product.id;
+          let variantId: string | null = null;
+
+          // Try to match variant by material hint in item name (e.g. "Bryce Chain — Sterling Silver")
+          const itemParts = item.name.split(/\s*[\u2014\u2013-]\s*/);
+          const materialHint = itemParts.length > 1 ? itemParts[1].trim().toLowerCase() : '';
+
+          if (materialHint && product.variants?.length > 1) {
+            const matchingVariants = product.variants.filter((v: any) =>
+              (v.title || '').toLowerCase().includes(materialHint)
+            );
+            if (matchingVariants.length > 0) {
+              // For chains: pick "By the Inch" variant, otherwise first match
+              const byInch = matchingVariants.find((v: any) => /by the inch/i.test(v.title));
+              variantId = (byInch || matchingVariants[0]).id;
+            }
+          } else if (product.variants?.length === 1) {
+            variantId = product.variants[0].id;
+          }
+
           const updateData: Record<string, any> = { sunstone_product_id: productId };
+          if (variantId) updateData.sunstone_variant_id = variantId;
 
           // Also set supplier_id if missing
           if (sunstoneSupplier) {
@@ -138,7 +159,8 @@ export async function POST(request: NextRequest) {
             linkResults.push({
               name: item.name,
               productId,
-              productTitle: matches[0].title,
+              productTitle: product.title,
+              variantId,
             });
           }
         } else {
