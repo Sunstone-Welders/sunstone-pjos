@@ -29,6 +29,7 @@ import CashDrawerPanel from '@/components/CashDrawerPanel';
 import { createWarrantyRecords } from '@/lib/warranty';
 import type {
   InventoryItem,
+  InventoryItemVariant,
   TaxProfile,
   ProductType,
   ChainProductPrice,
@@ -85,8 +86,27 @@ export default function StoreModePage() {
   const [emailError, setEmailError] = useState('');
   const [smsError, setSmsError] = useState('');
 
+  // Variant state
+  const [itemVariants, setItemVariants] = useState<Record<string, InventoryItemVariant[]>>({});
+
   const cart = useCartStore();
   const supabase = createClient();
+
+  // ── Load variants for has_variants items ───────────────────────────────
+  const loadVariants = async (items: InventoryItem[]) => {
+    const ids = items.filter((i) => i.has_variants && i.type !== 'chain').map((i) => i.id);
+    if (!ids.length) { setItemVariants({}); return; }
+    const { data } = await supabase
+      .from('inventory_item_variants').select('*')
+      .in('inventory_item_id', ids).eq('is_active', true)
+      .order('sort_order').order('name');
+    const map: Record<string, InventoryItemVariant[]> = {};
+    for (const v of (data || []) as InventoryItemVariant[]) {
+      if (!map[v.inventory_item_id]) map[v.inventory_item_id] = [];
+      map[v.inventory_item_id].push(v);
+    }
+    setItemVariants(map);
+  };
 
   // ── Load data ──────────────────────────────────────────────────────────
 
@@ -106,7 +126,9 @@ export default function StoreModePage() {
 
       const { data: items } = await supabase
         .from('inventory_items').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('type').order('name');
-      setInventory((items || []) as InventoryItem[]);
+      const allItems = (items || []) as InventoryItem[];
+      setInventory(allItems);
+      loadVariants(allItems);
 
       const { data: pts } = await supabase
         .from('product_types').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order');
@@ -246,6 +268,7 @@ export default function StoreModePage() {
           : 0;
         return {
           inventory_item_id: item.inventory_item_id || null,
+          inventory_variant_id: item.inventory_variant_id || null,
           name: item.name,
           quantity: item.quantity,
           unit_price: item.unit_price,
@@ -360,7 +383,7 @@ export default function StoreModePage() {
     toast.success('Payment received!');
 
     const { data: refreshed } = await supabase.from('inventory_items').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('type').order('name');
-    if (refreshed) setInventory(refreshed as InventoryItem[]);
+    if (refreshed) { setInventory(refreshed as InventoryItem[]); loadVariants(refreshed as InventoryItem[]); }
   };
 
   // ── Sale completion (external payments: cash, venmo, card_external) ──
@@ -390,6 +413,7 @@ export default function StoreModePage() {
           : 0;
         return {
           inventory_item_id: item.inventory_item_id || null,
+          inventory_variant_id: item.inventory_variant_id || null,
           name: item.name,
           quantity: item.quantity,
           unit_price: item.unit_price,
@@ -404,13 +428,13 @@ export default function StoreModePage() {
         };
       });
 
-      const deductions: { item_id: string; amount: number; log_movement: boolean }[] = [];
+      const deductions: { item_id: string; amount: number; log_movement: boolean; variant_id?: string | null }[] = [];
       for (const item of cart.items) {
         if (!item.inventory_item_id) continue;
         const inv = inventory.find((i) => i.id === item.inventory_item_id);
         if (!inv) continue;
         const deduct = inv.type === 'chain' && item.inches_used ? item.inches_used : item.quantity;
-        deductions.push({ item_id: item.inventory_item_id, amount: deduct, log_movement: false });
+        deductions.push({ item_id: item.inventory_item_id, amount: deduct, log_movement: false, variant_id: item.inventory_variant_id || null });
       }
 
       const { data: saleId, error: rpcError } = await supabase.rpc('create_sale_transaction', {
@@ -580,7 +604,7 @@ export default function StoreModePage() {
       }
 
       const { data: refreshed } = await supabase.from('inventory_items').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('type').order('name');
-      if (refreshed) setInventory(refreshed as InventoryItem[]);
+      if (refreshed) { setInventory(refreshed as InventoryItem[]); loadVariants(refreshed as InventoryItem[]); }
     } catch (err: any) { toast.error(err?.message || 'Sale failed'); }
     finally { setProcessing(false); }
   };
@@ -731,6 +755,7 @@ export default function StoreModePage() {
                 mode="store"
                 tenantPricingMode={tenant.pricing_mode}
                 pricingTiers={pricingTiers}
+                itemVariants={itemVariants}
                 onAddToCart={(item) => {
                   cart.addItem(item);
                   toast.success(`Added ${item.name}`);

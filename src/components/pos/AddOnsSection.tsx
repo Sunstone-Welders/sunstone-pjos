@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import type { InventoryItem, InventoryType } from '@/types';
+import type { InventoryItem, InventoryItemVariant, InventoryType } from '@/types';
 
 export interface AddOnsSectionProps {
   inventory: InventoryItem[];
   onAddItem: (item: InventoryItem) => void;
   onAddCustom: (name: string, price: number) => void;
+  itemVariants?: Record<string, InventoryItemVariant[]>;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -22,16 +23,19 @@ const TYPE_ORDER: InventoryType[] = ['connector', 'charm', 'clasp', 'jump_ring',
 const cardBase = 'bg-[var(--surface-raised)] border border-[var(--border-strong)] text-left cursor-pointer transition-all duration-200 hover:shadow-[0_8px_20px_-4px_rgba(0,0,0,0.15)] hover:-translate-y-px active:scale-[0.97]';
 const cardSecondary = `${cardBase} rounded-xl p-5 min-h-[100px] shadow-[var(--shadow-card)]`;
 
-export function AddOnsSection({ inventory, onAddItem, onAddCustom }: AddOnsSectionProps) {
+export function AddOnsSection({ inventory, onAddItem, onAddCustom, itemVariants }: AddOnsSectionProps) {
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customName, setCustomName] = useState('');
   const [customPrice, setCustomPrice] = useState('');
 
-  // Non-chain items only, in stock
+  // Non-chain items only, in stock (or has in-stock variants)
   const nonChainItems = useMemo(
-    () => inventory.filter((i) => i.type !== 'chain' && i.quantity_on_hand > 0),
-    [inventory]
+    () => inventory.filter((i) => i.type !== 'chain' && (
+      i.quantity_on_hand > 0 ||
+      (i.has_variants && itemVariants?.[i.id]?.some((v) => v.is_active && v.quantity_on_hand > 0))
+    )),
+    [inventory, itemVariants]
   );
 
   // Available types
@@ -142,6 +146,9 @@ export function AddOnsSection({ inventory, onAddItem, onAddCustom }: AddOnsSecti
                     <div className="text-[12px] text-[var(--text-tertiary)] mt-1">
                       {item.material && `${item.material} · `}{item.quantity_on_hand} left
                     </div>
+                    {item.has_variants && (
+                      <div className="text-[11px] text-[var(--accent-primary)] font-medium mt-0.5">Multiple options</div>
+                    )}
                   </div>
                   <div className="text-[20px] font-bold text-[var(--text-primary)] mt-3 tracking-tight">
                     ${Number(item.sell_price).toFixed(2)}

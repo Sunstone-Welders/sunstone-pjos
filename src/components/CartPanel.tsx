@@ -145,6 +145,9 @@ export default function CartPanel({ cart, step, setStep, tenant }: {
               <div className="flex items-start justify-between gap-3 px-4 py-3.5 min-h-[56px] border-b border-[var(--surface-subtle)] hover:bg-[var(--surface-raised)] transition-colors rounded-lg mx-1 my-0.5">
                 <div className="min-w-0 flex-1 pt-0.5">
                   <div className="text-sm font-medium text-[var(--text-primary)] leading-snug">{item.name}</div>
+                  {item._variant_name && (
+                    <div className="text-[11px] text-[var(--accent-primary)] font-medium mt-0.5">{item._variant_name}</div>
+                  )}
                   <div className="text-xs text-[var(--text-tertiary)] mt-1 flex items-center gap-1.5">
                     {item.quantity > 1 && <span>{item.quantity} x </span>}
                     <span className="">${item.unit_price.toFixed(2)}</span>

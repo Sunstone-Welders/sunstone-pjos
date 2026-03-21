@@ -29,7 +29,7 @@ import { ProductSelector, QueueBadge, CheckoutFlow, PendingPayments, GiftCardMod
 import type { CompletedSaleData, CheckoutStep, GiftCardData } from '@/components/pos';
 import type { QueueEntry } from '@/components/MiniQueueStrip';
 import type {
-  InventoryItem, Event, TaxProfile, ProductType, ChainProductPrice, JumpRingResolution, CartItem,
+  InventoryItem, InventoryItemVariant, Event, TaxProfile, ProductType, ChainProductPrice, JumpRingResolution, CartItem,
 } from '@/types';
 
 const BackArrow = () => (
@@ -163,8 +163,27 @@ function EventModePageInner() {
   const [activeQueueEntry, setActiveQueueEntry] = useState<QueueEntry | null>(null);
   const [queueRefresh, setQueueRefresh] = useState(0);
 
+  // Variant state
+  const [itemVariants, setItemVariants] = useState<Record<string, InventoryItemVariant[]>>({});
+
   const cart = useCartStore();
   const supabase = createClient();
+
+  // ── Load variants for has_variants items ───────────────────────────────
+  const loadVariants = async (items: InventoryItem[]) => {
+    const ids = items.filter((i) => i.has_variants && i.type !== 'chain').map((i) => i.id);
+    if (!ids.length) { setItemVariants({}); return; }
+    const { data } = await supabase
+      .from('inventory_item_variants').select('*')
+      .in('inventory_item_id', ids).eq('is_active', true)
+      .order('sort_order').order('name');
+    const map: Record<string, InventoryItemVariant[]> = {};
+    for (const v of (data || []) as InventoryItemVariant[]) {
+      if (!map[v.inventory_item_id]) map[v.inventory_item_id] = [];
+      map[v.inventory_item_id].push(v);
+    }
+    setItemVariants(map);
+  };
 
   // Pre-filter jump ring inventory for quick access
   const jumpRingInventory = useMemo(
@@ -217,6 +236,7 @@ function EventModePageInner() {
         allItems = allItems.filter((i) => i.type !== 'chain' || allowed.has(i.id));
       }
       setInventory(allItems);
+      loadVariants(allItems);
 
       // Load product types — filter by event_product_types if any exist
       const { data: pts } = await supabase
@@ -343,6 +363,7 @@ function EventModePageInner() {
           : 0;
         return {
           inventory_item_id: item.inventory_item_id || null,
+          inventory_variant_id: item.inventory_variant_id || null,
           name: item.name, quantity: item.quantity, unit_price: item.unit_price,
           discount_type: item.discount_type || null, discount_value: item.discount_value || 0,
           line_total: item.line_total, product_type_id: item.product_type_id || null,
@@ -434,7 +455,7 @@ function EventModePageInner() {
     toast.success('Payment received!');
 
     const { data: refreshed } = await supabase.from('inventory_items').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('type').order('name');
-    if (refreshed) setInventory(refreshed as InventoryItem[]);
+    if (refreshed) { setInventory(refreshed as InventoryItem[]); loadVariants(refreshed as InventoryItem[]); }
   };
 
   // ── Sale completion — with jump ring auto-deduction ──
@@ -500,6 +521,7 @@ function EventModePageInner() {
           : 0;
         return {
           inventory_item_id: item.inventory_item_id || null,
+          inventory_variant_id: item.inventory_variant_id || null,
           name: item.name,
           quantity: item.quantity,
           unit_price: item.unit_price,
@@ -515,7 +537,7 @@ function EventModePageInner() {
       });
 
       // Build atomic inventory deductions with movement logging
-      const deductions: { item_id: string; amount: number; log_movement: boolean; notes: string | null; performed_by: string | null }[] = [];
+      const deductions: { item_id: string; amount: number; log_movement: boolean; notes: string | null; performed_by: string | null; variant_id?: string | null }[] = [];
       for (const item of cart.items as any[]) {
         if (!item.inventory_item_id) continue;
         const inv = inventory.find((i) => i.id === item.inventory_item_id);
@@ -531,6 +553,7 @@ function EventModePageInner() {
           log_movement: true,
           notes: movementNotes || null,
           performed_by: user?.id || null,
+          variant_id: item.inventory_variant_id || null,
         });
       }
 
@@ -640,7 +663,7 @@ function EventModePageInner() {
       }
 
       const { data: refreshed } = await supabase.from('inventory_items').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('type').order('name');
-      if (refreshed) setInventory(refreshed as InventoryItem[]);
+      if (refreshed) { setInventory(refreshed as InventoryItem[]); loadVariants(refreshed as InventoryItem[]); }
     } catch (err: any) { toast.error(err?.message || 'Sale failed'); }
     finally { setProcessing(false); }
   };
@@ -877,6 +900,7 @@ function EventModePageInner() {
                 mode="event"
                 tenantPricingMode={tenant?.pricing_mode}
                 pricingTiers={pricingTiers}
+                itemVariants={itemVariants}
                 onAddToCart={(item) => {
                   // Event Mode enriches with jump ring metadata
                   const enriched = {

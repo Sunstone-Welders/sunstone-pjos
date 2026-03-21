@@ -81,6 +81,9 @@ export const useCartStore = create<CartStore>((set, get) => ({
       id: generateId(),
       line_total: lineTotal,
       warranty_amount: item.warranty_amount ?? 0,
+      // Variant fields
+      inventory_variant_id: item.inventory_variant_id ?? null,
+      _variant_name: item._variant_name ?? null,
       // Ensure jump ring metadata defaults
       _jump_rings_required: item._jump_rings_required ?? null,
       _inventory_type: item._inventory_type ?? null,

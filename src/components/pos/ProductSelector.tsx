@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useMemo, useCallback, useRef } from 'react';
-import type { InventoryItem, ProductType, ChainProductPrice, CartItem } from '@/types';
+import type { InventoryItem, InventoryItemVariant, ProductType, ChainProductPrice, CartItem } from '@/types';
 import { MaterialTabs } from './MaterialTabs';
 import { ChainGrid } from './ChainGrid';
 import { ProductTypeRow } from './ProductTypeRow';
 import { InchAdjuster } from './InchAdjuster';
 import { AddOnsSection } from './AddOnsSection';
+import { VariantPicker } from './VariantPicker';
 
 export interface ProductSelectorProps {
   chains: InventoryItem[];
@@ -17,6 +18,7 @@ export interface ProductSelectorProps {
   mode: 'store' | 'event';
   tenantPricingMode?: string;
   pricingTiers?: { id: string; name: string }[];
+  itemVariants?: Record<string, InventoryItemVariant[]>;
 }
 
 export function ProductSelector({
@@ -28,6 +30,7 @@ export function ProductSelector({
   mode,
   tenantPricingMode,
   pricingTiers = [],
+  itemVariants,
 }: ProductSelectorProps) {
   // ── View toggle: chains vs add-ons ──
   const [view, setView] = useState<'chains' | 'addons'>('chains');
@@ -41,6 +44,9 @@ export function ProductSelector({
     chain: InventoryItem;
     productType: ProductType;
   } | null>(null);
+
+  // ── Variant picker state ──
+  const [variantPickerItem, setVariantPickerItem] = useState<InventoryItem | null>(null);
 
   // ── Auto-mode detection ──
   const activeChains = useMemo(
@@ -144,9 +150,44 @@ export function ProductSelector({
     [inchAdjuster, onAddToCart, resetSelection]
   );
 
+  // ── Handle variant selection ──
+  const handleVariantSelect = useCallback(
+    (item: InventoryItem, variant: InventoryItemVariant) => {
+      onAddToCart({
+        inventory_item_id: item.id,
+        inventory_variant_id: variant.id,
+        name: `${item.name} — ${variant.name}`,
+        _variant_name: variant.name,
+        quantity: 1,
+        unit_price: Number(variant.sell_price),
+        discount_type: null,
+        discount_value: 0,
+        product_type_id: null,
+        product_type_name: null,
+        inches_used: null,
+        pricing_mode: null,
+      });
+    },
+    [onAddToCart]
+  );
+
   // ── Handle add-on item ──
   const handleAddOnItem = useCallback(
     (item: InventoryItem) => {
+      // Variant item → open picker (or auto-select if only 1 in-stock variant)
+      if (item.has_variants && itemVariants) {
+        const variants = (itemVariants[item.id] || []).filter((v) => v.is_active);
+        const inStock = variants.filter((v) => v.quantity_on_hand > 0);
+        if (inStock.length === 1) {
+          handleVariantSelect(item, inStock[0]);
+          return;
+        }
+        if (variants.length > 0) {
+          setVariantPickerItem(item);
+          return;
+        }
+      }
+      // Non-variant item or no variants loaded
       onAddToCart({
         inventory_item_id: item.id,
         name: item.name,
@@ -160,7 +201,7 @@ export function ProductSelector({
         pricing_mode: null,
       });
     },
-    [onAddToCart]
+    [onAddToCart, itemVariants, handleVariantSelect]
   );
 
   // ── Handle custom item ──
@@ -214,6 +255,7 @@ export function ProductSelector({
           inventory={inventory}
           onAddItem={handleAddOnItem}
           onAddCustom={handleAddCustom}
+          itemVariants={itemVariants}
         />
       )}
 
@@ -307,6 +349,16 @@ export function ProductSelector({
             </>
           )}
         </div>
+      )}
+      {/* ── Variant Picker Modal ── */}
+      {variantPickerItem && itemVariants && (
+        <VariantPicker
+          isOpen={!!variantPickerItem}
+          onClose={() => setVariantPickerItem(null)}
+          item={variantPickerItem}
+          variants={itemVariants[variantPickerItem.id] || []}
+          onSelect={handleVariantSelect}
+        />
       )}
     </div>
   );

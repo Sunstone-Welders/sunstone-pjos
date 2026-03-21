@@ -120,11 +120,11 @@ export async function POST(request: NextRequest) {
             })
             .eq('id', saleId);
 
-          // Deduct inventory now that payment is confirmed
+          // Deduct inventory now that payment is confirmed (variant-aware)
           try {
             const { data: saleItems } = await serviceRole
               .from('sale_items')
-              .select('inventory_item_id, inches_used, quantity')
+              .select('inventory_item_id, inventory_variant_id, inches_used, quantity')
               .eq('sale_id', saleId);
 
             if (saleItems && saleItems.length > 0) {
@@ -134,19 +134,51 @@ export async function POST(request: NextRequest) {
                   ? Number(si.inches_used)
                   : Number(si.quantity);
 
-                // Fetch current qty, floor at 0, update — service role bypasses RLS
-                const { data: inv } = await serviceRole
-                  .from('inventory_items')
-                  .select('quantity_on_hand')
-                  .eq('id', si.inventory_item_id)
-                  .single();
+                if (si.inventory_variant_id) {
+                  // Variant deduction — deduct from variant, recalc parent
+                  const { data: variant } = await serviceRole
+                    .from('inventory_item_variants')
+                    .select('quantity_on_hand')
+                    .eq('id', si.inventory_variant_id)
+                    .single();
 
-                if (inv) {
-                  const newQty = Math.max(Number(inv.quantity_on_hand) - deductAmount, 0);
-                  await serviceRole
+                  if (variant) {
+                    const newVariantQty = Math.max(Number(variant.quantity_on_hand) - deductAmount, 0);
+                    await serviceRole
+                      .from('inventory_item_variants')
+                      .update({ quantity_on_hand: newVariantQty })
+                      .eq('id', si.inventory_variant_id);
+
+                    // Recalc parent: SUM of all active variants
+                    const { data: allVariants } = await serviceRole
+                      .from('inventory_item_variants')
+                      .select('quantity_on_hand')
+                      .eq('inventory_item_id', si.inventory_item_id)
+                      .eq('is_active', true);
+
+                    const parentQty = (allVariants || []).reduce(
+                      (sum: number, v: any) => sum + Number(v.quantity_on_hand), 0
+                    );
+                    await serviceRole
+                      .from('inventory_items')
+                      .update({ quantity_on_hand: parentQty })
+                      .eq('id', si.inventory_item_id);
+                  }
+                } else {
+                  // Non-variant deduction — original behavior
+                  const { data: inv } = await serviceRole
                     .from('inventory_items')
-                    .update({ quantity_on_hand: newQty })
-                    .eq('id', si.inventory_item_id);
+                    .select('quantity_on_hand')
+                    .eq('id', si.inventory_item_id)
+                    .single();
+
+                  if (inv) {
+                    const newQty = Math.max(Number(inv.quantity_on_hand) - deductAmount, 0);
+                    await serviceRole
+                      .from('inventory_items')
+                      .update({ quantity_on_hand: newQty })
+                      .eq('id', si.inventory_item_id);
+                  }
                 }
               }
             }

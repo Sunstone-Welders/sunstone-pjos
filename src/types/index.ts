@@ -686,6 +686,8 @@ export interface PJUniversityData {
 export interface CartItem {
   id: string; // temp id
   inventory_item_id: string | null;
+  inventory_variant_id?: string | null;
+  _variant_name?: string | null;
   name: string;
   quantity: number;
   unit_price: number;

@@ -4,6 +4,7 @@ export { ChainGrid } from './ChainGrid';
 export { ProductTypeRow } from './ProductTypeRow';
 export { InchAdjuster } from './InchAdjuster';
 export { AddOnsSection } from './AddOnsSection';
+export { VariantPicker } from './VariantPicker';
 export { QueueBadge } from './QueueBadge';
 export { CheckoutFlow } from './checkout';
 export { PendingPayments } from './PendingPayments';
