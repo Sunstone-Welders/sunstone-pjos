@@ -71,10 +71,13 @@ export default function InventoryPage() {
   const [showProductTypesPrompt, setShowProductTypesPrompt] = useState(false);
   const [hasProductTypes, setHasProductTypes] = useState<boolean | null>(null);
 
+  // Tab layout
+  const [activeTab, setActiveTab] = useState<'inventory' | 'catalog' | 'history'>('inventory');
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
   // Reorder
   const [reorderItem, setReorderItem] = useState<InventoryItem | null>(null);
   const [reorderHistory, setReorderHistory] = useState<ReorderHistory[]>([]);
-  const [showReorderHistory, setShowReorderHistory] = useState(false);
   const [receivingId, setReceivingId] = useState<string | null>(null);
   const [autoLinking, setAutoLinking] = useState(false);
   // Pending reorder map: inventory_item_id → { quantity, status, trackingNumber, reorderId, shippingStatus }
@@ -88,7 +91,6 @@ export default function InventoryPage() {
 
   // Scroll position preservation across modal open/close
   const savedScrollRef = useRef<number>(0);
-  const reorderHistoryRef = useRef<HTMLDivElement>(null);
 
   // â"€â"€â"€ Load Inventory â"€â"€â"€
   // Helper: find the scrollable main container (dashboard layout's <main>)
@@ -189,21 +191,12 @@ export default function InventoryPage() {
   }, [loadReorderHistory]);
 
   useEffect(() => {
-    if (showReorderHistory) loadReorderHistory();
-  }, [showReorderHistory, loadReorderHistory]);
+    if (activeTab === 'history') loadReorderHistory();
+  }, [activeTab, loadReorderHistory]);
 
-  // Scroll the reorder history panel into view when opened
+  // Poll SF order status for active orders while history tab is active
   useEffect(() => {
-    if (showReorderHistory && reorderHistoryRef.current) {
-      requestAnimationFrame(() => {
-        reorderHistoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    }
-  }, [showReorderHistory]);
-
-  // Poll SF order status for active orders while panel is open
-  useEffect(() => {
-    if (!showReorderHistory) return;
+    if (activeTab !== 'history') return;
 
     const fetchStatuses = async () => {
       const activeOrders = reorderHistory.filter(
@@ -238,7 +231,7 @@ export default function InventoryPage() {
     fetchStatuses();
     const interval = setInterval(fetchStatuses, 30_000);
     return () => clearInterval(interval);
-  }, [showReorderHistory, reorderHistory, loadReorderHistory]);
+  }, [activeTab, reorderHistory, loadReorderHistory]);
 
   const handleMarkReceived = async (reorderId: string, overrides?: Record<string, number>) => {
     setReceivingId(reorderId);
@@ -313,6 +306,21 @@ export default function InventoryPage() {
       return matchesSearch && matchesType;
     });
   }, [items, search, filterType]);
+
+  // Count items eligible for Sunstone linking but not yet linked
+  const unlinkedCount = useMemo(() => {
+    return items.filter(
+      (i) => !i.sunstone_product_id && i.supplier?.toLowerCase().includes('sunstone')
+    ).length;
+  }, [items]);
+
+  // Close overflow menu when clicking outside
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handler = () => setOpenMenuId(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [openMenuId]);
 
   // â"€â"€â"€ Handle Add Button â"€â"€â"€
   const handleAddClick = () => {
@@ -424,19 +432,87 @@ export default function InventoryPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-      {/* â"€â"€â"€ Header â"€â"€â"€ */}
-      <div className="flex items-center justify-between">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-0">
+      {/* --- Header --- */}
+      <div className="flex items-center justify-between mb-1">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Inventory</h1>
-          <p className="text-sm text-[var(--text-tertiary)] mt-1">
-            {items.length} item{items.length !== 1 ? 's' : ''} total
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Inventory</h1>
+          <p className="text-sm text-[var(--text-tertiary)] mt-0.5">
+            {items.length} item{items.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          onClick={handleAddClick}
+          className="text-[#FAF7F0] font-semibold min-h-[44px]"
+          style={{ backgroundColor: '#7A234A' }}
+        >
+          + Add Item
+        </Button>
+      </div>
+
+      {/* --- Tab Bar --- */}
+      <div className="border-b border-[var(--border-default)] flex gap-0 -mx-4 sm:-mx-6 px-4 sm:px-6 mt-4 mb-6">
+        {([
+          { key: 'inventory' as const, label: 'My inventory' },
+          { key: 'catalog' as const, label: 'Shop Sunstone' },
+          { key: 'history' as const, label: 'Order history' },
+        ]).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-3 text-sm font-medium transition-colors relative min-h-[44px] ${
+              activeTab === tab.key
+                ? 'text-[var(--accent-primary)]'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            {tab.label}
+            {activeTab === tab.key && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-primary)]" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ============ MY INVENTORY TAB ============ */}
+      {activeTab === 'inventory' && (
+      <div className="space-y-4">
+        {/* Search, Filters, Settings gear */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, material, or SKU..."
+              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] min-h-[44px]"
+            />
+          </div>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value as InventoryType | 'all')}
+            className="rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] min-h-[44px]"
+          >
+            <option value="all">All Types</option>
+            {ITEM_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer whitespace-nowrap px-2">
+            <input
+              type="checkbox"
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+              className="rounded"
+            />
+            Inactive
+          </label>
           <button
             onClick={() => router.push('/dashboard/settings?section=pricing')}
-            className="p-2.5 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-raised)] transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+            className="p-2.5 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-raised)] transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center flex-shrink-0"
             title="Pricing Settings"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -444,171 +520,23 @@ export default function InventoryPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleAutoLink}
-            disabled={autoLinking}
-          >
-            {autoLinking ? 'Linking...' : 'Link Sunstone Products'}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowReorderHistory(!showReorderHistory)}
-          >
-            Reorder History
-          </Button>
-          <Button variant="primary" size="sm" onClick={handleAddClick}>
-            + Add Item
-          </Button>
         </div>
-      </div>
 
-      {/* Reorder History Panel -- positioned at top so it's always visible */}
-      {showReorderHistory && (
-        <div ref={reorderHistoryRef}>
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Reorder History</CardTitle>
-                <button
-                  onClick={() => setShowReorderHistory(false)}
-                  className="p-1.5 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded-lg hover:bg-[var(--surface-subtle)]"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {reorderHistory.length === 0 ? (
-                <p className="text-sm text-[var(--text-tertiary)] text-center py-6">
-                  No reorders yet. Use the cart icon on any Sunstone-linked item to place your first reorder.
-                </p>
-              ) : (
-                <div className="divide-y divide-[var(--border-subtle)]">
-                  {reorderHistory.map((r) => {
-                    const live = liveStatuses[r.id];
-                    const effectiveStatus = r.status === 'completed' ? 'completed'
-                      : r.status === 'cancelled' ? 'cancelled'
-                      : r.status === 'pending_payment' ? 'pending_payment'
-                      : live?.status || r.shipping_status || r.status;
-                    const statusLabel = effectiveStatus === 'completed' ? 'Received'
-                      : effectiveStatus === 'cancelled' ? 'Cancelled'
-                      : effectiveStatus === 'shipped' ? 'Shipped'
-                      : effectiveStatus === 'approved' ? 'Ready to Ship'
-                      : effectiveStatus === 'preparing' ? 'Preparing to Ship'
-                      : effectiveStatus === 'pending_payment' ? 'Awaiting Payment'
-                      : 'Processing';
-                    const statusVariant = effectiveStatus === 'completed' ? 'success'
-                      : effectiveStatus === 'cancelled' ? 'secondary'
-                      : effectiveStatus === 'shipped' || effectiveStatus === 'approved' ? 'default'
-                      : effectiveStatus === 'pending_payment' ? 'warning'
-                      : 'warning';
-                    const trackingNum = live?.trackingNumber || r.tracking_number;
-                    const carrier = live?.shippingCarrier || r.shipping_carrier || '';
-                    const isShipped = effectiveStatus === 'shipped';
-                    const trackingUrl = trackingNum
-                      ? carrier.toLowerCase().includes('ups')
-                        ? `https://www.ups.com/track?tracknum=${encodeURIComponent(trackingNum)}`
-                        : carrier.toLowerCase().includes('usps')
-                          ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(trackingNum)}`
-                          : carrier.toLowerCase().includes('fedex')
-                            ? `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(trackingNum)}`
-                            : `https://parcelsapp.com/en/tracking/${encodeURIComponent(trackingNum)}`
-                      : null;
-                    return (
-                      <div key={r.id} className="py-3 flex items-center gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-[var(--text-primary)]">
-                              {r.sf_quote_number ? `Quote #${r.sf_quote_number}` : r.shopify_order_name || (r.sf_opportunity_id ? 'SF Order' : 'Order')}
-                            </span>
-                            <Badge variant={statusVariant as any} className="text-[10px]">
-                              {statusLabel}
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
-                            {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            {' \u2014 '}
-                            {(r.items as any[]).map((i: any) => `${i.name} x${i.quantity}`).join(', ')}
-                          </p>
-                          {trackingNum && trackingUrl && (
-                            <p className="text-xs mt-0.5">
-                              <a
-                                href={trackingUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[var(--accent-primary)] hover:underline"
-                              >
-                                Tracking: {trackingNum}
-                              </a>
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-sm font-semibold text-[var(--text-primary)]">
-                            ${Number(r.total_amount).toFixed(2)}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {isShipped && r.status !== 'completed' && (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => openReceiveModal(r)}
-                              disabled={receivingId === r.id}
-                              className="min-h-[44px]"
-                            >
-                              {receivingId === r.id ? 'Restocking...' : 'Mark Received'}
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* â"€â"€â"€ Search & Filters â"€â"€â"€ */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex-1">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, material, or SKU..."
-            className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] min-h-[44px]"
-          />
-        </div>
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value as InventoryType | 'all')}
-          className="rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] min-h-[44px]"
-        >
-          <option value="all">All Types</option>
-          {ITEM_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-        <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer whitespace-nowrap px-2">
-          <input
-            type="checkbox"
-            checked={showInactive}
-            onChange={(e) => setShowInactive(e.target.checked)}
-            className="rounded"
-          />
-          Show inactive
-        </label>
-      </div>
+        {/* Smart banner: unlinked Sunstone items */}
+        {unlinkedCount > 0 && (
+          <div className="flex items-center justify-between rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5">
+            <span className="text-sm text-amber-800">
+              {unlinkedCount} item{unlinkedCount !== 1 ? 's' : ''} not linked to Sunstone products
+            </span>
+            <button
+              onClick={handleAutoLink}
+              disabled={autoLinking}
+              className="text-sm font-medium text-[var(--accent-primary)] hover:underline disabled:opacity-50 min-h-[44px] px-2"
+            >
+              {autoLinking ? 'Linking...' : 'Link now'}
+            </button>
+          </div>
+        )}
 
       {/* â"€â"€â"€ Inventory List â"€â"€â"€ */}
       {loading ? (
@@ -698,7 +626,7 @@ export default function InventoryPage() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setShowReorderHistory(true);
+                          setActiveTab('history');
                         }}
                         className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-medium hover:bg-blue-100 transition-colors"
                       >
@@ -765,9 +693,8 @@ export default function InventoryPage() {
                   </span>
                 </div>
 
-                {/* Desktop actions */}
+                {/* Overflow menu (desktop + mobile) */}
                 <div className="hidden sm:flex items-center gap-1 justify-end">
-                  {/* Mark Received -- prominent when shipped */}
                   {isShippedOrDelivered && (
                     <Button
                       variant="primary"
@@ -783,54 +710,60 @@ export default function InventoryPage() {
                       {receivingId === pending?.reorderId ? 'Restocking...' : 'Mark Received'}
                     </Button>
                   )}
-                  {item.sunstone_product_id && (
+                  <div className="relative">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setReorderItem(item);
+                        setOpenMenuId(openMenuId === item.id ? null : item.id);
                       }}
-                      className="text-[var(--text-tertiary)] hover:text-[var(--accent-primary)] p-1.5 rounded-lg hover:bg-[var(--accent-50)] transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
-                      title="Reorder from Sunstone"
+                      className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] p-1.5 rounded-lg hover:bg-[var(--surface-subtle)] transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
                     >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
                       </svg>
                     </button>
-                  )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleActive(item);
-                    }}
-                    className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] p-1.5 rounded-lg hover:bg-[var(--surface-subtle)] transition-colors"
-                    title={item.is_active ? 'Deactivate' : 'Activate'}
-                  >
-                    {item.is_active ? (
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                      </svg>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
+                    {openMenuId === item.id && (
+                      <div className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-[var(--border-default)] bg-[var(--surface-overlay)] shadow-lg z-20 py-1">
+                        {item.sunstone_product_id && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); setReorderItem(item); }}
+                            className="w-full text-left px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-raised)] min-h-[40px]"
+                          >
+                            Reorder
+                          </button>
+                        )}
+                        {!item.sunstone_product_id && item.supplier?.toLowerCase().includes('sunstone') && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); setEditingItem(item); setShowForm(true); }}
+                            className="w-full text-left px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-raised)] min-h-[40px]"
+                          >
+                            Link to Sunstone product
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); const c = getScrollContainer(); if (c) savedScrollRef.current = c.scrollTop; setEditingItem(item); setShowForm(true); }}
+                          className="w-full text-left px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-raised)] min-h-[40px]"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); handleToggleActive(item); }}
+                          className="w-full text-left px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-raised)] min-h-[40px]"
+                        >
+                          {item.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); handleDelete(item); }}
+                          className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 min-h-[40px]"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     )}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(item);
-                    }}
-                    className="text-[var(--text-tertiary)] hover:text-error-500 p-1.5 rounded-lg hover:bg-error-50 transition-colors"
-                    title="Delete"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                    </svg>
-                  </button>
+                  </div>
                 </div>
 
-                {/* Mobile: price, stock, and actions row */}
+                {/* Mobile: price, stock, overflow */}
                 <div className="flex items-center justify-between sm:hidden mt-1 gap-2">
                   <span className="text-sm text-[var(--text-primary)]">
                     {formatPrice(item)}
@@ -845,7 +778,6 @@ export default function InventoryPage() {
                     {item.quantity_on_hand} {item.unit}
                   </span>
                   <div className="flex items-center gap-1 ml-auto">
-                    {/* Mark Received -- prominent on mobile when shipped */}
                     {isShippedOrDelivered && (
                       <Button
                         variant="primary"
@@ -861,21 +793,49 @@ export default function InventoryPage() {
                         {receivingId === pending?.reorderId ? 'Restocking...' : 'Received'}
                       </Button>
                     )}
-                    {/* Reorder cart icon -- always visible on mobile */}
-                    {item.sunstone_product_id && (
+                    <div className="relative">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setReorderItem(item);
+                          setOpenMenuId(openMenuId === item.id ? null : item.id);
                         }}
-                        className="text-[var(--text-tertiary)] hover:text-[var(--accent-primary)] p-2.5 rounded-lg hover:bg-[var(--accent-50)] transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-                        title="Reorder from Sunstone"
+                        className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] p-2.5 rounded-lg hover:bg-[var(--surface-subtle)] transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                       >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
                         </svg>
                       </button>
-                    )}
+                      {openMenuId === item.id && (
+                        <div className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-[var(--border-default)] bg-[var(--surface-overlay)] shadow-lg z-20 py-1">
+                          {item.sunstone_product_id && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); setReorderItem(item); }}
+                              className="w-full text-left px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-raised)] min-h-[40px]"
+                            >
+                              Reorder
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); const c = getScrollContainer(); if (c) savedScrollRef.current = c.scrollTop; setEditingItem(item); setShowForm(true); }}
+                            className="w-full text-left px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-raised)] min-h-[40px]"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); handleToggleActive(item); }}
+                            className="w-full text-left px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-raised)] min-h-[40px]"
+                          >
+                            {item.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); handleDelete(item); }}
+                            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 min-h-[40px]"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -884,8 +844,127 @@ export default function InventoryPage() {
           </div>
         </div>
       )}
+      </div>
+      )}
 
-      {/* â"€â"€â"€ Product Types Prompt Modal â"€â"€â"€ */}
+      {/* ============ SHOP SUNSTONE TAB ============ */}
+      {activeTab === 'catalog' && (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-16 h-16 rounded-full bg-[var(--surface-raised)] flex items-center justify-center mb-4">
+            <svg className="w-8 h-8 text-[var(--text-tertiary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+            </svg>
+          </div>
+          <p className="text-lg font-semibold text-[var(--text-primary)]">Sunstone catalog coming soon</p>
+          <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-sm">
+            Browse and reorder Sunstone products directly from your inventory page.
+          </p>
+        </div>
+      )}
+
+      {/* ============ ORDER HISTORY TAB ============ */}
+      {activeTab === 'history' && (
+        <div>
+          {reorderHistory.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="w-16 h-16 rounded-full bg-[var(--surface-raised)] flex items-center justify-center mb-4">
+                <svg className="w-8 h-8 text-[var(--text-tertiary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                </svg>
+              </div>
+              <p className="text-lg font-semibold text-[var(--text-primary)]">No orders yet</p>
+              <p className="text-sm text-[var(--text-tertiary)] mt-1">
+                Use the reorder option on any Sunstone-linked item to place your first order.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-[var(--border-subtle)] rounded-xl border border-[var(--border-default)] bg-[var(--surface-base)] overflow-hidden">
+              {reorderHistory.map((r) => {
+                const live = liveStatuses[r.id];
+                const effectiveStatus = r.status === 'completed' ? 'completed'
+                  : r.status === 'cancelled' ? 'cancelled'
+                  : r.status === 'pending_payment' ? 'pending_payment'
+                  : live?.status || r.shipping_status || r.status;
+                const statusLabel = effectiveStatus === 'completed' ? 'Received'
+                  : effectiveStatus === 'cancelled' ? 'Cancelled'
+                  : effectiveStatus === 'shipped' ? 'Shipped'
+                  : effectiveStatus === 'approved' ? 'Ready to Ship'
+                  : effectiveStatus === 'preparing' ? 'Preparing to Ship'
+                  : effectiveStatus === 'pending_payment' ? 'Awaiting Payment'
+                  : 'Processing';
+                const statusVariant = effectiveStatus === 'completed' ? 'success'
+                  : effectiveStatus === 'cancelled' ? 'secondary'
+                  : effectiveStatus === 'shipped' || effectiveStatus === 'approved' ? 'default'
+                  : effectiveStatus === 'pending_payment' ? 'warning'
+                  : 'warning';
+                const trackingNum = live?.trackingNumber || r.tracking_number;
+                const carrier = live?.shippingCarrier || r.shipping_carrier || '';
+                const isShipped = effectiveStatus === 'shipped';
+                const trackingUrl = trackingNum
+                  ? carrier.toLowerCase().includes('ups')
+                    ? `https://www.ups.com/track?tracknum=${encodeURIComponent(trackingNum)}`
+                    : carrier.toLowerCase().includes('usps')
+                      ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(trackingNum)}`
+                      : carrier.toLowerCase().includes('fedex')
+                        ? `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(trackingNum)}`
+                        : `https://parcelsapp.com/en/tracking/${encodeURIComponent(trackingNum)}`
+                  : null;
+                return (
+                  <div key={r.id} className="px-4 py-4 flex items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-[var(--text-primary)]">
+                          {r.sf_quote_number ? `Quote #${r.sf_quote_number}` : r.shopify_order_name || (r.sf_opportunity_id ? 'SF Order' : 'Order')}
+                        </span>
+                        <Badge variant={statusVariant as any} className="text-[10px]">
+                          {statusLabel}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                        {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {' \u2014 '}
+                        {(r.items as any[]).map((i: any) => `${i.name} x${i.quantity}`).join(', ')}
+                      </p>
+                      {trackingNum && trackingUrl && (
+                        <p className="text-xs mt-0.5">
+                          <a
+                            href={trackingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[var(--accent-primary)] hover:underline"
+                          >
+                            Tracking: {trackingNum}
+                          </a>
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-semibold text-[var(--text-primary)]">
+                        ${Number(r.total_amount).toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {isShipped && r.status !== 'completed' && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => openReceiveModal(r)}
+                          disabled={receivingId === r.id}
+                          className="min-h-[44px]"
+                        >
+                          {receivingId === r.id ? 'Restocking...' : 'Mark Received'}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* --- Product Types Prompt Modal --- */}
       {showProductTypesPrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
