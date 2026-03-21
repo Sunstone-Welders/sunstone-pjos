@@ -374,11 +374,13 @@ export async function POST(request: NextRequest) {
     let sfTax = Math.max(reorder.tax_amount || 0, estimatedTax || 0);
     let sfShipping = Math.max(reorder.shipping_amount || 0, estimatedShipping || 0);
     let sfGrandTotal = reorder.total_amount || 0;
+    let sfQuoteNumber: string | null = null;
 
     try {
       const quote = await sfGet<any>('Quote', quoteId, [
-        'Tax', 'ShippingHandling', 'New_Grand_Total__c',
+        'Name', 'Tax', 'ShippingHandling', 'New_Grand_Total__c',
       ]);
+      if (quote.Name) sfQuoteNumber = quote.Name;
       if (quote.Tax != null) sfTax = Math.max(sfTax, Number(quote.Tax));
       if (quote.ShippingHandling != null) sfShipping = Math.max(sfShipping, Number(quote.ShippingHandling));
       if (quote.New_Grand_Total__c != null) sfGrandTotal = Math.max(sfGrandTotal, Number(quote.New_Grand_Total__c));
@@ -396,6 +398,7 @@ export async function POST(request: NextRequest) {
       .update({
         sf_opportunity_id: oppId,
         sf_quote_id: quoteId,
+        sf_quote_number: sfQuoteNumber,
         tax_amount: sfTax,
         shipping_amount: sfShipping,
         total_amount: sfGrandTotal,

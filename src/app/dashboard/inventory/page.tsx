@@ -229,12 +229,16 @@ export default function InventoryPage() {
         })
       );
       setLiveStatuses((prev) => ({ ...prev, ...results }));
+
+      // If any order was cancelled, refresh the full list so r.status is updated
+      const hasCancelled = Object.values(results).some((s) => s.status === 'cancelled');
+      if (hasCancelled) loadReorderHistory();
     };
 
     fetchStatuses();
     const interval = setInterval(fetchStatuses, 30_000);
     return () => clearInterval(interval);
-  }, [showReorderHistory, reorderHistory]);
+  }, [showReorderHistory, reorderHistory, loadReorderHistory]);
 
   const handleMarkReceived = async (reorderId: string, overrides?: Record<string, number>) => {
     setReceivingId(reorderId);
@@ -520,7 +524,7 @@ export default function InventoryPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-[var(--text-primary)]">
-                              {r.shopify_order_name || (r.sf_opportunity_id ? 'SF Order' : 'Order')}
+                              {r.sf_quote_number ? `Quote #${r.sf_quote_number}` : r.shopify_order_name || (r.sf_opportunity_id ? 'SF Order' : 'Order')}
                             </span>
                             <Badge variant={statusVariant as any} className="text-[10px]">
                               {statusLabel}

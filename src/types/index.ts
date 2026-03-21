@@ -177,6 +177,7 @@ export interface ReorderHistory {
   // Salesforce fields
   sf_opportunity_id: string | null;
   sf_quote_id: string | null;
+  sf_quote_number: string | null;
   sf_order_id: string | null;
   tracking_number: string | null;
   shipping_carrier: string | null;

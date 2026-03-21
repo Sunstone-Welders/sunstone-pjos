@@ -55,6 +55,37 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Verify the Opportunity still exists in SF (admin may have deleted it)
+    let oppExists = true;
+    try {
+      const opps = await sfQuery<any>(
+        `SELECT Id FROM Opportunity WHERE Id = '${reorder.sf_opportunity_id}' LIMIT 1`
+      );
+      oppExists = opps.length > 0;
+    } catch (sfErr: any) {
+      // SF connection error — don't falsely mark as cancelled
+      console.warn('[SF Order Status] Could not verify Opportunity — returning cached status:', sfErr.message);
+      return NextResponse.json({
+        status: reorder.shipping_status || 'processing',
+        label: reorder.shipping_status === 'shipped' ? 'Shipped' : 'Processing',
+        description: 'Unable to reach Salesforce. Showing last known status.',
+      });
+    }
+
+    if (!oppExists) {
+      // Opportunity was deleted in SF — mark as cancelled
+      await serviceClient
+        .from('reorder_history')
+        .update({ status: 'cancelled', shipping_status: 'cancelled' })
+        .eq('id', reorderId);
+
+      return NextResponse.json({
+        status: 'cancelled',
+        label: 'Cancelled',
+        description: 'This order was cancelled by the Sunstone team.',
+      });
+    }
+
     // Query SF for Order tied to this Opportunity (SF creates it async after Closed Won)
     const orders = await sfQuery<any>(
       `SELECT Id, OrderNumber, Status, Shipped__c, Ship_Date__c, Tracking_number__c, Shipping_Method__c, Approved_For_Shippment__c FROM Order WHERE OpportunityId = '${reorder.sf_opportunity_id}' ORDER BY CreatedDate DESC LIMIT 1`
