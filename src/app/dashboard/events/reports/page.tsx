@@ -189,7 +189,7 @@ export default function EventsPage() {
       {loading ? (
         <div className="py-16 text-center">
           <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-          <p className="text-text-tertiary mt-3 text-sm">Loading events…</p>
+          <p className="text-text-tertiary mt-3 text-sm">Loading events...</p>
         </div>
       ) : events.length === 0 ? (
         <Card className="py-16 text-center">
@@ -607,7 +607,7 @@ function EventFormModal({
             label="Description"
             value={form.description}
             onChange={(e) => set('description', e.target.value)}
-            placeholder="Optional description…"
+            placeholder="Optional description..."
             rows={2}
           />
           <Input
@@ -688,7 +688,7 @@ function EventFormModal({
             {limitProducts && (
               <div className="ml-7 space-y-1">
                 {loadingProductTypes ? (
-                  <p className="text-sm text-[var(--text-tertiary)]">Loading product types…</p>
+                  <p className="text-sm text-[var(--text-tertiary)]">Loading product types...</p>
                 ) : productTypes.length === 0 ? (
                   <p className="text-sm text-[var(--text-tertiary)]">
                     No product types configured yet. Add them in Settings → Product Types.

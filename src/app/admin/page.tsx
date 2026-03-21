@@ -251,7 +251,7 @@ export default function AdminOverviewPage() {
             )}
           >
             <RefreshIcon className={cn('w-3.5 h-3.5', insightsLoading && 'animate-spin')} />
-            {insightsLoading ? 'Analyzing…' : 'Refresh'}
+            {insightsLoading ? 'Analyzing...' : 'Refresh'}
           </button>
         </div>
 

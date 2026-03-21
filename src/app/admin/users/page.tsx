@@ -107,7 +107,7 @@ export default function AdminUsersPage() {
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-tertiary)]" />
             <input
               type="text"
-              placeholder="Search by email, name, or tenant…"
+              placeholder="Search by email, name, or tenant..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--surface-subtle)] focus:bg-[var(--surface-raised)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] transition"

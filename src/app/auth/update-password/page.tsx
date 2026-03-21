@@ -138,7 +138,7 @@ export default function UpdatePasswordPage() {
               <p className="text-sm text-text-secondary">
                 Your password has been changed successfully.
                 <br />
-                Redirecting you to login…
+                Redirecting you to login...
               </p>
 
               <Link
@@ -153,7 +153,7 @@ export default function UpdatePasswordPage() {
             <div className="text-center space-y-4">
               <div className="mx-auto w-8 h-8 border-2 border-accent-500 border-t-transparent rounded-full animate-spin" />
               <p className="text-sm text-text-secondary">
-                Verifying your reset link…
+                Verifying your reset link...
               </p>
               <p className="text-xs text-text-tertiary">
                 If this takes too long, your link may have expired.{' '}
@@ -235,7 +235,7 @@ export default function UpdatePasswordPage() {
                 disabled={loading}
                 className="w-full h-12 rounded-lg bg-accent-600 text-white font-medium hover:bg-accent-700 focus:outline-none focus:ring-2 focus:ring-accent-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? 'Updating…' : 'Update Password'}
+                {loading ? 'Updating...' : 'Update Password'}
               </button>
             </form>
           )}

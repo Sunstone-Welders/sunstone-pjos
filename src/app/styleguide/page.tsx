@@ -440,9 +440,9 @@ export default function StyleguidePage() {
               <Button variant="secondary" disabled>
                 Disabled
               </Button>
-              <Button loading>Loading…</Button>
+              <Button loading>Loading...</Button>
               <Button variant="secondary" loading>
-                Loading…
+                Loading...
               </Button>
             </div>
           </SubSection>
@@ -492,7 +492,7 @@ export default function StyleguidePage() {
               <Select
                 label="Default"
                 options={[
-                  { value: '', label: 'Choose an option…' },
+                  { value: '', label: 'Choose an option...' },
                   { value: 'chain', label: 'Chain' },
                   { value: 'charm', label: 'Charm' },
                   { value: 'jump_ring', label: 'Jump Ring' },
@@ -501,7 +501,7 @@ export default function StyleguidePage() {
               <Select
                 label="With error"
                 error="Selection is required."
-                options={[{ value: '', label: 'Choose…' }]}
+                options={[{ value: '', label: 'Choose...' }]}
               />
             </div>
           </SubSection>
@@ -510,7 +510,7 @@ export default function StyleguidePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Textarea
                 label="Default"
-                placeholder="Enter event notes…"
+                placeholder="Enter event notes..."
                 rows={3}
               />
               <Textarea

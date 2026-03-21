@@ -226,7 +226,7 @@ export async function GET(
       id: `inbound-${conv.id}`,
       type: 'message_received',
       date: conv.created_at,
-      summary: `Client texted: "${conv.body.length > 80 ? conv.body.slice(0, 80) + '…' : conv.body}"`,
+      summary: `Client texted: "${conv.body.length > 80 ? conv.body.slice(0, 80) + '...' : conv.body}"`,
       details: conv.body,
       metadata: { channel: 'sms', source: 'inbound' },
     });

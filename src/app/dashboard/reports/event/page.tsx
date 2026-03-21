@@ -390,7 +390,7 @@ function EventPLReportPage() {
   };
 
   if (!tenant) {
-    return <div className="text-text-tertiary py-12 text-center">Loading…</div>;
+    return <div className="text-text-tertiary py-12 text-center">Loading...</div>;
   }
 
   return (
@@ -434,7 +434,7 @@ function EventPLReportPage() {
       {loading ? (
         <div className="py-16 text-center">
           <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-          <p className="text-text-tertiary mt-3 text-sm">Crunching numbers…</p>
+          <p className="text-text-tertiary mt-3 text-sm">Crunching numbers...</p>
         </div>
       ) : !report ? (
         <Card>

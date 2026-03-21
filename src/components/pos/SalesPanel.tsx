@@ -94,7 +94,7 @@ export function SalesPanel({ isOpen, onClose, tenantId, eventId, mode }: SalesPa
         </h2>
         <p className="text-sm text-[var(--text-tertiary)] mt-1">
           {loading
-            ? 'Loading…'
+            ? 'Loading...'
             : `${sales.length} sale${sales.length !== 1 ? 's' : ''} · ${money(totalRevenue)} total`}
         </p>
       </ModalHeader>

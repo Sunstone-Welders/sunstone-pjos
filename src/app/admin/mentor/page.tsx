@@ -241,7 +241,7 @@ function GapsTab({
     });
 
   if (loading) {
-    return <div className="text-sm text-[var(--text-secondary)] py-8 text-center">Loading gaps…</div>;
+    return <div className="text-sm text-[var(--text-secondary)] py-8 text-center">Loading gaps...</div>;
   }
 
   if (gaps.length === 0) {
@@ -352,7 +352,7 @@ function GapsTab({
                       disabled={!approveForm.answer.trim() || actionLoading === gap.id}
                       className="px-4 py-2 bg-success-500 text-[var(--text-inverse)] text-sm font-medium rounded-lg hover:bg-success-600 disabled:opacity-50 transition-colors"
                     >
-                        {actionLoading === gap.id ? 'Saving…' : "Save to Sunny's Brain"}
+                        {actionLoading === gap.id ? 'Saving...' : "Save to Sunny's Brain"}
                     </button>
                     <button
                       onClick={() => setApproveForm(null)}
@@ -380,7 +380,7 @@ function GapsTab({
                     disabled={actionLoading === gap.id}
                     className="px-3 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-secondary)] border border-[var(--border-strong)] rounded-lg hover:bg-[var(--surface-subtle)] transition-colors"
                   >
-                    {actionLoading === gap.id ? 'Dismissing…' : 'Dismiss'}
+                    {actionLoading === gap.id ? 'Dismissing...' : 'Dismiss'}
                   </button>
                 </div>
               )}
@@ -444,7 +444,7 @@ function KnowledgeTab({
   }
 
   if (loading) {
-    return <div className="text-sm text-[var(--text-secondary)] py-8 text-center">Loading knowledge…</div>;
+    return <div className="text-sm text-[var(--text-secondary)] py-8 text-center">Loading knowledge...</div>;
   }
 
   return (
@@ -500,7 +500,7 @@ function KnowledgeTab({
               disabled={actionLoading || !newKnowledge.question.trim() || !newKnowledge.answer.trim()}
               className="px-4 py-2 bg-accent-500 text-[var(--text-on-accent)] text-sm font-medium rounded-lg hover:bg-accent-600 disabled:opacity-50 transition-colors"
             >
-              {actionLoading ? 'Saving…' : "Add to Sunny's Brain"}
+              {actionLoading ? 'Saving...' : "Add to Sunny's Brain"}
             </button>
             <button
               onClick={() => setShowAddForm(false)}

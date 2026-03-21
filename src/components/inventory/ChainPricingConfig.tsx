@@ -163,7 +163,7 @@ export default function ChainPricingConfig({
   if (loading) {
     return (
       <div className="py-8 text-center text-sm text-[var(--text-tertiary)]">
-        Loading pricing options…
+        Loading pricing options...
       </div>
     );
   }

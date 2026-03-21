@@ -2142,7 +2142,8 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
 
                     return (
                       <div className="mt-2 space-y-1.5">
-                        <label className="block text-xs font-medium text-[var(--text-secondary)]">Material</label>
+                        <label className="block text-xs font-medium text-[var(--text-secondary)]">Sunstone variant</label>
+                        <p className="text-[11px] text-[var(--text-tertiary)] -mt-0.5">Select which Sunstone variant to link for reordering</p>
                         <div className="space-y-1">
                           {[...materialGroups.entries()].map(([material, group]) => {
                             const lowestPrice = group.reduce((min: number, v: any) => {

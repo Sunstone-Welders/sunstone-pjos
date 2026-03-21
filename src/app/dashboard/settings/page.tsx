@@ -966,7 +966,7 @@ function SettingsPage() {
 
   if (!tenant)
     return (
-      <div className="text-text-tertiary py-12 text-center">Loading…</div>
+      <div className="text-text-tertiary py-12 text-center">Loading...</div>
     );
 
   // Derived state
@@ -1018,7 +1018,7 @@ function SettingsPage() {
     : 'Set up your business number';
 
   const waiverSummary = waiverText
-    ? waiverText.slice(0, 60) + (waiverText.length > 60 ? '…' : '')
+    ? waiverText.slice(0, 60) + (waiverText.length > 60 ? '...' : '')
     : 'Default waiver text';
 
   const totalTeamMembers = activeMembers.length + pendingMembers.length;
@@ -1112,7 +1112,7 @@ function SettingsPage() {
                     disabled={uploadingLogo}
                   />
                   <span className="text-sm font-medium text-[var(--accent-primary)] hover:underline cursor-pointer">
-                    {uploadingLogo ? 'Uploading…' : logoUrl ? 'Change logo' : 'Upload logo'}
+                    {uploadingLogo ? 'Uploading...' : logoUrl ? 'Change logo' : 'Upload logo'}
                   </span>
                 </label>
                 {logoUrl && (
@@ -2026,7 +2026,7 @@ function SettingsPage() {
 
             {/* Active Members */}
             {teamLoading ? (
-              <p className="text-sm text-[var(--text-tertiary)] py-4 text-center">Loading…</p>
+              <p className="text-sm text-[var(--text-tertiary)] py-4 text-center">Loading...</p>
             ) : activeMembers.length === 0 ? (
               <p className="text-sm text-[var(--text-tertiary)] py-4 text-center">
                 No team members yet. Invite someone to get started.

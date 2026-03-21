@@ -620,7 +620,7 @@ function FlagModal({
             className="flex-1 px-4 py-2.5 bg-error-500 text-white text-sm font-medium rounded-xl hover:bg-error-600 disabled:opacity-50 transition-colors"
             style={{ minHeight: 48 }}
           >
-            {submitting ? 'Submitting…' : 'Submit'}
+            {submitting ? 'Submitting...' : 'Submit'}
           </button>
           <button
             onClick={onClose}

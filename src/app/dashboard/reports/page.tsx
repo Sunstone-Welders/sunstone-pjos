@@ -601,7 +601,7 @@ export default function ReportsPage() {
   }, [sales]);
 
   if (!tenant) {
-    return <div className="text-text-tertiary py-12 text-center">Loading…</div>;
+    return <div className="text-text-tertiary py-12 text-center">Loading...</div>;
   }
 
   // ================================================================
@@ -618,7 +618,7 @@ export default function ReportsPage() {
         {loading ? (
           <div className="py-16 text-center">
             <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-            <p className="text-text-tertiary mt-3 text-sm">Loading…</p>
+            <p className="text-text-tertiary mt-3 text-sm">Loading...</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -788,7 +788,7 @@ export default function ReportsPage() {
           {loading ? (
             <div className="py-16 text-center">
               <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-              <p className="text-text-tertiary mt-3 text-sm">Crunching numbers…</p>
+              <p className="text-text-tertiary mt-3 text-sm">Crunching numbers...</p>
             </div>
           ) : (
             <>
@@ -1017,7 +1017,7 @@ export default function ReportsPage() {
           {eventsLoading ? (
             <div className="py-16 text-center">
               <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-              <p className="text-text-tertiary mt-3 text-sm">Loading events…</p>
+              <p className="text-text-tertiary mt-3 text-sm">Loading events...</p>
             </div>
           ) : events.length === 0 ? (
             <Card>
@@ -1087,7 +1087,7 @@ export default function ReportsPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-text-secondary">
-              {loading ? 'Loading…' : `${transactionSales.length} transaction${transactionSales.length !== 1 ? 's' : ''} in this period`}
+              {loading ? 'Loading...' : `${transactionSales.length} transaction${transactionSales.length !== 1 ? 's' : ''} in this period`}
             </p>
             {!loading && transactionSales.length > 0 && (
               <Button variant="secondary" size="sm" onClick={() => exportTransactionsCSV(transactionSales, dateLabel)}>
