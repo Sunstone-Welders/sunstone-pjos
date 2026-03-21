@@ -14,22 +14,7 @@ import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import type { SunstoneProduct } from '@/lib/shopify';
 import { useCartStore } from '@/stores/cart-store';
-
-// ── Filter constants (shared with inventory linking dropdown) ────────────
-
-const INVENTORY_TYPES = new Set([
-  'chain', 'chains', 'connector', 'connectors', 'charm', 'charms',
-  'jump ring', 'jump rings', 'findings', 'finding', 'clasp', 'clasps',
-  'earring', 'earrings', 'bracelet', 'bracelets', 'anklet', 'anklets',
-  'necklace', 'necklaces', 'ring', 'rings', 'wire', 'bead', 'beads',
-  'pendant', 'pendants', 'component', 'components', 'supply', 'supplies',
-]);
-
-const EXCLUDED_KEYWORDS = [
-  'welder', 'equipment', 'training', 'course', 'class', 'starter kit',
-  'kit', 'vinyl', 'covering', 'book', 'guide', 'gift card', 'apparel',
-  'clothing', 'zapp', 'mpulse', 'orion',
-];
+import { isInventoryProduct, getDisplayType } from '@/lib/catalog-filter';
 
 // ── Main Component ───────────────────────────────────────────────────────
 
@@ -63,17 +48,7 @@ export default function ShopSunstoneCatalog() {
             (p) => p.status === 'ACTIVE'
           );
 
-          const filtered = allActive.filter((p) => {
-            const pType = (p.productType || '').toLowerCase().trim();
-            const title = (p.title || '').toLowerCase();
-            if (EXCLUDED_KEYWORDS.some((kw) => title.includes(kw) || pType.includes(kw))) return false;
-            if (INVENTORY_TYPES.has(pType)) return true;
-            if (!pType || pType === 'other' || pType === '') {
-              const tags = (p.tags || []).map((t) => t.toLowerCase());
-              return tags.some((t) => INVENTORY_TYPES.has(t));
-            }
-            return false;
-          });
+          const filtered = allActive.filter((p) => isInventoryProduct(p));
 
           filtered.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
           setProducts(filtered);
@@ -93,7 +68,7 @@ export default function ShopSunstoneCatalog() {
   const collections = useMemo(() => {
     const types = new Set<string>();
     for (const p of products) {
-      const t = normalizeType(p.productType);
+      const t = getDisplayType(p.productType);
       if (t) types.add(t);
     }
     const sorted = [...types].sort((a, b) => {
@@ -112,7 +87,7 @@ export default function ShopSunstoneCatalog() {
     return products.filter((p) => {
       // Collection filter
       if (selectedCollection !== 'all') {
-        const pType = normalizeType(p.productType);
+        const pType = getDisplayType(p.productType);
         if (pType !== selectedCollection) return false;
       }
       // Search filter
@@ -311,7 +286,7 @@ function ProductCard({
   const variantCount = variants.filter((v) => v.title !== 'Default Title').length;
 
   // Derive a subtitle from the product type or first variant material
-  const subtitle = normalizeType(product.productType) || '';
+  const subtitle = getDisplayType(product.productType) || '';
 
   return (
     <div
@@ -450,7 +425,7 @@ function ProductDetailPanel({
             {/* Type badge */}
             {product.productType && (
               <span className="inline-block px-2.5 py-1 rounded-full bg-[var(--surface-raised)] text-xs font-medium text-[var(--text-secondary)]">
-                {normalizeType(product.productType)}
+                {getDisplayType(product.productType)}
               </span>
             )}
 
@@ -561,14 +536,3 @@ function VariantRow({
   );
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────
-
-function normalizeType(productType: string | undefined | null): string {
-  if (!productType) return '';
-  // Capitalize first letter of each word
-  return productType
-    .trim()
-    .split(/\s+/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(' ');
-}

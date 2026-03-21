@@ -33,6 +33,7 @@ import ShopSunstoneCatalog from '@/components/inventory/ShopSunstoneCatalog';
 import CartDrawer from '@/components/inventory/CartDrawer';
 import CartCheckout from '@/components/inventory/CartCheckout';
 import { useCartStore } from '@/stores/cart-store';
+import { isInventoryProduct } from '@/lib/catalog-filter';
 
 // â"€â"€â"€ Constants â"€â"€â"€
 const ITEM_TYPES: { value: InventoryType; label: string }[] = [
@@ -1504,19 +1505,6 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
     }
   }, [sunstoneProductId, catalogProducts, selectedProduct]);
 
-  // Inventory-relevant product types (lowercased for matching)
-  const INVENTORY_TYPES = useMemo(() => new Set([
-    'chain', 'chains', 'connector', 'connectors', 'charm', 'charms',
-    'jump ring', 'jump rings', 'findings', 'finding', 'clasp', 'clasps',
-    'earring', 'earrings', 'bracelet', 'bracelets', 'anklet', 'anklets',
-    'necklace', 'necklaces', 'ring', 'rings', 'wire', 'bead', 'beads',
-    'pendant', 'pendants', 'component', 'components', 'supply', 'supplies',
-  ]), []);
-  const EXCLUDED_KEYWORDS = useMemo(() => [
-    'welder', 'equipment', 'training', 'course', 'class', 'starter kit',
-    'kit', 'vinyl', 'covering', 'book', 'guide', 'gift card', 'apparel',
-    'clothing', 'zapp', 'mpulse', 'orion',
-  ], []);
 
   // Load Sunstone catalog when supplier is Sunstone
   useEffect(() => {
@@ -1535,22 +1523,8 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
         if (data?.products) {
           const allActive = (data.products as any[]).filter((p: any) => p.status === 'ACTIVE');
 
-          // Filter to inventory-relevant products
-          const filtered = allActive.filter((p: any) => {
-            const pType = (p.productType || '').toLowerCase().trim();
-            const title = (p.title || '').toLowerCase();
-            // Exclude by keywords in title or productType
-            if (EXCLUDED_KEYWORDS.some(kw => title.includes(kw) || pType.includes(kw))) return false;
-            // Include if productType matches known inventory types
-            if (INVENTORY_TYPES.has(pType)) return true;
-            // Include if productType is empty but title suggests inventory item
-            if (!pType || pType === 'other' || pType === '') {
-              // Fallback: check if tags contain inventory-relevant keywords
-              const tags = ((p.tags || []) as string[]).map((t: string) => t.toLowerCase());
-              return tags.some(t => INVENTORY_TYPES.has(t));
-            }
-            return false;
-          });
+          // Filter to inventory-relevant products (shared logic)
+          const filtered = allActive.filter((p: any) => isInventoryProduct(p));
 
           // Sort by productType then title
           filtered.sort((a: any, b: any) => {
