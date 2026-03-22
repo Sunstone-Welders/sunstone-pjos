@@ -316,6 +316,7 @@ export default function CartCheckout() {
         const variantLabel = ci.variantTitle !== 'Default Title' ? ` — ${ci.variantTitle}` : '';
         return {
           inventory_item_id: ci.inventoryItemId || null,
+          inventory_variant_id: ci.inventoryVariantId || null,
           variant_id: ci.sunstoneVariantId,
           name: `${ci.productTitle}${variantLabel}`,
           quantity: ci.quantity,

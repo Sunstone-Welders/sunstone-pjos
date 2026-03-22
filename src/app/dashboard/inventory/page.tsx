@@ -104,6 +104,12 @@ export default function InventoryPage() {
     inventoryItemId: string | null;
   } | null>(null);
 
+  // Variant cart picker: when parent has multiple linked variants
+  const [variantCartPicker, setVariantCartPicker] = useState<{
+    item: InventoryItem;
+    variants: InventoryItemVariant[];
+  } | null>(null);
+
   // Live order status from SF (reorderId -> { label, status, trackingNumber, shippingCarrier })
   const [liveStatuses, setLiveStatuses] = useState<Record<string, { label: string; status: string; trackingNumber: string | null; shippingCarrier: string | null }>>({});
 
@@ -495,38 +501,46 @@ export default function InventoryPage() {
   }
 
   // ─── Add inventory item to cart ───
-  const handleAddToCart = (item: InventoryItem) => {
-    if (!item.sunstone_product_id || !item.sunstone_variant_id) {
+  // Optional inventoryVariant: when adding a specific variant (bypasses chain length picker)
+  const handleAddToCart = (item: InventoryItem, inventoryVariant?: InventoryItemVariant) => {
+    // When a specific variant is provided, use its sunstone_variant_id
+    const effectiveVariantId = inventoryVariant?.sunstone_variant_id || item.sunstone_variant_id;
+    const effectiveProductId = item.sunstone_product_id;
+
+    if (!effectiveProductId || !effectiveVariantId) {
       // Fallback to ReorderModal for unlinked items
       setReorderItem(item);
       return;
     }
-    const product = catalogMap.get(item.sunstone_product_id);
+    const product = catalogMap.get(effectiveProductId);
     if (!product) {
       setReorderItem(item);
       return;
     }
-    const variant = (product.variants || []).find((v: any) => v.id === item.sunstone_variant_id);
+    const variant = (product.variants || []).find((v: any) => v.id === effectiveVariantId);
     if (!variant) {
       setReorderItem(item);
       return;
     }
 
     // Chain items: show length picker if multiple variants in the same material group
-    const isChain = (product.productType || '').toLowerCase().includes('chain');
-    if (isChain && (product.variants || []).length > 1) {
-      const material = (variant.title || '').split(' / ')[0].trim();
-      const materialVariants = (product.variants || []).filter((v: any) => {
-        const m = (v.title || '').split(' / ')[0].trim();
-        return m === material;
-      });
-      if (materialVariants.length > 1) {
-        setChainLengthPicker({
-          product,
-          variants: materialVariants,
-          inventoryItemId: item.id || null,
+    // Skip when adding from a specific inventory variant (already have exact Shopify variant)
+    if (!inventoryVariant) {
+      const isChain = (product.productType || '').toLowerCase().includes('chain');
+      if (isChain && (product.variants || []).length > 1) {
+        const material = (variant.title || '').split(' / ')[0].trim();
+        const materialVariants = (product.variants || []).filter((v: any) => {
+          const m = (v.title || '').split(' / ')[0].trim();
+          return m === material;
         });
-        return;
+        if (materialVariants.length > 1) {
+          setChainLengthPicker({
+            product,
+            variants: materialVariants,
+            inventoryItemId: item.id || null,
+          });
+          return;
+        }
       }
     }
 
@@ -541,6 +555,7 @@ export default function InventoryPage() {
       productType: product.productType || '',
       imageUrl: product.imageUrl || null,
       inventoryItemId: item.id || null,
+      inventoryVariantId: inventoryVariant?.id || null,
     });
     toast.success(`${product.title} added to cart`);
     openCart();
@@ -917,7 +932,22 @@ export default function InventoryPage() {
                       <div className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-[var(--border-default)] bg-[var(--surface-overlay)] shadow-lg z-20 py-1">
                         {item.sunstone_product_id && (
                           <button
-                            onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); handleAddToCart(item); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(null);
+                              if (item.has_variants && variants.length > 0) {
+                                const linkedVars = variants.filter((v) => v.sunstone_variant_id);
+                                if (linkedVars.length === 1) {
+                                  handleAddToCart(item, linkedVars[0]);
+                                } else if (linkedVars.length > 1) {
+                                  setVariantCartPicker({ item, variants: linkedVars });
+                                } else {
+                                  handleAddToCart(item);
+                                }
+                              } else {
+                                handleAddToCart(item);
+                              }
+                            }}
                             className="w-full text-left px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-raised)] min-h-[40px]"
                           >
                             Add to Cart
@@ -1000,7 +1030,22 @@ export default function InventoryPage() {
                         <div className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-[var(--border-default)] bg-[var(--surface-overlay)] shadow-lg z-20 py-1">
                           {item.sunstone_product_id && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); handleAddToCart(item); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuId(null);
+                                if (item.has_variants && variants.length > 0) {
+                                  const linkedVars = variants.filter((v) => v.sunstone_variant_id);
+                                  if (linkedVars.length === 1) {
+                                    handleAddToCart(item, linkedVars[0]);
+                                  } else if (linkedVars.length > 1) {
+                                    setVariantCartPicker({ item, variants: linkedVars });
+                                  } else {
+                                    handleAddToCart(item);
+                                  }
+                                } else {
+                                  handleAddToCart(item);
+                                }
+                              }}
                               className="w-full text-left px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-raised)] min-h-[40px]"
                             >
                               Add to Cart
@@ -1049,6 +1094,9 @@ export default function InventoryPage() {
                     {!v.is_active && (
                       <span className="text-[10px] text-[var(--text-tertiary)] ml-1">(inactive)</span>
                     )}
+                    {v.sunstone_variant_id && item.sunstone_product_id && (
+                      <span className="text-[10px] text-green-600 ml-1">Linked</span>
+                    )}
                   </div>
                   <div className="hidden sm:block text-right">
                     <span className="text-sm text-[var(--text-tertiary)]">
@@ -1069,10 +1117,17 @@ export default function InventoryPage() {
                       {v.quantity_on_hand}
                     </span>
                   </div>
-                  <div className="hidden sm:block text-right">
-                    {v.is_active && v.quantity_on_hand <= v.reorder_threshold && (
+                  <div className="hidden sm:flex items-center justify-end gap-1">
+                    {v.sunstone_variant_id && item.sunstone_product_id ? (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleAddToCart(item, v); }}
+                        className="text-[10px] font-semibold text-[var(--accent-primary)] hover:underline min-h-[36px] px-1"
+                      >
+                        + Cart
+                      </button>
+                    ) : v.is_active && v.quantity_on_hand <= v.reorder_threshold ? (
                       <span className="text-[10px] text-[var(--error-600)] font-medium">Low</span>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -1314,6 +1369,7 @@ export default function InventoryPage() {
                         productType: chainLengthPicker.product.productType || '',
                         imageUrl: chainLengthPicker.product.imageUrl || null,
                         inventoryItemId: chainLengthPicker.inventoryItemId,
+                        inventoryVariantId: null,
                       });
                       toast.success(`${chainLengthPicker.product.title} added to cart`);
                       setChainLengthPicker(null);
@@ -1329,6 +1385,47 @@ export default function InventoryPage() {
             </div>
             <button
               onClick={() => setChainLengthPicker(null)}
+              className="w-full py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors min-h-[44px]"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Variant Cart Picker Modal */}
+      {variantCartPicker && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+            onClick={() => setVariantCartPicker(null)}
+          />
+          <div className="relative bg-[var(--surface-overlay)] rounded-2xl shadow-xl max-w-sm w-full p-5 space-y-4">
+            <h3 className="text-lg font-semibold text-[var(--text-primary)]">
+              Select variant for {variantCartPicker.item.name}
+            </h3>
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {variantCartPicker.variants.map((v) => {
+                const product = catalogMap.get(variantCartPicker.item.sunstone_product_id!);
+                const shopifyVariant = product?.variants?.find((sv: any) => sv.id === v.sunstone_variant_id);
+                const price = shopifyVariant ? parseFloat(shopifyVariant.price) : Number(v.sell_price);
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => {
+                      handleAddToCart(variantCartPicker.item, v);
+                      setVariantCartPicker(null);
+                    }}
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-[var(--surface-raised)] hover:bg-[var(--surface-subtle)] transition-colors min-h-[48px] text-left"
+                  >
+                    <span className="text-sm text-[var(--text-primary)]">{v.name}</span>
+                    <span className="text-sm font-semibold text-[var(--text-primary)]">${price.toFixed(2)}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => setVariantCartPicker(null)}
               className="w-full py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors min-h-[44px]"
             >
               Cancel
@@ -1495,6 +1592,16 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
   // Validation
   const [validationTriggered, setValidationTriggered] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Chain auto-create offer
+  const [chainAutoCreateOffer, setChainAutoCreateOffer] = useState<{
+    product: any;
+    missingMaterials: { material: string; variants: any[]; lowestPrice: number }[];
+    sourceItemData: Record<string, any>;
+    savedItemId: string;
+  } | null>(null);
+  const [autoCreateSelected, setAutoCreateSelected] = useState<Set<string>>(new Set());
+  const [autoCreating, setAutoCreating] = useState(false);
 
   // Load variants for existing items with has_variants
   useEffect(() => {
@@ -2014,6 +2121,57 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
       }
 
       toast.success(isEditing ? 'Item updated' : 'Item added');
+
+      // Check for chain auto-create offer
+      if (type === 'chain' && sunstoneProductId && selectedProduct) {
+        const product = selectedProduct;
+        const allVariants = (product.variants || []) as any[];
+        if (allVariants.length > 1 && isChainProduct(product)) {
+          const materialGroups = groupVariantsByMaterial(allVariants);
+          if (materialGroups.size > 1) {
+            // Find which materials already have inventory items
+            const { data: existingItems } = await supabase
+              .from('inventory_items')
+              .select('sunstone_variant_id')
+              .eq('tenant_id', tenant.id)
+              .eq('sunstone_product_id', sunstoneProductId);
+            const linkedVariantIds = new Set((existingItems || []).map((i: any) => i.sunstone_variant_id).filter(Boolean));
+
+            const missingMaterials: { material: string; variants: any[]; lowestPrice: number }[] = [];
+            for (const [material, group] of materialGroups) {
+              const hasLinked = group.some((v: any) => linkedVariantIds.has(v.id));
+              if (!hasLinked) {
+                const lowestPrice = group.reduce((min: number, v: any) => {
+                  const p = parseFloat(v.price);
+                  return p > 0 && p < min ? p : min;
+                }, Infinity);
+                missingMaterials.push({ material, variants: group, lowestPrice: lowestPrice < Infinity ? lowestPrice : 0 });
+              }
+            }
+
+            if (missingMaterials.length > 0) {
+              setChainAutoCreateOffer({
+                product,
+                missingMaterials,
+                sourceItemData: {
+                  type: 'chain',
+                  unit: 'in',
+                  supplier: supplierText.trim() || null,
+                  supplier_id: supplierId,
+                  pricing_mode: pricingMode,
+                  pricing_tier_id: pricingTierId,
+                  sunstone_product_id: sunstoneProductId,
+                },
+                savedItemId,
+              });
+              setAutoCreateSelected(new Set(missingMaterials.map((m) => m.material)));
+              // Don't call onSaved yet — wait for the auto-create decision
+              return;
+            }
+          }
+        }
+      }
+
       onSaved();
     } catch (err: any) {
       console.error('Save error:', err);
@@ -2033,8 +2191,115 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
     : 'Cost per Unit';
   const quantityLabel = type === 'chain' ? 'Quantity on Hand (inches)' : 'Quantity on Hand';
 
+  // Handle chain auto-create
+  const handleAutoCreate = async () => {
+    if (!chainAutoCreateOffer) return;
+    const { product, missingMaterials, sourceItemData } = chainAutoCreateOffer;
+    const selected = missingMaterials.filter((m) => autoCreateSelected.has(m.material));
+    if (selected.length === 0) {
+      onSaved();
+      return;
+    }
+
+    setAutoCreating(true);
+    try {
+      let created = 0;
+      for (const mat of selected) {
+        const byInch = mat.variants.find((v: any) => /by the inch/i.test(v.title));
+        const targetVariant = byInch || mat.variants[0];
+        const price = parseFloat(targetVariant.price) || 0;
+
+        const newItem = {
+          ...sourceItemData,
+          tenant_id: tenant.id,
+          name: `${product.title} — ${mat.material}`,
+          material: mat.material,
+          material_id: null,
+          sku: null,
+          cost_per_unit: price,
+          sell_price: 0,
+          quantity_on_hand: 0,
+          reorder_threshold: 0,
+          notes: null,
+          is_active: true,
+          has_variants: false,
+          sunstone_variant_id: targetVariant.id,
+        };
+
+        const { error } = await supabase.from('inventory_items').insert(newItem);
+        if (!error) created++;
+      }
+      if (created > 0) {
+        toast.success(`Created ${created} chain item${created !== 1 ? 's' : ''}`);
+      }
+    } catch {
+      toast.error('Some items could not be created');
+    } finally {
+      setAutoCreating(false);
+      setChainAutoCreateOffer(null);
+      onSaved();
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto">
+      {/* Chain Auto-Create Offer Modal */}
+      {chainAutoCreateOffer && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => { setChainAutoCreateOffer(null); onSaved(); }} />
+          <div className="relative bg-[var(--surface-overlay)] rounded-2xl shadow-xl max-w-sm w-full p-5 space-y-4">
+            <h3 className="text-lg font-semibold text-[var(--text-primary)]">
+              Create items for other materials?
+            </h3>
+            <p className="text-sm text-[var(--text-secondary)]">
+              {chainAutoCreateOffer.product.title} has {chainAutoCreateOffer.missingMaterials.length} other material{chainAutoCreateOffer.missingMaterials.length !== 1 ? 's' : ''} without inventory items.
+            </p>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {chainAutoCreateOffer.missingMaterials.map((m) => (
+                <label
+                  key={m.material}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-[var(--surface-raised)] cursor-pointer min-h-[44px]"
+                >
+                  <input
+                    type="checkbox"
+                    checked={autoCreateSelected.has(m.material)}
+                    onChange={(e) => {
+                      setAutoCreateSelected((prev) => {
+                        const next = new Set(prev);
+                        if (e.target.checked) next.add(m.material);
+                        else next.delete(m.material);
+                        return next;
+                      });
+                    }}
+                    className="rounded accent-[var(--accent-primary)]"
+                  />
+                  <span className="text-sm text-[var(--text-primary)] flex-1">{m.material}</span>
+                  {m.lowestPrice > 0 && (
+                    <span className="text-xs text-[var(--text-tertiary)]">from ${m.lowestPrice.toFixed(2)}</span>
+                  )}
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setChainAutoCreateOffer(null); onSaved(); }}
+                className="flex-1 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors min-h-[44px] rounded-lg border border-[var(--border-default)]"
+              >
+                Skip
+              </button>
+              <button
+                onClick={handleAutoCreate}
+                disabled={autoCreating || autoCreateSelected.size === 0}
+                className="flex-1 py-2.5 text-sm font-semibold text-white rounded-lg min-h-[44px] disabled:opacity-50"
+                style={{ backgroundColor: '#7A234A' }}
+              >
+                {autoCreating ? 'Creating...' : `Create ${autoCreateSelected.size} item${autoCreateSelected.size !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/30 backdrop-blur-sm"
@@ -2123,6 +2388,8 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
                   setSunstoneVariantId(null);
                   setSelectedProduct(null);
                   setCatalogProducts([]);
+                  // Clear all variant sunstone links
+                  if (hasVariants) setVariants((prev) => prev.map((v) => ({ ...v, sunstone_variant_id: null })));
                 }
               }}
             />
@@ -2151,7 +2418,14 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
                     {sunstoneProductId ? (
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); setSunstoneProductId(null); setSunstoneVariantId(null); setSelectedProduct(null); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSunstoneProductId(null);
+                          setSunstoneVariantId(null);
+                          setSelectedProduct(null);
+                          // Clear all variant sunstone links
+                          if (hasVariants) setVariants((prev) => prev.map((v) => ({ ...v, sunstone_variant_id: null })));
+                        }}
                         className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)]"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -2572,24 +2846,38 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
                 </label>
 
                 {/* Variant editor */}
-                {hasVariants && (
+                {hasVariants && (() => {
+                  const showVariantLinking = isSunstoneSupplier && !!sunstoneProductId && !!selectedProduct;
+                  const shopifyVariants = showVariantLinking ? (selectedProduct.variants || []) as any[] : [];
+                  const gridCols = showVariantLinking
+                    ? 'grid-cols-[1fr_70px_70px_60px_60px_80px_56px]'
+                    : 'grid-cols-[1fr_70px_70px_60px_60px_56px]';
+
+                  return (
                   <div className="space-y-3">
                     {variants.length > 0 && (
                       <div className="rounded-xl border border-[var(--border-default)] overflow-hidden">
                         {/* Header */}
-                        <div className="grid grid-cols-[1fr_70px_70px_60px_60px_56px] gap-2 px-3 py-2 bg-[var(--surface-raised)] text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
+                        <div className={`grid ${gridCols} gap-2 px-3 py-2 bg-[var(--surface-raised)] text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider`}>
                           <div>Name</div>
                           <div className="text-right">Cost</div>
                           <div className="text-right">Price</div>
                           <div className="text-right">Stock</div>
                           <div className="text-right">Alert</div>
+                          {showVariantLinking && <div className="text-center">Sunstone</div>}
                           <div></div>
                         </div>
 
                         {/* Rows */}
                         <div className="divide-y divide-[var(--border-subtle)]">
-                          {variants.map((v, idx) => (
-                            <div key={v.id} className="grid grid-cols-[1fr_70px_70px_60px_60px_56px] gap-2 px-3 py-2 items-center">
+                          {variants.map((v, idx) => {
+                            const linkedShopifyVar = v.sunstone_variant_id
+                              ? shopifyVariants.find((sv: any) => sv.id === v.sunstone_variant_id)
+                              : null;
+
+                            return (
+                            <div key={v.id}>
+                              <div className={`grid ${gridCols} gap-2 px-3 py-2 items-center`}>
                               <input
                                 type="text"
                                 value={v.name}
@@ -2635,6 +2923,38 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
                                 onChange={(e) => updateVariant(v.id, 'reorder_threshold', parseFloat(e.target.value) || 0)}
                                 className="w-full rounded border border-[var(--border-default)] bg-[var(--surface-base)] px-1 py-1.5 text-sm text-right text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] min-h-[36px]"
                               />
+                              {showVariantLinking && (
+                                <div className="relative flex items-center justify-center">
+                                  {linkedShopifyVar ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => updateVariant(v.id, 'sunstone_variant_id', null)}
+                                      className="flex items-center gap-0.5 text-[10px] text-green-700 bg-green-50 rounded px-1.5 py-0.5 hover:bg-green-100 transition-colors max-w-full"
+                                      title={`Linked: ${linkedShopifyVar.title}. Click to unlink.`}
+                                    >
+                                      <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                      </svg>
+                                      <span className="truncate">{linkedShopifyVar.title?.split(' / ')[0] || 'Linked'}</span>
+                                    </button>
+                                  ) : !v.sunstone_variant_id ? (
+                                    <VariantLinkPicker
+                                      shopifyVariants={shopifyVariants}
+                                      isChain={isChainProduct(selectedProduct)}
+                                      onSelect={(shopifyVarId) => updateVariant(v.id, 'sunstone_variant_id', shopifyVarId)}
+                                    />
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => updateVariant(v.id, 'sunstone_variant_id', null)}
+                                      className="text-[10px] text-amber-600 hover:underline"
+                                      title="Linked variant not found in catalog. Click to clear."
+                                    >
+                                      Unknown
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                               <div className="flex items-center gap-0.5 justify-end">
                                 <button
                                   type="button"
@@ -2658,10 +2978,43 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
                                   </svg>
                                 </button>
                               </div>
+                              </div>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
+                    )}
+
+                    {/* Auto-link variants button */}
+                    {showVariantLinking && variants.length > 0 && variants.some((v) => !v.sunstone_variant_id) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          let matched = 0;
+                          setVariants((prev) => prev.map((v) => {
+                            if (v.sunstone_variant_id) return v;
+                            const vNameLower = v.name.toLowerCase().trim();
+                            const match = shopifyVariants.find((sv: any) => {
+                              const svTitle = (sv.title || '').toLowerCase();
+                              return svTitle.includes(vNameLower) || vNameLower.includes(svTitle.split(' / ')[0].trim().split('(')[0].trim());
+                            });
+                            if (match) {
+                              matched++;
+                              return { ...v, sunstone_variant_id: match.id };
+                            }
+                            return v;
+                          }));
+                          if (matched > 0) {
+                            toast.success(`Auto-linked ${matched} variant${matched !== 1 ? 's' : ''}`);
+                          } else {
+                            toast.info('No matches found. Link variants manually.');
+                          }
+                        }}
+                        className="text-xs font-medium text-[var(--accent-primary)] hover:underline min-h-[36px]"
+                      >
+                        Auto-link variants to Sunstone
+                      </button>
                     )}
 
                     {/* Action buttons */}
@@ -2688,7 +3041,8 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
                       </p>
                     )}
                   </div>
-                )}
+                  );
+                })()}
               </div>
             </>
           )}
@@ -2729,6 +3083,91 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Variant Link Picker — inline dropdown for linking inventory variant → Shopify variant
+// ============================================================================
+
+function VariantLinkPicker({
+  shopifyVariants,
+  isChain,
+  onSelect,
+}: {
+  shopifyVariants: any[];
+  isChain: boolean;
+  onSelect: (shopifyVariantId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  // Group variants by material for chain products
+  const grouped = useMemo(() => {
+    if (!isChain) return null;
+    const map = new Map<string, any[]>();
+    for (const v of shopifyVariants) {
+      if (!v.title || v.title === 'Default Title') continue;
+      const material = v.title.split(' / ')[0].trim();
+      if (!map.has(material)) map.set(material, []);
+      map.get(material)!.push(v);
+    }
+    return map.size > 1 ? map : null;
+  }, [shopifyVariants, isChain]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="text-[10px] font-medium text-[var(--accent-primary)] hover:underline"
+      >
+        Link...
+      </button>
+      {open && (
+        <div className="absolute z-50 right-0 top-full mt-1 w-56 max-h-48 overflow-y-auto bg-[var(--surface-overlay)] border border-[var(--border-default)] rounded-lg shadow-lg py-1">
+          {grouped ? (
+            [...grouped.entries()].map(([material, group]) => (
+              <div key={material}>
+                <div className="px-2 py-1 text-[9px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider bg-[var(--surface-subtle)] sticky top-0">{material}</div>
+                {group.map((sv: any) => (
+                  <button
+                    key={sv.id}
+                    type="button"
+                    onClick={() => { onSelect(sv.id); setOpen(false); }}
+                    className="w-full text-left px-2 py-1.5 text-[11px] text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] flex justify-between gap-1 min-h-[32px] items-center"
+                  >
+                    <span className="truncate">{sv.title.split(' / ').slice(1).join(' / ') || sv.title}</span>
+                    <span className="shrink-0 text-[var(--text-tertiary)]">${parseFloat(sv.price).toFixed(2)}</span>
+                  </button>
+                ))}
+              </div>
+            ))
+          ) : (
+            shopifyVariants.filter((sv: any) => sv.title !== 'Default Title').map((sv: any) => (
+              <button
+                key={sv.id}
+                type="button"
+                onClick={() => { onSelect(sv.id); setOpen(false); }}
+                className="w-full text-left px-2 py-1.5 text-[11px] text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] flex justify-between gap-1 min-h-[32px] items-center"
+              >
+                <span className="truncate">{sv.title}</span>
+                <span className="shrink-0 text-[var(--text-tertiary)]">${parseFloat(sv.price).toFixed(2)}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

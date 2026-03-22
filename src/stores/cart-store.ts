@@ -22,6 +22,7 @@ export interface CartItem {
   productType: string;              // "Chain", "Connector", etc.
   imageUrl: string | null;          // product image
   inventoryItemId: string | null;   // linked inventory_item.id (null if from catalog)
+  inventoryVariantId: string | null; // linked inventory_item_variant.id (null if no variant)
 }
 
 interface CartStore {

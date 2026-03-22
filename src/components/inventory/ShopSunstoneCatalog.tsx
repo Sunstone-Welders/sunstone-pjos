@@ -118,6 +118,7 @@ export default function ShopSunstoneCatalog() {
       productType: product.productType || '',
       imageUrl: product.imageUrl || null,
       inventoryItemId: null,
+      inventoryVariantId: null,
     });
     toast.success(`${product.title} added to cart`);
     openCart();
