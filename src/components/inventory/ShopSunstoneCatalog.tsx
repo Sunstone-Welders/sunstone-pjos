@@ -124,18 +124,35 @@ export default function ShopSunstoneCatalog() {
     const loadCatalog = async () => {
       setLoading(true);
       try {
-        const { data } = await supabase
-          .from('sunstone_catalog_cache')
-          .select('products')
-          .limit(1)
-          .single();
+        // Load catalog + visibility overrides in parallel
+        const [catalogResult, visibilityResult] = await Promise.all([
+          supabase
+            .from('sunstone_catalog_cache')
+            .select('products')
+            .limit(1)
+            .single(),
+          supabase
+            .from('catalog_product_visibility')
+            .select('shopify_product_id, is_visible'),
+        ]);
+
+        const { data } = catalogResult;
+
+        // Build set of hidden product IDs
+        const hiddenIds = new Set(
+          (visibilityResult.data || [])
+            .filter((v: any) => !v.is_visible)
+            .map((v: any) => v.shopify_product_id)
+        );
 
         if (data?.products) {
           const allActive = (data.products as SunstoneProduct[]).filter(
             (p) => p.status === 'ACTIVE'
           );
 
-          const filtered = allActive.filter((p) => isInventoryProduct(p));
+          const filtered = allActive
+            .filter((p) => isInventoryProduct(p))   // type filter (existing)
+            .filter((p) => !hiddenIds.has(p.id));    // visibility filter (new)
 
           filtered.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
           setProducts(filtered);
