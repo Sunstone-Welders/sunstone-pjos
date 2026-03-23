@@ -235,7 +235,8 @@ export async function POST(request: NextRequest) {
 
     // ── Step 1: Create Opportunity (Quote Sent — NOT Closed Won until payment) ──
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const today = now.toLocaleDateString('en-CA', { timeZone: 'America/Denver' });
+    // en-CA locale produces YYYY-MM-DD format, in Denver timezone
     const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Denver' });
     const oppName = `Studio Reorder — ${tenant?.name || 'Artist'} — ${today} — ${timeStr}`;
 
