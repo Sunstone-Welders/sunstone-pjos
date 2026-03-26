@@ -20,9 +20,6 @@ interface ActivityEntry {
     tag_name?: string;
     tag_color?: string;
     payment_method?: string;
-    refund_status?: string;
-    refund_amount?: number;
-    payment_provider?: string;
     sale_id?: string;
   };
 }
@@ -45,44 +42,10 @@ export async function GET(
   if (!member) return NextResponse.json({ error: 'No tenant membership' }, { status: 403 });
   const tenantId = member.tenant_id;
 
-  // Debug: check if query returns data
-  const debugUrl = request.nextUrl.searchParams.get('debug');
-  if (debugUrl === '1') {
-    const { data: debugSales, error: debugErr } = await supabase
-      .from('sales')
-      .select('id, created_at, total, payment_method, payment_provider, refund_status, refund_amount, items:sale_items(name, quantity), event:events(name)')
-      .eq('client_id', clientId)
-      .eq('tenant_id', tenantId)
-      .eq('status', 'completed')
-      .order('created_at', { ascending: false })
-      .limit(3);
-    const { data: debugWaivers, error: waiverErr } = await supabase
-      .from('waivers')
-      .select('id, signed_at')
-      .eq('client_id', clientId)
-      .eq('tenant_id', tenantId)
-      .limit(3);
-    const { data: debugMsgs, error: msgErr } = await supabase
-      .from('message_log')
-      .select('id')
-      .eq('client_id', clientId)
-      .eq('tenant_id', tenantId)
-      .limit(3);
-    return NextResponse.json({
-      debug: true,
-      userId: user.id,
-      tenantId,
-      clientId,
-      sales: { count: debugSales?.length ?? 0, error: debugErr?.message ?? null, first: debugSales?.[0] ?? null },
-      waivers: { count: debugWaivers?.length ?? 0, error: waiverErr?.message ?? null },
-      messages: { count: debugMsgs?.length ?? 0, error: msgErr?.message ?? null },
-    });
-  }
-
   const [salesRes, waiversRes, messagesRes, tagsRes, workflowRes, notesRes, refundsRes, inboundRes] = await Promise.all([
     supabase
       .from('sales')
-      .select('id, created_at, total, payment_method, payment_provider, refund_status, refund_amount, items:sale_items(name, quantity), event:events(name)')
+      .select('id, created_at, total, payment_method, items:sale_items(name, quantity), event:events(name)')
       .eq('client_id', clientId)
       .eq('tenant_id', tenantId)
       .eq('status', 'completed')
@@ -157,9 +120,6 @@ export async function GET(
         items: itemNames,
         total: Number(sale.total),
         payment_method: sale.payment_method,
-        payment_provider: (sale as any).payment_provider || undefined,
-        refund_status: (sale as any).refund_status || 'none',
-        refund_amount: Number((sale as any).refund_amount) || 0,
         event_name: (sale.event as any)?.name || undefined,
         sale_id: sale.id,
       },
