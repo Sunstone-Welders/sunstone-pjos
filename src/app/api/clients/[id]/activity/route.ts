@@ -50,19 +50,32 @@ export async function GET(
   if (debugUrl === '1') {
     const { data: debugSales, error: debugErr } = await supabase
       .from('sales')
-      .select('id, total')
+      .select('id, created_at, total, payment_method, payment_provider, refund_status, refund_amount, items:sale_items(name, quantity), event:events(name)')
       .eq('client_id', clientId)
       .eq('tenant_id', tenantId)
       .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(3);
+    const { data: debugWaivers, error: waiverErr } = await supabase
+      .from('waivers')
+      .select('id, signed_at')
+      .eq('client_id', clientId)
+      .eq('tenant_id', tenantId)
+      .limit(3);
+    const { data: debugMsgs, error: msgErr } = await supabase
+      .from('message_log')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('tenant_id', tenantId)
       .limit(3);
     return NextResponse.json({
       debug: true,
       userId: user.id,
       tenantId,
       clientId,
-      salesCount: debugSales?.length ?? 0,
-      salesError: debugErr?.message ?? null,
-      firstSale: debugSales?.[0] ?? null,
+      sales: { count: debugSales?.length ?? 0, error: debugErr?.message ?? null, first: debugSales?.[0] ?? null },
+      waivers: { count: debugWaivers?.length ?? 0, error: waiverErr?.message ?? null },
+      messages: { count: debugMsgs?.length ?? 0, error: msgErr?.message ?? null },
     });
   }
 
