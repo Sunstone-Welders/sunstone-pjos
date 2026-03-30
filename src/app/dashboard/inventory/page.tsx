@@ -71,6 +71,8 @@ export default function InventoryPage() {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<InventoryType | 'all'>('all');
   const [showInactive, setShowInactive] = useState(false);
+  const [sortColumn, setSortColumn] = useState<'name' | 'cost_per_unit' | 'sell_price' | 'quantity_on_hand'>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Modal state
   const [showForm, setShowForm] = useState(false);
@@ -352,7 +354,7 @@ export default function InventoryPage() {
   };
 
   const filteredItems = useMemo(() => {
-    return items.filter((item) => {
+    const filtered = items.filter((item) => {
       const matchesSearch =
         !search ||
         item.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -361,7 +363,14 @@ export default function InventoryPage() {
       const matchesType = filterType === 'all' || item.type === filterType;
       return matchesSearch && matchesType;
     });
-  }, [items, search, filterType]);
+    return filtered.sort((a, b) => {
+      const dir = sortDirection === 'asc' ? 1 : -1;
+      if (sortColumn === 'name') {
+        return dir * a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      }
+      return dir * (Number(a[sortColumn] ?? 0) - Number(b[sortColumn] ?? 0));
+    });
+  }, [items, search, filterType, sortColumn, sortDirection]);
 
   // Count items eligible for Sunstone linking but not yet linked
   const unlinkedCount = useMemo(() => {
@@ -827,11 +836,32 @@ export default function InventoryPage() {
       ) : (
         <div className="rounded-xl border border-[var(--border-default)] overflow-hidden bg-[var(--surface-base)]">
           {/* Table Header */}
-          <div className="hidden sm:grid grid-cols-[1fr_100px_100px_100px_80px] gap-4 px-4 py-3 bg-[var(--surface-raised)] border-b border-[var(--border-subtle)] text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-            <div>Item</div>
-            <div className="text-right">Cost</div>
-            <div className="text-right">Price</div>
-            <div className="text-right">Stock</div>
+          <div className="hidden sm:grid grid-cols-[1fr_100px_100px_100px_80px] gap-4 px-4 py-3 bg-[var(--surface-raised)] border-b border-[var(--border-subtle)] text-xs font-medium uppercase tracking-wider">
+            {([
+              { key: 'name' as const, label: 'Item', align: 'text-left' },
+              { key: 'cost_per_unit' as const, label: 'Cost', align: 'text-right' },
+              { key: 'sell_price' as const, label: 'Price', align: 'text-right' },
+              { key: 'quantity_on_hand' as const, label: 'Stock', align: 'text-right' },
+            ]).map((col) => (
+              <button
+                key={col.key}
+                type="button"
+                onClick={() => {
+                  if (sortColumn === col.key) {
+                    setSortDirection((d) => d === 'asc' ? 'desc' : 'asc');
+                  } else {
+                    setSortColumn(col.key);
+                    setSortDirection('asc');
+                  }
+                }}
+                className={`${col.align} flex items-center gap-1 min-h-[44px] cursor-pointer select-none ${col.align === 'text-right' ? 'justify-end' : ''} ${sortColumn === col.key ? 'text-[var(--text-primary)] font-semibold' : 'text-[var(--text-tertiary)]'}`}
+              >
+                {col.label}
+                {sortColumn === col.key && (
+                  <span className="text-[10px]">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                )}
+              </button>
+            ))}
             <div></div>
           </div>
 
