@@ -23,12 +23,22 @@ export type SupplierFormData = {
   contact_email: string;
   contact_phone: string;
   website: string;
+  street: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+  instagram: string;
+  facebook: string;
+  tiktok: string;
+  account_number: string;
   notes: string;
 };
 
 export const EMPTY_SUPPLIER_FORM: SupplierFormData = {
   name: '', contact_name: '', contact_email: '', contact_phone: '', website: '',
-  notes: '',
+  street: '', city: '', state: '', postal_code: '', country: '',
+  instagram: '', facebook: '', tiktok: '', account_number: '', notes: '',
 };
 
 const inputCls = 'w-full h-10 px-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] min-h-[44px]';
@@ -83,16 +93,71 @@ export function SupplierFormFields({
         </div>
       </div>
 
-      {/* Notes */}
+      {/* Address */}
       <div>
-        <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">Notes</p>
-        <div>
-          <textarea
-            value={form.notes}
-            onChange={(e) => onChange('notes', e.target.value)}
-            className="w-full h-20 px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] resize-none"
-            placeholder="Free shipping over $200, sales rep is John..."
-          />
+        <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">Address</p>
+        <div className="space-y-3">
+          <div>
+            <label className={labelCls}>Street</label>
+            <input type="text" value={form.street} onChange={(e) => onChange('street', e.target.value)} className={inputCls} placeholder="123 Main St" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <label className={labelCls}>City</label>
+              <input type="text" value={form.city} onChange={(e) => onChange('city', e.target.value)} className={inputCls} placeholder="City" />
+            </div>
+            <div>
+              <label className={labelCls}>State</label>
+              <input type="text" value={form.state} onChange={(e) => onChange('state', e.target.value)} className={inputCls} placeholder="CA" />
+            </div>
+            <div>
+              <label className={labelCls}>ZIP</label>
+              <input type="text" value={form.postal_code} onChange={(e) => onChange('postal_code', e.target.value)} className={inputCls} placeholder="90001" />
+            </div>
+            <div>
+              <label className={labelCls}>Country</label>
+              <input type="text" value={form.country} onChange={(e) => onChange('country', e.target.value)} className={inputCls} placeholder="US" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Social Media */}
+      <div>
+        <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">Social Media</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className={labelCls}>Instagram</label>
+            <input type="text" value={form.instagram} onChange={(e) => onChange('instagram', e.target.value)} className={inputCls} placeholder="@handle" />
+          </div>
+          <div>
+            <label className={labelCls}>Facebook</label>
+            <input type="text" value={form.facebook} onChange={(e) => onChange('facebook', e.target.value)} className={inputCls} placeholder="pagename" />
+          </div>
+          <div>
+            <label className={labelCls}>TikTok</label>
+            <input type="text" value={form.tiktok} onChange={(e) => onChange('tiktok', e.target.value)} className={inputCls} placeholder="@handle" />
+          </div>
+        </div>
+      </div>
+
+      {/* Account & Notes */}
+      <div>
+        <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">Account & Notes</p>
+        <div className="space-y-3">
+          <div>
+            <label className={labelCls}>Account Number</label>
+            <input type="text" value={form.account_number} onChange={(e) => onChange('account_number', e.target.value)} className={inputCls} placeholder="Your account # with this supplier" />
+          </div>
+          <div>
+            <label className={labelCls}>Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => onChange('notes', e.target.value)}
+              className="w-full h-20 px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--surface-base)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] resize-none"
+              placeholder="Free shipping over $200, sales rep is John..."
+            />
+          </div>
         </div>
       </div>
     </div>

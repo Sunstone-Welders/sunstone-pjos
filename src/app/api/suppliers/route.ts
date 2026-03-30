@@ -53,6 +53,8 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const {
     name, contact_name, contact_email, contact_phone, website, notes,
+    street, city, state, postal_code, country,
+    instagram, facebook, tiktok, account_number,
   } = body;
 
   if (!name) {
@@ -87,6 +89,15 @@ export async function POST(request: NextRequest) {
       contact_email: contact_email || null,
       contact_phone: contact_phone || null,
       website: cleanWebsite,
+      street: street || null,
+      city: city || null,
+      state: state || null,
+      postal_code: postal_code || null,
+      country: country || null,
+      instagram: instagram?.replace(/^@/, '') || null,
+      facebook: facebook || null,
+      tiktok: tiktok?.replace(/^@/, '') || null,
+      account_number: account_number || null,
       notes: notes || null,
       is_sunstone: false,
     })

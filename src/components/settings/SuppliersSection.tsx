@@ -92,6 +92,15 @@ export default function SuppliersSection({ tenantId }: SuppliersSectionProps) {
       contact_email: s.contact_email || '',
       contact_phone: s.contact_phone || '',
       website: s.website?.replace(/^https?:\/\//, '') || '',
+      street: s.street || '',
+      city: s.city || '',
+      state: s.state || '',
+      postal_code: s.postal_code || '',
+      country: s.country || '',
+      instagram: s.instagram || '',
+      facebook: s.facebook || '',
+      tiktok: s.tiktok || '',
+      account_number: s.account_number || '',
       notes: s.notes || '',
     });
   };

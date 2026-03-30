@@ -249,7 +249,17 @@ export interface Supplier {
   contact_email: string | null;
   contact_phone: string | null;
   website: string | null;
+  street: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  country: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  tiktok: string | null;
+  account_number: string | null;
   is_sunstone: boolean;
+  is_active: boolean;
   notes: string | null;
   sort_order: number;
   created_at: string;
