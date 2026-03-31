@@ -46,6 +46,8 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/demo') ||
     request.nextUrl.pathname.startsWith('/pay') ||
     request.nextUrl.pathname.startsWith('/payment-success') ||
+    request.nextUrl.pathname.startsWith('/ambassador') ||
+    request.nextUrl.pathname.startsWith('/join') ||
     request.nextUrl.pathname === '/';
 
   if (!user && !isPublicRoute) {

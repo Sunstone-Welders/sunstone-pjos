@@ -12,6 +12,7 @@ import { useTenant } from '@/hooks/use-tenant';
 import { Button, Card } from '@/components/ui';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import Link from 'next/link';
 
 interface AmbassadorData {
   id: string;
@@ -102,6 +103,38 @@ export default function AmbassadorPage() {
           <div className="h-8 bg-[var(--surface-raised)] rounded w-64" />
           <div className="h-48 bg-[var(--surface-raised)] rounded-xl" />
         </div>
+      </div>
+    );
+  }
+
+  // ── Not on a paid plan and not already an ambassador — show upgrade prompt ──
+  const hasPaidPlan = tenant?.subscription_status === 'active' || !!tenant?.stripe_subscription_id;
+  if (!ambassador && !hasPaidPlan) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Ambassador Program</h1>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">Earn commission by referring PJ artists to Sunstone Studio</p>
+        </div>
+
+        <Card className="p-8 text-center space-y-6">
+          <div className="w-16 h-16 rounded-full bg-[var(--accent-50)] flex items-center justify-center mx-auto">
+            <svg className="w-8 h-8 text-[var(--accent-600)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-[var(--text-primary)]">Upgrade to Unlock</h2>
+            <p className="text-sm text-[var(--text-secondary)] mt-2 max-w-md mx-auto">
+              The Ambassador Program is available to artists on a paid Sunstone plan. Choose a plan to start earning commissions on referrals.
+            </p>
+          </div>
+          <Link href="/dashboard/settings?tab=subscription">
+            <Button variant="primary" size="lg" className="min-h-[48px]">
+              View Plans
+            </Button>
+          </Link>
+        </Card>
       </div>
     );
   }

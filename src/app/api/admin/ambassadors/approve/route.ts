@@ -50,7 +50,23 @@ export async function POST(request: NextRequest) {
               <p style="color: #555; line-height: 1.6;">Hi ${ambassador.name},</p>
               <p style="color: #555; line-height: 1.6;">Your Sunstone Ambassador application has been approved. Start sharing your referral link:</p>
               <p style="margin: 20px 0;"><a href="${link}" style="background: #B1275E; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">${link}</a></p>
-              <p style="color: #555; line-height: 1.6;">You'll earn 20% of every referred artist's subscription for 8 months.</p>
+              <h3 style="color: #1a1a1a; margin-top: 28px;">Your Commission Details</h3>
+              <p style="color: #555; line-height: 1.6;">You'll earn <strong>20% of every referred artist's monthly subscription</strong> for 8 months per referral:</p>
+              <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+                <tr style="border-bottom: 1px solid #eee;">
+                  <td style="padding: 8px 0; color: #555;">Starter ($99/mo)</td>
+                  <td style="padding: 8px 0; text-align: right; color: #B1275E; font-weight: 600;">$19.80/mo</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eee;">
+                  <td style="padding: 8px 0; color: #555;">Pro ($169/mo)</td>
+                  <td style="padding: 8px 0; text-align: right; color: #B1275E; font-weight: 600;">$33.80/mo</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #555;">Business ($279/mo)</td>
+                  <td style="padding: 8px 0; text-align: right; color: #B1275E; font-weight: 600;">$55.80/mo</td>
+                </tr>
+              </table>
+              <p style="color: #555; line-height: 1.6; font-size: 14px;">Commissions are calculated monthly and paid out via direct deposit. Each referral earns commission for 8 months from their subscription start date.</p>
               <p style="color: #999; margin-top: 32px;">— The Sunstone Team</p>
             </div>
           `,
