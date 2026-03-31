@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
     }
 
-    const { userId, businessName, firstName } = await request.json();
+    const { userId, businessName, firstName, referralCode } = await request.json();
 
     if (!userId || !businessName) {
       return NextResponse.json(
@@ -112,7 +112,65 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 4. Auto-provision dedicated phone number (non-blocking)
+    // 4. Referral attribution (non-blocking)
+    if (referralCode) {
+      try {
+        const { data: ambassador } = await supabase
+          .from('ambassadors')
+          .select('id, email, status')
+          .eq('referral_code', referralCode.toLowerCase())
+          .eq('status', 'active')
+          .single();
+
+        // Anti-self-referral: skip if ambassador email matches signup email
+        if (ambassador && ambassador.email?.toLowerCase() !== user.email?.toLowerCase()) {
+          // Update tenant with referral info
+          await supabase
+            .from('tenants')
+            .update({
+              referred_by_ambassador_id: ambassador.id,
+              referral_code_used: referralCode.toLowerCase(),
+              referral_cookie_data: { code: referralCode, signed_up_at: new Date().toISOString() },
+            })
+            .eq('id', tenant.id);
+
+          // Update existing referral record (from link click) or create one
+          const { data: existingReferral } = await supabase
+            .from('referrals')
+            .select('id')
+            .eq('ambassador_id', ambassador.id)
+            .eq('referral_code_used', referralCode.toLowerCase())
+            .is('referred_tenant_id', null)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (existingReferral) {
+            await supabase
+              .from('referrals')
+              .update({
+                referred_tenant_id: tenant.id,
+                status: 'signed_up',
+                signed_up_at: new Date().toISOString(),
+              })
+              .eq('id', existingReferral.id);
+          } else {
+            await supabase.from('referrals').insert({
+              ambassador_id: ambassador.id,
+              referred_tenant_id: tenant.id,
+              referral_code_used: referralCode.toLowerCase(),
+              attribution_source: 'manual_code',
+              status: 'signed_up',
+              signed_up_at: new Date().toISOString(),
+            });
+          }
+        }
+      } catch (refErr) {
+        console.warn('[Signup] Referral attribution failed (non-fatal):', refErr);
+      }
+    }
+
+    // 5. Auto-provision dedicated phone number (non-blocking)
     provisionPhoneNumber(tenant.id).catch(err =>
       console.warn('[Signup] Auto-provision phone failed:', err.message)
     );

@@ -1,12 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button, Input } from '@/components/ui';
 
 export default function SignupPage() {
+  return (
+    <Suspense>
+      <SignupForm />
+    </Suspense>
+  );
+}
+
+function SignupForm() {
   const [firstName, setFirstName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,8 +23,28 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [referralName, setReferralName] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
+
+  // Check for referral code from URL param or cookie
+  useEffect(() => {
+    const ref = searchParams.get('ref');
+    const cookieRef = document.cookie.match(/referral_code=([^;]+)/)?.[1];
+    const code = ref || cookieRef || '';
+    if (!code) return;
+    setReferralCode(code);
+
+    // Look up ambassador display name
+    fetch(`/api/ambassador/lookup?code=${encodeURIComponent(code)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.displayName) setReferralName(data.displayName);
+      })
+      .catch(() => {});
+  }, [searchParams]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,6 +82,7 @@ export default function SignupPage() {
           userId: authData.user.id,
           businessName: businessName.trim(),
           firstName: firstName.trim(),
+          referralCode: referralCode || undefined,
         }),
       });
 
@@ -131,6 +160,15 @@ export default function SignupPage() {
             30 days free. No credit card required.
           </p>
         </div>
+
+        {/* Referral attribution */}
+        {referralName && (
+          <div className="rounded-lg bg-[var(--accent-50)] border border-[var(--accent-200)] px-4 py-3 mb-4 text-center">
+            <p className="text-sm text-[var(--accent-700)]">
+              Referred by <strong>{referralName}</strong>
+            </p>
+          </div>
+        )}
 
         {/* Form Card */}
         <div className="rounded-xl border border-border-default bg-surface-raised shadow-sm p-8">
