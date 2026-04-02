@@ -12,6 +12,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button, Card } from '@/components/ui';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { getMarketingAssets } from '@/lib/ambassador-assets';
 
 // ── Types ──
 
@@ -98,6 +99,8 @@ export default function AmbassadorDashboardContent() {
   const [customCode, setCustomCode] = useState('');
   const [customizeLoading, setCustomizeLoading] = useState(false);
   const [showCommissionDetails, setShowCommissionDetails] = useState(false);
+  const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
+  const [copiedAssetKey, setCopiedAssetKey] = useState<string | null>(null);
 
   // ── Data Loading ──
 
@@ -225,6 +228,16 @@ export default function AmbassadorDashboardContent() {
   }
 
   if (!ambassador) return null;
+
+  // ── Marketing Assets ──
+  const marketingAssets = ambassador ? getMarketingAssets(referralLink) : [];
+
+  const copyAssetText = (key: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedAssetKey(key);
+    toast.success('Copied!');
+    setTimeout(() => setCopiedAssetKey(null), 2000);
+  };
 
   // ── Earned This Month ──
   const now = new Date();
@@ -355,7 +368,68 @@ export default function AmbassadorDashboardContent() {
         </Card>
       )}
 
-      {/* Section 4: Referrals Table */}
+      {/* Section 4: Share & Promote */}
+      <Card className="overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--border-subtle)] flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-[var(--accent-50)] flex items-center justify-center shrink-0">
+            <svg className="w-4 h-4 text-[var(--accent-600)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 010 3.46" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Share & Promote</h3>
+            <p className="text-xs text-[var(--text-tertiary)]">Ready-made content to share Sunstone Studio with your audience</p>
+          </div>
+        </div>
+
+        <div className="divide-y divide-[var(--border-subtle)]">
+          {marketingAssets.map((asset) => (
+            <div key={asset.id}>
+              <button
+                onClick={() => setExpandedAsset(expandedAsset === asset.id ? null : asset.id)}
+                className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-[var(--surface-raised)]/50 transition-colors min-h-[48px]"
+              >
+                <span className="text-sm font-medium text-[var(--text-primary)]">{asset.title}</span>
+                <svg className={`w-4 h-4 text-[var(--text-tertiary)] transition-transform shrink-0 ${expandedAsset === asset.id ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+
+              {expandedAsset === asset.id && (
+                <div className="px-4 pb-4 space-y-3">
+                  {asset.items.map((item, idx) => {
+                    const copyKey = `${asset.id}-${idx}`;
+                    return (
+                      <div key={idx} className="rounded-lg border border-[var(--border-default)] overflow-hidden">
+                        <div className="flex items-center justify-between px-3 py-2 bg-[var(--surface-raised)]">
+                          <span className="text-xs font-medium text-[var(--text-secondary)]">{item.label}</span>
+                          <button
+                            onClick={() => copyAssetText(copyKey, item.text)}
+                            className="text-xs font-medium text-[var(--accent-600)] hover:text-[var(--accent-700)] min-h-[36px] px-2"
+                          >
+                            {copiedAssetKey === copyKey ? 'Copied!' : 'Copy'}
+                          </button>
+                        </div>
+                        <div className="px-3 py-2.5 text-xs text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
+                          {item.text}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="px-4 py-3 border-t border-[var(--border-subtle)] bg-[var(--surface-raised)]/50">
+          <p className="text-[11px] text-[var(--text-tertiary)]">
+            FTC requires you to disclose your ambassador relationship. Add #ad or #sponsored to paid promotions.
+          </p>
+        </div>
+      </Card>
+
+      {/* Section 5: Referrals Table */}
       <Card className="overflow-hidden">
         <div className="px-4 py-3 border-b border-[var(--border-subtle)]">
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">Referrals</h3>
@@ -441,7 +515,7 @@ export default function AmbassadorDashboardContent() {
         )}
       </Card>
 
-      {/* Section 5: Payout History */}
+      {/* Section 6: Payout History */}
       <Card className="overflow-hidden">
         <div className="px-4 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between">
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">Payout History</h3>
@@ -484,7 +558,7 @@ export default function AmbassadorDashboardContent() {
         )}
       </Card>
 
-      {/* Section 6: Commission Details (collapsible) */}
+      {/* Section 7: Commission Details (collapsible) */}
       <div>
         <button
           onClick={() => setShowCommissionDetails(!showCommissionDetails)}

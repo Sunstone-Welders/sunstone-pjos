@@ -27,6 +27,7 @@ import {
   MARKETING_KNOWLEDGE,
   PJ_UNIVERSITY_AND_SUNNY_ROLE,
   PJOS_PLATFORM_GUIDE,
+  AMBASSADOR_PROGRAM_KNOWLEDGE,
 } from '@/lib/mentor-knowledge';
 import { runAgenticLoop, buildAgenticSSEStream } from '@/lib/agentic-loop';
 import { logAnthropicCost } from '@/lib/cost-tracker';
@@ -623,6 +624,15 @@ const SUBSECTIONS: Subsection[] = [
     label: 'Jump Ring Selection Guide',
     data: PRODUCTS_KNOWLEDGE.jumpRingSelection,
     keywords: ['which jump ring', 'jump ring gauge', 'thickest gauge', 'what gauge', 'jump ring size', 'pick jump ring', 'right jump ring', '3mm', 'visual weight', 'gauge fit'],
+    priority: 1,
+  },
+
+  // ── AMBASSADOR PROGRAM ──
+  {
+    id: 'ambassador-program',
+    label: 'Ambassador Program',
+    data: AMBASSADOR_PROGRAM_KNOWLEDGE,
+    keywords: ['ambassador', 'referral', 'refer', 'affiliate', 'commission', 'earn money', 'referral link', 'referral code', 'refer a friend', 'refer artist', 'know someone', 'tell a friend', 'earn with sunstone', 'share sunstone', 'ambassador program', 'my referral link'],
     priority: 1,
   },
 ];

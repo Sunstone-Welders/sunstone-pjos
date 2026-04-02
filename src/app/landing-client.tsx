@@ -1404,6 +1404,7 @@ export default function LandingPageClient() {
           <div style={{ display: 'flex', gap: 20, justifyContent: 'center', marginBottom: 24 }}>
             <a href="/privacy" style={{ fontSize: 13, color: '#1F1F1F', textDecoration: 'none', opacity: 0.7 }}>Privacy Policy</a>
             <a href="/terms" style={{ fontSize: 13, color: '#1F1F1F', textDecoration: 'none', opacity: 0.7 }}>Terms of Service</a>
+            <a href="/ambassador" style={{ fontSize: 13, color: '#1F1F1F', textDecoration: 'none', opacity: 0.7 }}>Ambassador Program</a>
           </div>
           <p style={{ fontSize: 12, color: '#1F1F1F', opacity: 0.5 }}>
             &copy; 2026 Sunstone Permanent Jewelry. All rights reserved.

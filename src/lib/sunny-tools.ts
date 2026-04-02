@@ -629,6 +629,16 @@ export const SUNNY_TOOL_DEFINITIONS = [
       required: ['search_name'],
     },
   },
+  // 38. get_ambassador_status
+  {
+    name: 'get_ambassador_status',
+    description: 'Check if the current artist is enrolled in the Ambassador Program and get their referral link. Use this when an artist asks about their referral link, referral code, how many referrals they have, or their ambassador earnings.',
+    input_schema: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
 ];
 
 // ============================================================================
@@ -673,6 +683,7 @@ export function getSunnyToolStatusLabel(name: string): string {
     assign_pricing_tier: 'Assigning pricing tier...',
     search_sunstone_catalog: 'Searching Sunstone catalog...',
     create_reorder: 'Creating Sunstone reorder...',
+    get_ambassador_status: 'Checking ambassador status...',
   };
   return labels[name] || 'Working...';
 }
@@ -2718,6 +2729,62 @@ export async function executeSunnyTool(
             quantity: suggestedQty,
             estimated_total: `$${estimatedTotal.toFixed(2)}`,
             message: `I've added ${suggestedQty} ${inventoryItem.unit} of ${shopifyProduct.title} to your reorder draft (est. $${estimatedTotal.toFixed(2)}). Head to Inventory → Reorder to review and pay with your card on file.`,
+          },
+        };
+      }
+
+      case 'get_ambassador_status': {
+        // Find the tenant's owner user_id first
+        const { data: member } = await serviceClient
+          .from('tenant_members')
+          .select('user_id')
+          .eq('tenant_id', tenantId)
+          .eq('role', 'owner')
+          .single();
+
+        if (!member) {
+          return { result: { enrolled: false, message: 'Could not determine account owner.' } };
+        }
+
+        const { data: amb } = await serviceClient
+          .from('ambassadors')
+          .select('id, status, referral_code, stripe_connect_onboarded, created_at')
+          .eq('user_id', member.user_id)
+          .single();
+
+        if (!amb || amb.status !== 'active') {
+          return {
+            result: {
+              enrolled: false,
+              message: amb?.status === 'pending'
+                ? 'Your ambassador application is pending review.'
+                : 'You are not enrolled in the Ambassador Program. You can enroll from the Ambassador section in your sidebar.',
+            },
+          };
+        }
+
+        // Get referral stats
+        const { data: refs } = await serviceClient
+          .from('referrals')
+          .select('status, total_commission_earned')
+          .eq('ambassador_id', amb.id);
+
+        const allRefs = refs || [];
+        const totalReferrals = allRefs.length;
+        const converted = allRefs.filter((r: any) => r.status === 'converted').length;
+        const totalEarned = allRefs.reduce((sum: number, r: any) => sum + Number(r.total_commission_earned || 0), 0);
+
+        const referralLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://sunstonepj.app'}/join/${amb.referral_code}`;
+
+        return {
+          result: {
+            enrolled: true,
+            referral_code: amb.referral_code,
+            referral_link: referralLink,
+            total_referrals: totalReferrals,
+            converted_referrals: converted,
+            total_earned: `$${totalEarned.toFixed(2)}`,
+            payouts_connected: amb.stripe_connect_onboarded,
           },
         };
       }

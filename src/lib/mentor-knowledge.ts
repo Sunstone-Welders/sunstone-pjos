@@ -2497,6 +2497,49 @@ export const PJOS_PLATFORM_GUIDE = {
 };
 
 // =============================================================================
+// SECTION 10: AMBASSADOR PROGRAM
+// =============================================================================
+export const AMBASSADOR_PROGRAM_KNOWLEDGE = {
+  overview: {
+    summary: 'Sunstone Studio has an Ambassador Program where artists can earn recurring commission by referring other PJ artists to the platform.',
+    howToEnroll: 'Artists on a paid plan can enroll from their dashboard — look for "Ambassador" in the sidebar. External ambassadors (educators, influencers) can apply at sunstonepj.app/ambassador.',
+    programType: 'Single-level referral program only. No downlines, no tiers, not MLM. Ambassadors earn commission only on their own direct referrals.',
+  },
+  commissionDetails: {
+    rate: '20% of referred artists\' monthly subscription billing',
+    duration: '8 months from each referral\'s first paid invoice',
+    appliesTo: 'Base subscription and CRM add-on fees',
+    doesNotApplyTo: 'Hardware purchases, one-time fees, physical product orders, supply reorders',
+    payouts: 'Monthly on the 15th via bank deposit (Stripe Connect). Minimum payout: $25.',
+    taxNote: 'Ambassador is responsible for tax reporting. Stripe issues 1099 for US ambassadors earning $600+ annually.',
+  },
+  howItWorks: {
+    step1: 'Enroll from the Ambassador section in your dashboard (paid plan required)',
+    step2: 'Get your unique referral link and share it with other PJ artists',
+    step3: 'When they sign up and subscribe to a paid plan, you start earning 20% monthly',
+    step4: 'Connect your bank account via Stripe to receive payouts',
+    step5: 'Commissions are paid monthly — check your Ambassador dashboard for earnings',
+  },
+  whenToMention: {
+    do: [
+      'When an artist asks about referrals, affiliate programs, or earning money through Sunstone',
+      'When an artist mentions knowing other PJ artists who might benefit from the platform',
+      'When an artist directly asks "how can I earn money with Sunstone Studio?"',
+    ],
+    doNot: [
+      'Never bring it up proactively with artists who are struggling with the platform',
+      'Never mention it more than once per conversation unless asked',
+      'Never be pushy — one brief mention, then move on',
+      'Never mention specific commission amounts to artists who have not enrolled (just say "recurring commission" and point to the Ambassador section)',
+    ],
+    naturalMentions: [
+      'By the way, if you know other PJ artists who might benefit from Sunstone Studio, check out the Ambassador section in your sidebar — you can earn recurring commission for referrals.',
+      'Sunstone has an Ambassador Program! You can find the details in the Ambassador section of your dashboard.',
+    ],
+  },
+};
+
+// =============================================================================
 // COMBINED EXPORT (for easy import in PJOS)
 // =============================================================================
 export const SUNNY_MENTOR_KNOWLEDGE = {
@@ -2509,4 +2552,5 @@ export const SUNNY_MENTOR_KNOWLEDGE = {
   marketing: MARKETING_KNOWLEDGE,
   pjUniversityAndSunnyRole: PJ_UNIVERSITY_AND_SUNNY_ROLE,
   pjosPlatformGuide: PJOS_PLATFORM_GUIDE,
+  ambassadorProgram: AMBASSADOR_PROGRAM_KNOWLEDGE,
 };
