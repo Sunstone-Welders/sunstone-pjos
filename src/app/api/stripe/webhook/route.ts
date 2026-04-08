@@ -288,7 +288,7 @@ export async function POST(request: NextRequest) {
           // Fallback: look up tenant by stripe_customer_id
           const { data: tenant } = await serviceRole
             .from('tenants')
-            .select('id')
+            .select('id, trial_ends_at')
             .eq('stripe_customer_id', customerId)
             .single();
 
@@ -297,6 +297,9 @@ export async function POST(request: NextRequest) {
             break;
           }
 
+          // Check if this is a trial reactivation (trial already expired)
+          const isReactivation = tenant.trial_ends_at && new Date(tenant.trial_ends_at) < new Date();
+
           await serviceRole
             .from('tenants')
             .update({
@@ -304,9 +307,19 @@ export async function POST(request: NextRequest) {
               stripe_subscription_id: subscriptionId,
               subscription_status: subStatus,
               platform_fee_percent: getPlatformFeePercent(tier),
+              ...(isReactivation ? { trial_reactivated_at: new Date().toISOString() } : {}),
             })
             .eq('id', tenant.id);
         } else {
+          // Check if trial is expired for this tenant (reactivation tracking)
+          const { data: existingTenant } = await serviceRole
+            .from('tenants')
+            .select('trial_ends_at')
+            .eq('id', tenantId)
+            .single();
+
+          const isReactivation = existingTenant?.trial_ends_at && new Date(existingTenant.trial_ends_at) < new Date();
+
           await serviceRole
             .from('tenants')
             .update({
@@ -315,6 +328,7 @@ export async function POST(request: NextRequest) {
               stripe_subscription_id: subscriptionId,
               subscription_status: subStatus,
               platform_fee_percent: getPlatformFeePercent(tier),
+              ...(isReactivation ? { trial_reactivated_at: new Date().toISOString() } : {}),
             })
             .eq('id', tenantId);
         }
