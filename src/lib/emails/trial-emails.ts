@@ -1,5 +1,5 @@
 // ============================================================================
-// Trial Expiration Email Templates — src/lib/emails/trial-emails.ts
+// Trial Expiration Email Templates - src/lib/emails/trial-emails.ts
 // ============================================================================
 // Three-stage email sequence for trial expiration: 7-day, 1-day, expired.
 // Uses Resend with dynamic import (same pattern as ambassador-emails.ts).
@@ -48,7 +48,7 @@ function emailLayout(content: string): string {
           <tr>
             <td style="padding: 20px 32px; border-top: 1px solid #F3E8EE; text-align: center;">
               <p style="margin: 0; color: #999; font-size: 12px; line-height: 1.5;">
-                Sunstone Studio &mdash; Built for permanent jewelry artists<br>
+                Sunstone Studio - Built for permanent jewelry artists<br>
                 You're receiving this because you signed up for a free trial.
               </p>
             </td>
@@ -91,7 +91,7 @@ export function trialEmail7Day(params: TrialEmailParams): { subject: string; htm
         We hope you've had a chance to explore your POS, manage your client list, and start tracking your inventory.
       </p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-        When you subscribe, everything you've built stays exactly where it is &mdash; your clients, sales history, events, and settings all carry over seamlessly.
+        When you subscribe, everything you've built stays exactly where it is - your clients, sales history, events, and settings all carry over seamlessly.
       </p>
       <div style="background: #FDF8FA; border-radius: 10px; padding: 16px 20px; margin: 20px 0;">
         <p style="color: #852454; font-size: 14px; font-weight: 600; margin: 0 0 8px;">Plans start at just $99/month:</p>
@@ -101,7 +101,7 @@ export function trialEmail7Day(params: TrialEmailParams): { subject: string; htm
       </div>
       ${ctaButton('Choose Your Plan')}
       <p style="color: #999; font-size: 13px; text-align: center; margin: 16px 0 0;">
-        Questions? Just reply to this email &mdash; we're here to help.
+        Questions? Just reply to this email - we're here to help.
       </p>
     `),
   };
@@ -122,11 +122,11 @@ export function trialEmail1Day(params: TrialEmailParams): { subject: string; htm
       <div style="background: #FEF3F2; border-left: 4px solid #B1275E; border-radius: 0 10px 10px 0; padding: 16px 20px; margin: 20px 0;">
         <p style="color: #852454; font-size: 14px; font-weight: 600; margin: 0 0 4px;">Your data is 100% safe.</p>
         <p style="color: #666; font-size: 13px; line-height: 1.5; margin: 0;">
-          Nothing gets deleted. Your clients, inventory, sales &mdash; everything is waiting for you.
+          Nothing gets deleted. Your clients, inventory, sales - everything is waiting for you.
         </p>
       </div>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-        One tap and you're back in business &mdash; no setup, no starting over.
+        One tap and you're back in business - no setup, no starting over.
       </p>
       ${ctaButton('Keep My Studio Running', '#B1275E')}
     `),
@@ -139,11 +139,11 @@ export function trialEmailExpired(params: TrialEmailParams): { subject: string; 
   const firstName = params.ownerFirstName || 'there';
 
   return {
-    subject: 'Your Sunstone Studio trial has ended — your data is safe',
+    subject: 'Your Sunstone Studio trial has ended - your data is safe',
     html: emailLayout(`
       <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${firstName},</p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-        Your free trial for <strong>${params.businessName}</strong> has ended. But don't worry &mdash; nothing is lost.
+        Your free trial for <strong>${params.businessName}</strong> has ended. But don't worry - nothing is lost.
       </p>
       <div style="background: #F0FDF4; border-radius: 10px; padding: 16px 20px; margin: 20px 0;">
         <p style="color: #15803D; font-size: 14px; font-weight: 600; margin: 0 0 8px;">Everything is exactly how you left it:</p>

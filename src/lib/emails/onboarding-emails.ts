@@ -1,5 +1,5 @@
 // ============================================================================
-// Onboarding Drip Email Templates — src/lib/emails/onboarding-emails.ts
+// Onboarding Drip Email Templates - src/lib/emails/onboarding-emails.ts
 // ============================================================================
 // Eight behavior-triggered emails for days 0–15 of the trial onboarding
 // journey. Uses the same brand styling as trial-emails.ts.
@@ -85,21 +85,21 @@ export function onboardingWelcome(params: OnboardingEmailParams): { subject: str
   const firstName = params.ownerFirstName || 'there';
 
   return {
-    subject: "Welcome to Sunstone Studio \u2014 let's set up your business",
+    subject: "Welcome to Sunstone Studio - let's set up your business",
     html: emailLayout(`
       <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${firstName},</p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-        Welcome to Sunstone Studio! We're so glad you're here. Sunstone Studio is your all-in-one business platform for permanent jewelry &mdash; POS, inventory, clients, events, and more, all in one place.
+        Welcome to Sunstone Studio! We're so glad you're here. Sunstone Studio is your all-in-one business platform for permanent jewelry - POS, inventory, clients, events, and more, all in one place.
       </p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-        Your first step? <strong>Add your first chain to inventory.</strong> Once your chains are in, everything else clicks into place &mdash; your POS auto-populates, prices are set, and you're ready to sell.
+        Your first step? <strong>Add your first chain to inventory.</strong> Once your chains are in, everything else clicks into place - your POS auto-populates, prices are set, and you're ready to sell.
       </p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-        And if you ever have a question, just tap the <strong>Ask Sunny</strong> button &mdash; she knows permanent jewelry inside and out.
+        And if you ever have a question, just tap the <strong>Ask Sunny</strong> button - she knows permanent jewelry inside and out.
       </p>
       ${ctaButton('Set Up My Studio', 'https://sunstonepj.app/dashboard/inventory')}
       <p style="color: #999; font-size: 13px; text-align: center; margin: 16px 0 0;">
-        Welcome aboard &mdash; The Sunstone Team
+        Welcome aboard - The Sunstone Team
       </p>
     `),
   };
@@ -115,14 +115,14 @@ export function onboardingInventoryNudge(params: OnboardingEmailParams): { subje
     html: emailLayout(`
       <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${firstName},</p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-        Just a quick tip &mdash; once you add your chains to inventory, everything clicks into place. Your POS auto-populates with your products, prices are set, and your reports start tracking costs automatically.
+        Just a quick tip - once you add your chains to inventory, everything clicks into place. Your POS auto-populates with your products, prices are set, and your reports start tracking costs automatically.
       </p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
         It takes about 2 minutes. If you purchased a Sunstone starter kit, you can browse the Sunstone catalog right inside the app to add your chains even faster.
       </p>
       ${ctaButton('Add My Inventory', 'https://sunstonepj.app/dashboard/inventory')}
       <p style="color: #999; font-size: 13px; text-align: center; margin: 16px 0 0;">
-        Need help? Just reply to this email &mdash; we're here for you.
+        Need help? Just reply to this email - we're here for you.
       </p>
     `),
   };
@@ -134,21 +134,21 @@ export function onboardingFirstSaleNudge(params: OnboardingEmailParams): { subje
   const firstName = params.ownerFirstName || 'there';
 
   return {
-    subject: 'Your POS is ready \u2014 try a test sale',
+    subject: 'Your POS is ready - try a test sale',
     html: emailLayout(`
       <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${firstName},</p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
         Your inventory is looking great! Now that your chains are set up, your POS is ready to go.
       </p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-        Try running a quick test sale &mdash; even to yourself. It takes about 30 seconds:
+        Try running a quick test sale - even to yourself. It takes about 30 seconds:
       </p>
       <div style="background: #FDF8FA; border-radius: 10px; padding: 16px 20px; margin: 20px 0;">
         <p style="color: #852454; font-size: 14px; line-height: 1.8; margin: 0;">
           1. Tap <strong>POS</strong> &rarr; Store Mode<br>
           2. Pick a chain<br>
           3. Record an external payment to complete<br>
-          <span style="color: #999; font-size: 12px;">You can void it after &mdash; this is just to build confidence.</span>
+          <span style="color: #999; font-size: 12px;">You can void it after - this is just to build confidence.</span>
         </p>
       </div>
       ${ctaButton('Try My First Sale', 'https://sunstonepj.app/dashboard/pos')}
@@ -162,7 +162,7 @@ export function onboardingWeek1Active(params: OnboardingEmailParams): { subject:
   const firstName = params.ownerFirstName || 'there';
 
   return {
-    subject: "You're setting up like a pro \u2014 here's what to try next",
+    subject: "You're setting up like a pro - here's what to try next",
     html: emailLayout(`
       <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${firstName},</p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
@@ -173,9 +173,9 @@ export function onboardingWeek1Active(params: OnboardingEmailParams): { subject:
       </p>
       <div style="background: #FDF8FA; border-radius: 10px; padding: 16px 20px; margin: 16px 0;">
         <p style="color: #555; font-size: 14px; line-height: 1.8; margin: 0;">
-          <strong style="color: #852454;">Ask Sunny</strong> &mdash; Your AI mentor knows weld settings, troubleshooting, pricing, and more<br>
-          <strong style="color: #852454;">Client Management</strong> &mdash; Track your regulars, their purchase history, and birthdays<br>
-          <strong style="color: #852454;">Event Mode</strong> &mdash; QR check-in, queue management, and waivers for pop-ups
+          <strong style="color: #852454;">Ask Sunny</strong> - Your AI mentor knows weld settings, troubleshooting, pricing, and more<br>
+          <strong style="color: #852454;">Client Management</strong> - Track your regulars, their purchase history, and birthdays<br>
+          <strong style="color: #852454;">Event Mode</strong> - QR check-in, queue management, and waivers for pop-ups
         </p>
       </div>
       ${ctaButton('Explore More Features', 'https://sunstonepj.app/dashboard')}
@@ -193,14 +193,14 @@ export function onboardingWeek1Inactive(params: OnboardingEmailParams): { subjec
     html: emailLayout(`
       <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${firstName},</p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-        Life gets busy &mdash; we totally get it. Just wanted you to know your Sunstone Studio is all set up and waiting for you.
+        Life gets busy - we totally get it. Just wanted you to know your Sunstone Studio is all set up and waiting for you.
       </p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-        When you're ready, it takes about 2 minutes to add your first chain and start selling. And if you ever have a question about welding, pricing, or running your business &mdash; just ask Sunny. She knows permanent jewelry inside and out.
+        When you're ready, it takes about 2 minutes to add your first chain and start selling. And if you ever have a question about welding, pricing, or running your business - just ask Sunny. She knows permanent jewelry inside and out.
       </p>
       ${ctaButton('Open My Studio', 'https://sunstonepj.app/dashboard')}
       <p style="color: #999; font-size: 13px; text-align: center; margin: 16px 0 0;">
-        No pressure &mdash; your studio isn't going anywhere.
+        No pressure - your studio isn't going anywhere.
       </p>
     `),
   };
@@ -212,11 +212,11 @@ export function onboardingStripeNudge(params: OnboardingEmailParams): { subject:
   const firstName = params.ownerFirstName || 'there';
 
   return {
-    subject: 'Start getting paid \u2014 connect your payment account',
+    subject: 'Start getting paid - connect your payment account',
     html: emailLayout(`
       <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${firstName},</p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-        You've been making sales &mdash; that's awesome! To start accepting card payments from customers through the app, connect your Stripe account. It takes about 5 minutes.
+        You've been making sales - that's awesome! To start accepting card payments from customers through the app, connect your Stripe account. It takes about 5 minutes.
       </p>
       <div style="background: #FDF8FA; border-radius: 10px; padding: 16px 20px; margin: 20px 0;">
         <p style="color: #555; font-size: 14px; line-height: 1.8; margin: 0;">
@@ -236,7 +236,7 @@ export function onboardingWeek2Active(params: OnboardingEmailParams): { subject:
   const firstName = params.ownerFirstName || 'there';
 
   return {
-    subject: "Two weeks in \u2014 here's what artists like you do next",
+    subject: "Two weeks in - here's what artists like you do next",
     html: emailLayout(`
       <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${firstName},</p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
@@ -244,13 +244,13 @@ export function onboardingWeek2Active(params: OnboardingEmailParams): { subject:
       </p>
       <div style="background: #FDF8FA; border-radius: 10px; padding: 16px 20px; margin: 20px 0;">
         <p style="color: #555; font-size: 14px; line-height: 1.8; margin: 0;">
-          <strong style="color: #852454;">Book an event</strong> &mdash; Pop-ups, markets, and private parties with QR check-in<br>
-          <strong style="color: #852454;">Set up your storefront</strong> &mdash; A free public page where clients can book you<br>
-          <strong style="color: #852454;">Invite a team member</strong> &mdash; Add staff for busy events
+          <strong style="color: #852454;">Book an event</strong> - Pop-ups, markets, and private parties with QR check-in<br>
+          <strong style="color: #852454;">Set up your storefront</strong> - A free public page where clients can book you<br>
+          <strong style="color: #852454;">Invite a team member</strong> - Add staff for busy events
         </p>
       </div>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-        Your Pro trial includes everything &mdash; now's the time to explore and make it yours.
+        Your Pro trial includes everything - now's the time to explore and make it yours.
       </p>
       ${ctaButton('Keep Building', 'https://sunstonepj.app/dashboard')}
     `),
@@ -270,7 +270,7 @@ export function onboardingWeek2Inactive(params: OnboardingEmailParams): { subjec
         Sunstone has been in the permanent jewelry world for over 20 years. We built Studio because we saw artists juggling Square, spreadsheets, text messages, and a dozen other tools just to run their business.
       </p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-        Sunstone Studio puts it all in one place &mdash; POS, inventory, clients, events, waivers, messaging, and an AI mentor who actually knows permanent jewelry. Built by artists, for artists.
+        Sunstone Studio puts it all in one place - POS, inventory, clients, events, waivers, messaging, and an AI mentor who actually knows permanent jewelry. Built by artists, for artists.
       </p>
       <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
         We'd love for you to come back and see what's possible.
