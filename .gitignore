@@ -37,3 +37,10 @@ next-env.d.ts
 
 # supabase
 .supabase/
+
+# Capacitor native builds
+android/app/build/
+android/.gradle/
+ios/App/Pods/
+ios/DerivedData/
+www/
