@@ -56,6 +56,6 @@
 <key>ITSAppUsesNonExemptEncryption</key>
 <false/>
 <key>NSPhotoLibraryUsageDescription</key>
-<string>Sunstone Studio needs access to your photo library to save and upload photos.</string>
+<string>Sunstone Studio uses your photo library to upload your business logo and profile images.</string>
 </dict>
 </plist>
