@@ -1089,13 +1089,21 @@ async function generateSunnyTake(
     ? Math.max(0, Math.ceil((new Date(nextEvent.start_time).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : null;
 
+  const today = new Date();
+  const thisMonthName = today.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const lastMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const lastMonthName = lastMonthDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
   const businessData = {
+    currentDate: today.toISOString().slice(0, 10),
     tenantAgeDays,
     thisMonth: {
+      label: thisMonthName,
       revenue: monthRevenue,
       salesCount: thisMonthSales.length,
     },
     lastMonth: {
+      label: lastMonthName,
       revenue: lastMonthRevenue,
       salesCount: lastMonthSales.length,
     },

@@ -275,8 +275,9 @@ export default function ReportsPage() {
 
   // Overview state
   const [datePreset, setDatePreset] = useState<DatePreset>('ytd');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+  const now = new Date();
+  const [customStart, setCustomStart] = useState(() => `${now.getFullYear()}-01-01`);
+  const [customEnd, setCustomEnd] = useState(() => now.toISOString().slice(0, 10));
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [loading, setLoading] = useState(true);
   const [sales, setSales] = useState<(Sale & { sale_items: SaleItem[]; clients?: { first_name: string; last_name: string } | null })[]>([]);
