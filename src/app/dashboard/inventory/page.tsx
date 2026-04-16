@@ -379,6 +379,8 @@ export default function InventoryPage() {
     ).length;
   }, [items]);
 
+  const [unlinkedBannerDismissed, setUnlinkedBannerDismissed] = useState(false);
+
   // Catalog map for showing linked product/variant info on rows
   const [catalogMap, setCatalogMap] = useState<Map<string, any>>(new Map());
   useEffect(() => {
@@ -787,18 +789,29 @@ export default function InventoryPage() {
         </div>
 
         {/* Smart banner: unlinked Sunstone items */}
-        {unlinkedCount > 0 && (
+        {unlinkedCount > 0 && !unlinkedBannerDismissed && (
           <div className="flex items-center justify-between rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5">
             <span className="text-sm text-amber-800">
               {unlinkedCount} item{unlinkedCount !== 1 ? 's' : ''} not linked to Sunstone products
             </span>
-            <button
-              onClick={handleAutoLink}
-              disabled={autoLinking}
-              className="text-sm font-medium text-[var(--accent-primary)] hover:underline disabled:opacity-50 min-h-[44px] px-2"
-            >
-              {autoLinking ? 'Linking...' : 'Link now'}
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleAutoLink}
+                disabled={autoLinking}
+                className="text-sm font-medium text-[var(--accent-primary)] hover:underline disabled:opacity-50 min-h-[44px] px-2"
+              >
+                {autoLinking ? 'Linking...' : 'Link now'}
+              </button>
+              <button
+                onClick={() => setUnlinkedBannerDismissed(true)}
+                className="p-1.5 rounded text-amber-600 hover:text-amber-800 hover:bg-amber-100 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                title="Dismiss"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
         )}
 
