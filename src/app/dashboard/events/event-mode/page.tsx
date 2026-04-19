@@ -139,6 +139,7 @@ function EventModePageInner() {
   const [showGiftCardModal, setShowGiftCardModal] = useState(false);
   const [giftCardData, setGiftCardData] = useState<GiftCardData | null>(null);
   const [autoReplyOn, setAutoReplyOn] = useState(false);
+  const [queueModeOn, setQueueModeOn] = useState(false);
   const [openDrawerId, setOpenDrawerId] = useState<string | null>(null);
   const [drawerRefresh, setDrawerRefresh] = useState(0);
 
@@ -209,6 +210,21 @@ function EventModePageInner() {
       await supabase.from('tenants').update({ auto_reply_enabled: next }).eq('id', tenant!.id);
     } catch {
       setAutoReplyOn(!next); // revert on failure
+    }
+  };
+
+  // Init queue mode from event
+  useEffect(() => {
+    if (event?.queue_mode) setQueueModeOn(true);
+  }, [event]);
+
+  const toggleQueueMode = async () => {
+    const next = !queueModeOn;
+    setQueueModeOn(next);
+    try {
+      await supabase.from('events').update({ queue_mode: next }).eq('id', event!.id);
+    } catch {
+      setQueueModeOn(!next); // revert on failure
     }
   };
 
@@ -794,6 +810,21 @@ function EventModePageInner() {
               aria-label="Show QR code">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm14 3h.01M17 17h.01M14 14h3v3h-3v-3zm0 4h.01M17 20h.01M20 14h.01M20 17h.01M20 20h.01" />
+              </svg>
+            </button>
+            {/* Queue mode toggle */}
+            <button
+              onClick={toggleQueueMode}
+              className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-colors ${
+                queueModeOn
+                  ? 'border-[var(--accent-500)] bg-[var(--accent-50)] text-[var(--accent-600)]'
+                  : 'border-[var(--border-default)] bg-[var(--surface-raised)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
+              }`}
+              aria-label={queueModeOn ? 'Queue mode on' : 'Queue mode off'}
+              title={queueModeOn ? 'Queue Mode ON — waiver signers join the queue' : 'Queue Mode OFF — tap to enable queue check-in'}
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
               </svg>
             </button>
             {/* Auto-reply toggle */}

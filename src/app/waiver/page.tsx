@@ -236,15 +236,16 @@ function WaiverPageInner() {
       let didCreateQueue = false;
 
       if (resolvedEventId) {
-        // Check if event is active and happening today/recently
+        // Check if event is active, happening today, and has queue mode on
         const { data: eventData } = await supabase
           .from('events')
-          .select('id, is_active, start_time')
+          .select('id, is_active, start_time, queue_mode')
           .eq('id', resolvedEventId)
           .single();
 
         const shouldQueue = (() => {
           if (!eventData || !eventData.is_active) return false;
+          if (!eventData.queue_mode) return false;
           const startTime = new Date(eventData.start_time);
           const now = new Date();
           const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);

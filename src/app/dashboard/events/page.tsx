@@ -539,6 +539,7 @@ function EventFormModal({
     end_time: '',
     booth_fee: '0',
     tax_profile_id: '',
+    queue_mode: false,
   });
 
   // ─── Product type filtering state ───
@@ -572,6 +573,7 @@ function EventFormModal({
         ? format(new Date(event.end_time), "yyyy-MM-dd'T'HH:mm")
         : '',
       booth_fee: event?.booth_fee?.toString() || '0',
+      queue_mode: event?.queue_mode ?? false,
       tax_profile_id: event?.tax_profile_id || '',
     });
 
@@ -685,6 +687,7 @@ function EventFormModal({
         : null,
       booth_fee: Number(form.booth_fee),
       tax_profile_id: form.tax_profile_id || null,
+      queue_mode: form.queue_mode,
       // Pass product filtering as extra data
       _productTypeFilter: {
         limitProducts,
@@ -771,6 +774,35 @@ function EventFormModal({
               onChange={(e) => set('tax_profile_id', e.target.value)}
               options={taxOptions}
             />
+          </div>
+
+          {/* ─── Queue Mode ─── */}
+          <div className="pt-4 border-t border-[var(--border-primary)]">
+            <label className="flex items-center justify-between cursor-pointer">
+              <div>
+                <span className="block text-sm font-medium text-[var(--text-primary)]">Queue Mode</span>
+                <span className="block text-xs text-[var(--text-tertiary)] mt-0.5">
+                  Customers who sign the waiver will join a queue and get position notifications. Leave off for walk-up flow.
+                </span>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.queue_mode}
+                onClick={() => setForm((f) => ({ ...f, queue_mode: !f.queue_mode }))}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ml-4 ${
+                  form.queue_mode
+                    ? 'bg-[var(--accent-primary)]'
+                    : 'bg-[var(--border-default)]'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    form.queue_mode ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </label>
           </div>
 
           {/* ─── Product Availability ─── */}

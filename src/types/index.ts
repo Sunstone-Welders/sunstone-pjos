@@ -327,6 +327,7 @@ export interface Event {
   is_active: boolean;
   notes: string | null;
   selected_chain_ids: string[] | null;
+  queue_mode: boolean;
   created_at: string;
   updated_at: string;
   // Joined
