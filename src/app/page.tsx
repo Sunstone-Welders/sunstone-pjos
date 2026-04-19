@@ -2,6 +2,7 @@
 // Root route — shows landing page for visitors, redirects logged-in users
 
 import type { Metadata } from 'next'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createServerSupabase, createServiceRoleClient } from '@/lib/supabase/server'
 import LandingPageClient from './landing-client'
@@ -49,8 +50,16 @@ export const metadata: Metadata = {
 }
 
 export default async function LandingPage() {
+  // Belt-and-suspenders: native shell should never see the landing page
+  const cookieStore = await cookies()
+  const isNative = cookieStore.get('sunstone_native')?.value === '1'
+
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
+
+  if (isNative) {
+    redirect(user ? '/dashboard' : '/auth/login')
+  }
 
   if (user) {
     // Preserve existing admin redirect behavior

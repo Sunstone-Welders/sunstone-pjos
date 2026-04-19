@@ -33,6 +33,35 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // ---------------------------------------------------------------------------
+  // Native shell detection — block marketing/pricing pages in iOS/Android shell
+  // ---------------------------------------------------------------------------
+  const isNative = request.cookies.get('sunstone_native')?.value === '1';
+  const path = request.nextUrl.pathname;
+
+  // On native, unauthenticated users must land on /auth/login
+  // Block: landing page, signup, terms (contains pricing)
+  if (isNative && !user) {
+    const nativeBlockedForAnon =
+      path === '/' ||
+      path.startsWith('/auth/signup') ||
+      path === '/terms';
+    if (nativeBlockedForAnon) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/auth/login';
+      url.search = '';
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // On native, authenticated users should never see the landing page
+  if (isNative && user && path === '/') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/dashboard';
+    url.search = '';
+    return NextResponse.redirect(url);
+  }
+
   // Redirect unauthenticated users to login (except public routes)
   const isPublicRoute =
     request.nextUrl.pathname.startsWith('/auth') ||
