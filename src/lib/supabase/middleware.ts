@@ -4,6 +4,7 @@
 
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { isNativeRequest } from '@/lib/native-server';
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -35,8 +36,12 @@ export async function updateSession(request: NextRequest) {
 
   // ---------------------------------------------------------------------------
   // Native shell detection — block marketing/pricing pages in iOS/Android shell
+  // UA check fires on the very first request (no cookie needed); cookie is fallback.
   // ---------------------------------------------------------------------------
-  const isNative = request.cookies.get('sunstone_native')?.value === '1';
+  const isNative = isNativeRequest({
+    userAgent: request.headers.get('user-agent') || '',
+    cookieValue: request.cookies.get('sunstone_native')?.value,
+  });
   const path = request.nextUrl.pathname;
 
   // On native, unauthenticated users must land on /auth/login

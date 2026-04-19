@@ -2,9 +2,10 @@
 // Root route — shows landing page for visitors, redirects logged-in users
 
 import type { Metadata } from 'next'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createServerSupabase, createServiceRoleClient } from '@/lib/supabase/server'
+import { isNativeRequest } from '@/lib/native-server'
 import LandingPageClient from './landing-client'
 
 export const metadata: Metadata = {
@@ -51,8 +52,13 @@ export const metadata: Metadata = {
 
 export default async function LandingPage() {
   // Belt-and-suspenders: native shell should never see the landing page
+  // UA check covers the very first request; cookie is a speedup fallback.
   const cookieStore = await cookies()
-  const isNative = cookieStore.get('sunstone_native')?.value === '1'
+  const headerList = await headers()
+  const isNative = isNativeRequest({
+    userAgent: headerList.get('user-agent') || '',
+    cookieValue: cookieStore.get('sunstone_native')?.value,
+  })
 
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
