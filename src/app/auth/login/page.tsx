@@ -3,10 +3,11 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { isNativeApp } from '@/lib/native';
 import { toast } from 'sonner';
 import { Suspense } from 'react';
 
@@ -22,9 +23,12 @@ function LoginPageInner() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isNative, setIsNative] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
+
+  useEffect(() => { setIsNative(isNativeApp()); }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,16 +140,18 @@ function LoginPageInner() {
             </button>
           </form>
 
-          {/* Signup link */}
-          <p className="mt-6 text-center text-sm text-text-secondary">
-            Don&apos;t have an account?{' '}
-            <Link
-              href="/auth/signup"
-              className="text-accent-600 hover:text-accent-700 font-medium transition-colors"
-            >
-              Sign up
-            </Link>
-          </p>
+          {/* Signup link — hidden on native to prevent external purchase path */}
+          {!isNative && (
+            <p className="mt-6 text-center text-sm text-text-secondary">
+              Don&apos;t have an account?{' '}
+              <Link
+                href="/auth/signup"
+                className="text-accent-600 hover:text-accent-700 font-medium transition-colors"
+              >
+                Sign up
+              </Link>
+            </p>
+          )}
         </div>
       </div>
     </div>
