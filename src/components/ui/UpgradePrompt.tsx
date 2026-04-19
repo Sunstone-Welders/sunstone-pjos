@@ -11,6 +11,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, Button } from '@/components/ui';
+import { canShowBillingUI } from '@/lib/billing-gate';
 
 interface UpgradePromptProps {
   /** Display name of the gated feature */
@@ -26,6 +27,9 @@ interface UpgradePromptProps {
 export default function UpgradePrompt({ feature, variant, description, trialExpired }: UpgradePromptProps) {
   const router = useRouter();
   const [dismissed, setDismissed] = useState(false);
+
+  // Hide upgrade prompts entirely on native — no pricing/purchase messaging allowed
+  if (!canShowBillingUI()) return null;
 
   const navigateToPlans = () => {
     router.push('/dashboard/settings?tab=subscription');
