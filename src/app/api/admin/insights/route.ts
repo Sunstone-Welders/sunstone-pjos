@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdmin, AdminAuthError } from '@/lib/admin/verify-platform-admin';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { logAnthropicCost } from '@/lib/cost-tracker';
+import { isDemoTenant } from '@/lib/demo/personas';
 
 interface Insight {
   type: 'growth' | 'attention' | 'churn_risk' | 'opportunity' | 'milestone';
@@ -86,11 +87,13 @@ interface PlatformData {
   adoption: {
     eventModeUsers: number;
     storeModeUsers: number;
-    squareConnected: number;
     stripeConnected: number;
     eventsCreatedThisMonth: number;
     queueUsed: number;
     waiverUsed: number;
+  };
+  meta: {
+    demoTenantCount: number;
   };
   inventory: {
     totalItems: number;
@@ -117,9 +120,12 @@ async function collectPlatformData(serviceClient: any): Promise<PlatformData> {
   // ── Tenants ──────────────────────────────────────────────────────────
   const { data: tenants } = await serviceClient
     .from('tenants')
-    .select('id, name, slug, subscription_tier, square_merchant_id, stripe_account_id, onboarding_completed, created_at');
+    .select('id, name, slug, subscription_tier, stripe_account_id, onboarding_completed, created_at');
 
-  const allTenants = tenants || [];
+  const allTenantsRaw = tenants || [];
+  // Filter out demo tenants from all metrics
+  const demoTenantCount = allTenantsRaw.filter((t: any) => isDemoTenant(t.id)).length;
+  const allTenants = allTenantsRaw.filter((t: any) => !isDemoTenant(t.id));
   const total = allTenants.length;
 
   const newThisMonth = allTenants.filter(
@@ -257,7 +263,6 @@ async function collectPlatformData(serviceClient: any): Promise<PlatformData> {
   const eventModeUsers = tenantsWithEvents.size;
 
   // Payment processor adoption
-  const squareConnected = allTenants.filter((t: any) => t.square_merchant_id).length;
   const stripeConnected = allTenants.filter((t: any) => t.stripe_account_id).length;
 
   // Queue usage
@@ -272,7 +277,7 @@ async function collectPlatformData(serviceClient: any): Promise<PlatformData> {
 
   // ── Inventory ────────────────────────────────────────────────────────
   const { data: inventory } = await serviceClient
-    .from('inventory')
+    .from('inventory_items')
     .select('id, tenant_id, material, name');
 
   const allInventory = inventory || [];
@@ -334,7 +339,6 @@ async function collectPlatformData(serviceClient: any): Promise<PlatformData> {
     adoption: {
       eventModeUsers,
       storeModeUsers,
-      squareConnected,
       stripeConnected,
       eventsCreatedThisMonth,
       queueUsed: queueCount || 0,
@@ -351,6 +355,9 @@ async function collectPlatformData(serviceClient: any): Promise<PlatformData> {
       totalClients: totalClients || 0,
       busiestDay,
     },
+    meta: {
+      demoTenantCount,
+    },
   };
 }
 
@@ -365,6 +372,14 @@ async function generateAIInsights(data: PlatformData): Promise<Insight[]> {
   }
 
   const systemPrompt = `You are Atlas, the platform intelligence AI for Sunstone PJOS. You help Tony (the platform founder) understand how his SaaS platform is performing and where to focus his attention.
+
+PLATFORM CONTEXT:
+- Sunstone PJOS is a pre-launch SaaS for permanent jewelry artists
+- The platform is in invite-only beta with a small number of real artists
+- Payment processing is exclusively through Stripe (no Square)
+- Demo/test tenant accounts have been excluded from these metrics — all data shown is from real users
+- Low numbers are EXPECTED at this stage — calibrate analysis accordingly
+- Do NOT generate crisis-level alerts for normal pre-launch metrics (e.g. low engagement with only a few tenants is expected)
 
 PERSONALITY:
 - Direct, data-driven, strategic
@@ -415,7 +430,6 @@ REVENUE:
 FEATURE ADOPTION:
 - Event Mode users: ${data.adoption.eventModeUsers}
 - Store Mode users: ${data.adoption.storeModeUsers}
-- Square connected: ${data.adoption.squareConnected}
 - Stripe connected: ${data.adoption.stripeConnected}
 - Events created this month: ${data.adoption.eventsCreatedThisMonth}
 - Queue entries total: ${data.adoption.queueUsed}
@@ -537,12 +551,12 @@ function generateRuleBasedInsights(data: PlatformData): Insight[] {
   }
 
   // Payment processor
-  const noProcessor = data.tenantHealth.total - data.adoption.squareConnected - data.adoption.stripeConnected;
+  const noProcessor = data.tenantHealth.total - data.adoption.stripeConnected;
   if (noProcessor > 0 && data.tenantHealth.total > 1) {
     insights.push({
       type: 'attention',
-      title: `${noProcessor} tenant${noProcessor > 1 ? 's' : ''} without payment processing`,
-      body: `${noProcessor} of ${data.tenantHealth.total} tenants haven't connected Square or Stripe. They can only accept cash, which limits their revenue potential.`,
+      title: `${noProcessor} tenant${noProcessor > 1 ? 's' : ''} without Stripe`,
+      body: `${noProcessor} of ${data.tenantHealth.total} tenants haven't connected Stripe. They can only accept cash/external payments, which limits their revenue potential.`,
     });
   }
 
@@ -590,7 +604,7 @@ function getEarlyStageTips(data: PlatformData): Insight[] {
     {
       type: 'attention',
       title: 'Check payment processing setup',
-      body: `${data.adoption.squareConnected + data.adoption.stripeConnected} of ${data.tenantHealth.total} tenants have connected a payment processor. Help any remaining tenants get Square or Stripe connected so they can start processing card payments.`,
+      body: `${data.adoption.stripeConnected} of ${data.tenantHealth.total} tenants have connected Stripe. Help any remaining tenants get Stripe connected so they can start processing card payments.`,
     },
   ];
 

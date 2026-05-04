@@ -7,11 +7,15 @@ import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 
+interface DailyTierData {
+  gmv: number; fees: number; count: number;
+}
+
 interface RevenueData {
   totals: { gmv: number; platform_fees: number; sales_count: number };
   by_tier: Record<string, { gmv: number; fees: number; count: number }>;
   by_tenant: Array<{ tenant_id: string; name: string; tier: string; gmv: number; fees: number; count: number }>;
-  daily: Array<{ date: string; gmv: number; fees: number; count: number }>;
+  daily: Array<{ date: string; gmv: number; fees: number; count: number; byTier?: Record<string, DailyTierData> }>;
 }
 
 type TimeRange = '7d' | '30d' | '90d' | 'all';
@@ -200,7 +204,17 @@ export default function AdminRevenuePage() {
         <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Revenue by Plan Tier</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {(['starter', 'pro', 'business'] as const).map(tier => {
-            const tierData = data.by_tier[tier] || { gmv: 0, fees: 0, count: 0 };
+            // Compute filtered tier totals from daily data when a time range is active
+            const tierData = timeRange === 'all'
+              ? (data.by_tier[tier] || { gmv: 0, fees: 0, count: 0 })
+              : filteredDaily.reduce(
+                  (acc, d) => {
+                    const t = d.byTier?.[tier];
+                    if (!t) return acc;
+                    return { gmv: acc.gmv + t.gmv, fees: acc.fees + t.fees, count: acc.count + t.count };
+                  },
+                  { gmv: 0, fees: 0, count: 0 }
+                );
             const tierColors: Record<string, string> = {
               starter: 'border-l-[var(--text-tertiary)]',
               pro: 'border-l-info-500',

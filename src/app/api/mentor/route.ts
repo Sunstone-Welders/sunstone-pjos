@@ -1299,7 +1299,7 @@ After a tool executes, summarize the result naturally. If a tool errors, explain
           .replace(/<!--\s*PRODUCT_SEARCH:.*?-->/g, '')
           .trim();
 
-        await serviceClient.from('mentor_knowledge_gaps').insert({
+        const { error: gapInsertErr } = await serviceClient.from('mentor_knowledge_gaps').insert({
           tenant_id: tenantId,
           user_id: user.id,
           user_message: latestUserMsg,
@@ -1309,19 +1309,19 @@ After a tool executes, summarize the result naturally. If a tool errors, explain
           source: 'auto_detected',
           status: 'pending',
         });
+        if (gapInsertErr) console.error('[Mentor] Auto gap insert error:', gapInsertErr);
+        else console.log('[Mentor] Auto gap logged for tenant', tenantId, '— topic:', gapData.topic);
       }
     } catch (gapError) {
       console.error('[Mentor] Gap detection error:', gapError);
     }
 
-    // 9b. Text correction detection — async, does not block response
+    // 9b. Text correction detection
     try {
       if (detectUserCorrection(latestUserMsg)) {
-        // Find the last assistant message from conversation history
         const prevAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
         if (prevAssistantMsg) {
-          // Fire-and-forget — don't await
-          serviceClient.from('mentor_knowledge_gaps').insert({
+          const { error: corrInsertErr } = await serviceClient.from('mentor_knowledge_gaps').insert({
             tenant_id: tenantId,
             user_id: user.id,
             user_message: latestUserMsg,
@@ -1333,9 +1333,9 @@ After a tool executes, summarize the result naturally. If a tool errors, explain
             user_correction_note: latestUserMsg,
             conversation_context: latestUserMsg,
             status: 'pending',
-          }).then(({ error }) => {
-            if (error) console.error('[Mentor] Text correction log error:', error);
           });
+          if (corrInsertErr) console.error('[Mentor] Text correction log error:', corrInsertErr);
+          else console.log('[Mentor] Text correction gap logged for tenant', tenantId);
         }
       }
     } catch (correctionError) {

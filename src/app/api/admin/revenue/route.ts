@@ -10,11 +10,12 @@ export async function GET(request: NextRequest) {
     await verifyPlatformAdmin();
     const serviceClient = await createServiceRoleClient();
 
-    // Get all completed sales
+    // Get all completed + paid sales
     const { data: sales, error: salesError } = await serviceClient
       .from('sales')
       .select('id, tenant_id, total, platform_fee_amount, subtotal, created_at')
       .eq('status', 'completed')
+      .eq('payment_status', 'completed')
       .order('created_at', { ascending: true });
 
     if (salesError) {
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
     };
 
     // ── By date (daily aggregation) ──
-    const byDate: Record<string, { gmv: number; fees: number; count: number }> = {};
+    const byDate: Record<string, { gmv: number; fees: number; count: number; byTier: Record<string, { gmv: number; fees: number; count: number }> }> = {};
 
     for (const sale of sales || []) {
       const total = Number(sale.total) || 0;
@@ -75,13 +76,18 @@ export async function GET(request: NextRequest) {
         byTier[tier].count++;
       }
 
-      // By date
+      // By date (with per-tier breakdown)
       if (!byDate[date]) {
-        byDate[date] = { gmv: 0, fees: 0, count: 0 };
+        byDate[date] = { gmv: 0, fees: 0, count: 0, byTier: { starter: { gmv: 0, fees: 0, count: 0 }, pro: { gmv: 0, fees: 0, count: 0 }, business: { gmv: 0, fees: 0, count: 0 } } };
       }
       byDate[date].gmv += total;
       byDate[date].fees += fee;
       byDate[date].count++;
+      if (byDate[date].byTier[tier]) {
+        byDate[date].byTier[tier].gmv += total;
+        byDate[date].byTier[tier].fees += fee;
+        byDate[date].byTier[tier].count++;
+      }
     }
 
     // Sort by-tenant by fees descending

@@ -21,7 +21,7 @@ export async function GET() {
 
     const { data: tenants, error } = await serviceClient
       .from('tenants')
-      .select('id, name, subscription_tier, subscription_status, trial_ends_at, updated_at, created_at, is_suspended');
+      .select('id, name, subscription_tier, subscription_status, trial_ends_at, updated_at, created_at, is_suspended, admin_tier_override');
 
     if (error) {
       return NextResponse.json({ error: 'Failed to fetch tenants' }, { status: 500 });
@@ -32,6 +32,8 @@ export async function GET() {
 
     for (const t of tenants || []) {
       if (t.is_suspended) continue;
+      // Skip tenants with admin tier override — they're intentionally managed
+      if (t.admin_tier_override) continue;
 
       // Past due subscriptions
       if (t.subscription_status === 'past_due') {
