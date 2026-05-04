@@ -97,6 +97,8 @@ export function getSubscriptionTier(tenant: TenantSubscriptionFields): Subscript
  * Whether the tenant's trial is currently active.
  */
 export function isTrialActive(tenant: TenantSubscriptionFields): boolean {
+  // Admin override means no trial logic applies
+  if (tenant.admin_tier_override) return false;
   if (tenant.subscription_status !== 'trialing') return false;
   if (!tenant.trial_ends_at) return false;
   return new Date(tenant.trial_ends_at) > new Date();
@@ -106,6 +108,7 @@ export function isTrialActive(tenant: TenantSubscriptionFields): boolean {
  * Number of days remaining in trial. Returns 0 if not trialing or expired.
  */
 export function getTrialDaysRemaining(tenant: TenantSubscriptionFields): number {
+  if (tenant.admin_tier_override) return 0;
   if (!isTrialActive(tenant)) return 0;
   const now = new Date();
   const end = new Date(tenant.trial_ends_at!);

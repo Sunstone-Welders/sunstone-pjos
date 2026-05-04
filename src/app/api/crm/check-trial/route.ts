@@ -32,7 +32,7 @@ export async function POST() {
 
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('crm_enabled, crm_trial_start, crm_trial_end, crm_subscription_id, crm_deactivated_at')
+      .select('crm_enabled, crm_trial_start, crm_trial_end, crm_subscription_id, crm_deactivated_at, admin_tier_override, subscription_tier')
       .eq('id', member.tenant_id)
       .single();
 
@@ -40,10 +40,16 @@ export async function POST() {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
+    // Admin override with Pro/Business tier — CRM always active, skip trial logic
+    if (tenant.admin_tier_override && (tenant.subscription_tier === 'pro' || tenant.subscription_tier === 'business')) {
+      return NextResponse.json({ active: true, reason: 'subscribed', daysLeft: null, trialExpired: false });
+    }
+
     const status = getCrmStatus(tenant);
 
     // If trial expired and CRM is still marked enabled, disable it
-    if (status.trialExpired && tenant.crm_enabled && !tenant.crm_subscription_id) {
+    // But never auto-disable if admin manually enabled CRM (admin_tier_override acts as god-mode)
+    if (status.trialExpired && tenant.crm_enabled && !tenant.crm_subscription_id && !tenant.admin_tier_override) {
       await supabase
         .from('tenants')
         .update({

@@ -846,6 +846,9 @@ function TrialBanner() {
 
   if (!tenant) return null;
 
+  // Admin override — treat as fully paid, no trial messaging
+  if (tenant.admin_tier_override) return null;
+
   // Hide trial banners entirely on native — no pricing/upgrade messaging allowed
   if (!canShowBillingUI()) return null;
 
@@ -924,6 +927,9 @@ function TrialExpiredOverlay() {
   const [subscribing, setSubscribing] = useState(false);
 
   if (!tenant) return null;
+
+  // Admin override — treat as fully paid, never lock out
+  if (tenant.admin_tier_override) return null;
 
   // On native, middleware silently destroys the session for expired users.
   // Never show any trial/subscription overlay in the native shell.

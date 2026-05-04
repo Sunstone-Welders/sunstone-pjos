@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
       .select(`
         id, name, created_at, trial_ends_at,
         stripe_subscription_id, subscription_status,
-        stripe_account_id,
+        stripe_account_id, admin_tier_override,
         last_owner_login_at,
         onboarding_welcome_sent_at,
         onboarding_inventory_nudge_sent_at,
@@ -102,10 +102,12 @@ export async function GET(request: NextRequest) {
     for (const tenant of tenants) {
       try {
         // Skip tenants that already have an active subscription (converted — no more onboarding)
+        // Also skip tenants with admin tier override (manually managed)
         if (
           tenant.subscription_status === 'active' ||
           tenant.subscription_status === 'past_due' ||
-          tenant.stripe_subscription_id
+          tenant.stripe_subscription_id ||
+          tenant.admin_tier_override === true
         ) {
           continue;
         }

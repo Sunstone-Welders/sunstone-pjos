@@ -42,6 +42,7 @@ export interface Tenant {
   stripe_subscription_id: string | null;
   trial_ends_at: string | null;
   subscription_period_end: string | null;
+  admin_tier_override?: boolean;
   sunny_questions_used: number;
   sunny_questions_reset_at: string | null;
   // Fees

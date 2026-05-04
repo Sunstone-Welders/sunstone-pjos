@@ -32,14 +32,15 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = await createServiceRoleClient();
 
-    // Query tenants in trial (no subscription, trial_ends_at set)
+    // Query tenants in trial (no subscription, trial_ends_at set, no admin override)
     let query = supabase
       .from('tenants')
       .select('id, name, trial_ends_at, trial_email_7day_sent_at, trial_email_1day_sent_at, trial_email_expired_sent_at')
       .not('trial_ends_at', 'is', null)
       .is('stripe_subscription_id', null)
       .not('subscription_status', 'eq', 'active')
-      .not('subscription_status', 'eq', 'past_due');
+      .not('subscription_status', 'eq', 'past_due')
+      .or('admin_tier_override.is.null,admin_tier_override.eq.false');
 
     // Exclude demo tenants
     if (DEMO_TENANT_IDS.length > 0) {
