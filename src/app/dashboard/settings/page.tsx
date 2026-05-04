@@ -46,7 +46,7 @@ import { canShowBillingUI } from '@/lib/billing-gate';
 // ============================================================================
 
 const TEAM_MEMBER_LIMITS: Record<string, number> = {
-  starter: 1,
+  starter: 2,
   pro: 3,
   business: Infinity,
 };
@@ -2040,7 +2040,7 @@ function SettingsPage() {
                         <div className="flex-1">
                           <p className="text-sm font-medium text-[var(--text-primary)]">Add team members with Pro</p>
                           <p className="text-sm text-[var(--text-secondary)] mt-0.5">
-                            The Starter plan includes 1 team member (you). Upgrade to Pro for up to 3 team members, or Business for unlimited.
+                            The Starter plan includes up to 2 team members. Upgrade to Pro for up to 3 team members, or Business for unlimited.
                           </p>
                           <button
                             onClick={() => toggleSection('billing')}

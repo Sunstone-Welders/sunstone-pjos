@@ -445,8 +445,8 @@ Core Feature Set:
 - Atlas AI: Platform admin intelligence (this is you)
 
 Subscription Tiers:
-- Starter ($99/month): 3% platform fee (deducted from artist's Stripe payouts), 5 Sunny questions/month, 1 team member, basic POS and inventory, integrated Stripe payments
-- Pro ($169/month): 1.5% platform fee (deducted from payouts), unlimited Sunny, full reports, AI insights, 3 team members
+- Starter ($99/month): 3% platform fee (deducted from artist's Stripe payouts), 5 Sunny questions/month, up to 2 team members, basic POS and inventory, integrated Stripe payments
+- Pro ($169/month): 1.5% platform fee (deducted from payouts), unlimited Sunny, full reports, AI insights, up to 3 team members
 - Business ($279/month): 0% platform fee (artist keeps 100%), everything in Pro, unlimited team members, priority support
 - Trial: 30-day Pro trial for new accounts, defaults to Starter after expiry
 - CRM Add-On: $69/mo add-on to any plan — dedicated business phone number, two-way SMS, automated aftercare, broadcasts, workflows, party booking, client intelligence. Included free during 30-day Pro trial.
@@ -478,7 +478,7 @@ COMMON TENANT ISSUES & RESOLUTIONS:
 - "Payment processor not connected" → They need to connect Stripe in Settings → Payments. No API keys needed — it's a one-click OAuth connect flow.
 - "Inventory not deducting" → Product types may not be configured, or chain pricing mode is not set up correctly
 - "SMS not sending" → Customer may not have provided a phone number on the waiver, or carrier delay
-- "Can't invite team members" → Hit tier limit (Starter=1, Pro=3, Business=unlimited) — upgrade needed
+- "Can't invite team members" → Hit tier limit (Starter=2, Pro=3, Business=unlimited) — upgrade needed
 - "Reports not showing" → Starter tier only gets basic metrics, need Pro or Business for full reports
 - "QR code not working" → Usually a display size issue or customer internet connectivity
 - "Customer didn't complete payment" → Check Pending Payments in POS — can resend the Stripe payment link or cancel the session

@@ -37,9 +37,10 @@ const PRICING = [
     price: '$99',
     period: '/mo',
     fee: '3% platform fee',
-    tagline: 'Everything you need to launch',
+    tagline: 'Everything your team needs to launch',
     popular: false,
     features: [
+      'Up to 2 team members',
       'Full POS \u2014 Event & Store Mode',
       'Integrated Stripe payments (QR + text link)',
       'Smart Inventory management',

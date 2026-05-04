@@ -2,7 +2,7 @@
 // Team Invite API — GATED — src/app/api/team/invite/route.ts
 // ============================================================================
 // POST: Invite a new team member (admin only)
-// GATE: Starter = max 1 (owner only), Pro = max 3, Business = unlimited
+// GATE: Starter = max 2 (including owner), Pro = max 3, Business = unlimited
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -10,9 +10,9 @@ import { createServerSupabase, createServiceRoleClient } from '@/lib/supabase/se
 import { hasPermission, type TenantRole } from '@/lib/permissions';
 import { getSubscriptionTier } from '@/lib/subscription';
 
-// Team member limits by tier
+// Team member limits by tier (includes the owner)
 const TEAM_MEMBER_LIMITS: Record<string, number> = {
-  starter: 1,
+  starter: 2,
   pro: 3,
   business: Infinity,
 };
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     if (currentCount >= memberLimit) {
       if (effectiveTier === 'starter') {
         return NextResponse.json(
-          { error: 'Starter plan is limited to 1 team member (owner only). Upgrade to Pro to add team members.' },
+          { error: 'Starter plan is limited to 2 team members. Upgrade to Pro for up to 3 team members, or Business for unlimited.' },
           { status: 403 }
         );
       }

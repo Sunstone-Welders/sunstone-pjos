@@ -2151,8 +2151,8 @@ export const PJOS_PLATFORM_GUIDE = {
       starter: {
         price: '$99/month',
         processingFee: '3% platform fee (deducted from your payouts)',
-        features: ['Basic POS (Event Mode and Store Mode)', 'Integrated Stripe payments (QR + text link)', 'Inventory management', 'Queue and waivers', '5 Sunny AI questions per month', '1 team member'],
-        bestFor: 'Artists just getting started who want to try the platform.',
+        features: ['Basic POS (Event Mode and Store Mode)', 'Integrated Stripe payments (QR + text link)', 'Inventory management', 'Queue and waivers', '5 Sunny AI questions per month', 'Up to 2 team members'],
+        bestFor: 'Teams just getting started who want to try the platform.',
       },
       pro: {
         price: '$169/month',
@@ -2209,7 +2209,7 @@ export const PJOS_PLATFORM_GUIDE = {
     },
     permissions: 'Each role has specific permissions. Admins see everything, managers see most things, and staff see what they need to serve customers.',
     tierLimits: {
-      starter: '1 team member (just you).',
+      starter: 'Up to 2 team members.',
       pro: 'Up to 3 team members.',
       business: 'Unlimited team members.',
     },
@@ -2314,7 +2314,7 @@ export const PJOS_PLATFORM_GUIDE = {
     cantInviteTeamMembers: {
       symptom: 'The "Invite Team Member" button is not working or you cannot add more people.',
       fix: [
-        '1. Check your subscription tier — Starter allows 1 member, Pro allows 3, Business is unlimited.',
+        '1. Check your subscription tier — Starter allows up to 2 members, Pro allows 3, Business is unlimited.',
         '2. If you have hit your limit, upgrade your plan in Settings → Subscription.',
         '3. Make sure you are entering a valid email address.',
         '4. The invited person needs to check their email (including spam folder) for the invitation.',

@@ -59,8 +59,8 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  // On native, authenticated users should never see the landing page
-  if (isNative && user && path === '/') {
+  // On native, authenticated users should never see the landing page or onboarding
+  if (isNative && user && (path === '/' || path.startsWith('/onboarding'))) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     url.search = '';
