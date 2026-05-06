@@ -1065,7 +1065,7 @@ function EventModePageInner() {
           <ModalFooter><Button variant="ghost" size="sm" onClick={() => setShowFullScreenQR(true)}>Full Screen</Button><Button variant="secondary" onClick={() => setShowQR(false)}>Close</Button></ModalFooter>
         </Modal>
       )}
-      {showFullScreenQR && event && tenant && (<FullScreenQR url={generateQRData(tenant.slug, event.id)} tenantName={tenant.name} eventName={event.name} onClose={() => setShowFullScreenQR(false)} />)}
+      {showFullScreenQR && event && tenant && (<FullScreenQR url={generateQRData(tenant.slug, event.id)} tenantName={tenant.name} eventName={event.name} eventId={event.id} tenantId={tenant.id} onClose={() => setShowFullScreenQR(false)} />)}
 
       {/* Jump Ring Picker Modal */}
       <JumpRingPickerModal

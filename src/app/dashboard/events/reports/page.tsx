@@ -341,6 +341,8 @@ export default function EventsPage() {
           url={generateQRData(tenant.slug, qrEvent.id)}
           tenantName={tenant.name}
           eventName={qrEvent.name}
+          eventId={qrEvent.id}
+          tenantId={tenant.id}
           onClose={() => setFullScreenQR(false)}
         />
       )}
