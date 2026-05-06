@@ -29,22 +29,28 @@ function SignupForm() {
   const searchParams = useSearchParams();
   const supabase = createClient();
 
-  // Check for referral code from URL param or cookie
+  // Pre-fill referral code from URL param or cookie
   useEffect(() => {
     const ref = searchParams.get('ref');
     const cookieRef = document.cookie.match(/referral_code=([^;]+)/)?.[1];
     const code = ref || cookieRef || '';
-    if (!code) return;
-    setReferralCode(code);
-
-    // Look up ambassador display name
-    fetch(`/api/ambassador/lookup?code=${encodeURIComponent(code)}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => {
-        if (data?.displayName) setReferralName(data.displayName);
-      })
-      .catch(() => {});
+    if (code) setReferralCode(code);
   }, [searchParams]);
+
+  // Look up ambassador display name whenever referral code changes
+  useEffect(() => {
+    if (!referralCode.trim()) {
+      setReferralName('');
+      return;
+    }
+    const timer = setTimeout(() => {
+      fetch(`/api/ambassador/lookup?code=${encodeURIComponent(referralCode.trim())}`)
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => setReferralName(data?.displayName || ''))
+        .catch(() => setReferralName(''));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [referralCode]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,15 +171,6 @@ function SignupForm() {
           </p>
         </div>
 
-        {/* Referral attribution */}
-        {referralName && (
-          <div className="rounded-lg bg-[var(--accent-50)] border border-[var(--accent-200)] px-4 py-3 mb-4 text-center">
-            <p className="text-sm text-[var(--accent-700)]">
-              Referred by <strong>{referralName}</strong>
-            </p>
-          </div>
-        )}
-
         {/* Form Card */}
         <div className="rounded-xl border border-border-default bg-surface-raised shadow-sm p-8">
           <form onSubmit={handleSignup} className="space-y-5">
@@ -239,6 +236,22 @@ function SignupForm() {
                   </svg>
                 )}
               </button>
+            </div>
+
+            {/* Referral Code — optional */}
+            <div>
+              <Input
+                label="Referral Code (optional)"
+                type="text"
+                value={referralCode}
+                onChange={(e) => setReferralCode(e.target.value)}
+                placeholder="Have a referral code? Enter it here"
+              />
+              {referralName && (
+                <p className="mt-1.5 text-sm text-[var(--accent-600)]">
+                  Referred by <strong>{referralName}</strong>
+                </p>
+              )}
             </div>
 
             <Button
