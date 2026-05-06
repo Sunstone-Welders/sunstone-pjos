@@ -622,14 +622,14 @@ function TenantProfilePanel({
                     <p className="text-[11px] text-[var(--text-tertiary)]">Ignore payment status</p>
                   </div>
                   <button
-                    onClick={() => onUpdateTenant({ admin_tier_override: !detail?.tenant?.admin_tier_override })}
+                    onClick={() => onUpdateTenant({ admin_tier_override: !(detail?.tenant?.admin_tier_override ?? tenant.admin_tier_override) })}
                     disabled={actionLoading}
                     className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
-                      detail?.tenant?.admin_tier_override ? 'bg-[#FF7A00]' : 'bg-[var(--surface-raised)] border border-[var(--border-default)]'
+                      (detail?.tenant?.admin_tier_override ?? tenant.admin_tier_override) ? 'bg-[#FF7A00]' : 'bg-[var(--surface-raised)] border border-[var(--border-default)]'
                     }`}
                   >
                     <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
-                      detail?.tenant?.admin_tier_override ? 'translate-x-5' : 'translate-x-0'
+                      (detail?.tenant?.admin_tier_override ?? tenant.admin_tier_override) ? 'translate-x-5' : 'translate-x-0'
                     }`} />
                   </button>
                 </div>

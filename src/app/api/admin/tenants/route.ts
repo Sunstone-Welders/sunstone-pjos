@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
         square_merchant_id, stripe_account_id, stripe_onboarding_complete,
         onboarding_completed, is_suspended, suspended_at, suspended_reason,
         crm_enabled, brand_color, logo_url, created_at, updated_at,
-        last_owner_login_at
+        last_owner_login_at, admin_tier_override
       `)
       .order('created_at', { ascending: false });
 
