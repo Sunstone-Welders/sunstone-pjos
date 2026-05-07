@@ -12,8 +12,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
-import { provisionPhoneNumber, sendSMS } from '@/lib/twilio';
+import { provisionPhoneNumber, sendSMS, normalizePhone } from '@/lib/twilio';
 import { sendReferralSignupEmail } from '@/lib/ambassador-emails';
+import crypto from 'crypto';
 
 const RATE_LIMIT = { prefix: 'signup', limit: 5, windowSeconds: 300 };
 
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
     }
 
-    const { userId, businessName, firstName, referralCode, email } = await request.json();
+    const { userId, businessName, firstName, referralCode, email, phone } = await request.json();
 
     if (!userId || !businessName) {
       return NextResponse.json(
@@ -67,6 +68,9 @@ export async function POST(request: NextRequest) {
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 30);
 
+    // Normalize phone if provided
+    const normalizedPhone = phone ? normalizePhone(phone) : null;
+
     // ── Step 1: Create tenant ────────────────────────────────────────────
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
@@ -74,6 +78,8 @@ export async function POST(request: NextRequest) {
         name: businessName,
         slug,
         owner_id: userId,
+        // Phone from signup form
+        ...(normalizedPhone ? { phone: normalizedPhone } : {}),
         // Subscription: 30-day Pro trial
         subscription_tier: 'pro',
         subscription_status: 'trialing',
@@ -247,29 +253,58 @@ export async function POST(request: NextRequest) {
 
     // 6. Welcome email is now sent after email confirmation (in /auth/callback)
 
-    // ── Step 7: Send Sunny welcome SMS (non-blocking) ────────────────────
+    // ── Step 7: Send SMS verification code (non-blocking) ─────────────────
+    let verificationSent = false;
+    if (normalizedPhone) {
+      try {
+        const verifyCode = String(crypto.randomInt(100000, 999999));
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+        await supabase.from('sms_verification_codes').insert({
+          user_id: userId,
+          phone: normalizedPhone,
+          code: verifyCode,
+          expires_at: expiresAt,
+        });
+
+        // Send via Twilio
+        if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+          const twilio = require('twilio');
+          const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+          const messageParams: Record<string, string> = {
+            body: `Your Sunstone Studio verification code is: ${verifyCode}. It expires in 10 minutes.`,
+            to: normalizedPhone,
+          };
+          if (process.env.TWILIO_MESSAGING_SERVICE_SID) {
+            messageParams.messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
+          } else if (process.env.TWILIO_PHONE_NUMBER) {
+            messageParams.from = process.env.TWILIO_PHONE_NUMBER;
+          }
+          await client.messages.create(messageParams);
+          verificationSent = true;
+          console.log(`[signup] Verification SMS sent to ${normalizedPhone}`);
+        } else {
+          console.log(`[signup] Twilio not configured — verification code for ${normalizedPhone}: ${verifyCode}`);
+          verificationSent = true; // Still count as sent for flow purposes
+        }
+      } catch (smsErr: any) {
+        console.warn('[signup] Verification SMS failed (non-fatal):', smsErr.message);
+        // Don't block signup — user can resend from verify screen
+        verificationSent = true;
+      }
+    }
+
+    // ── Step 8: Send Sunny welcome SMS (non-blocking, after verification) ──
     const parsedFirst = firstName
       ? firstName.trim().split(/\s+/)[0] || firstName.trim()
       : null;
-    const artistPhone = user.phone || (user.user_metadata?.phone as string);
-    if (artistPhone) {
-      (async () => {
-        try {
-          const sunnyName = parsedFirst || 'there';
-          await sendSMS({
-            to: artistPhone,
-            body: `Hey ${sunnyName}! 👋 I'm Sunny, your AI assistant in Sunstone Studio. Anytime you have a question about welding, pricing, or running your business — just open the app and ask me. I'm here to help! - Sunny`,
-            tenantId: tenant.id,
-            skipConsentCheck: true,
-          });
-          console.log(`[signup] Sunny welcome SMS sent to ${artistPhone}`);
-        } catch (smsErr: any) {
-          console.warn('[signup] Sunny SMS failed (non-fatal):', smsErr.message);
-        }
-      })();
-    }
+    // Sunny welcome will be sent after phone verification completes
+    // (moved to post-verify flow to avoid double-texting during signup)
 
-    return NextResponse.json({ tenantId: tenant.id });
+    return NextResponse.json({
+      tenantId: tenant.id,
+      requiresVerification: !!normalizedPhone,
+    });
   } catch (error: any) {
     console.error('[signup] Unhandled error:', error);
     return NextResponse.json(

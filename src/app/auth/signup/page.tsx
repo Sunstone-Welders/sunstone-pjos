@@ -6,6 +6,19 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button, Input } from '@/components/ui';
 
+/** Format digits as (XXX) XXX-XXXX */
+function formatPhoneDisplay(digits: string): string {
+  if (digits.length <= 3) return digits.length ? `(${digits}` : '';
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+}
+
+/** Mask phone for URL: (XXX) XXX-4567 → last 4 only */
+function maskPhone(digits: string): string {
+  if (digits.length < 4) return digits;
+  return `(•••) •••-${digits.slice(-4)}`;
+}
+
 export default function SignupPage() {
   return (
     <Suspense>
@@ -17,12 +30,12 @@ export default function SignupPage() {
 function SignupForm() {
   const [firstName, setFirstName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState(''); // raw digits only
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [businessName, setBusinessName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
   const [referralName, setReferralName] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const router = useRouter();
@@ -52,10 +65,23 @@ function SignupForm() {
     return () => clearTimeout(timer);
   }, [referralCode]);
 
+  /** Handle phone input — extract digits only, max 10 */
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, '');
+    setPhone(raw.slice(0, 10));
+  };
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    // Client-side phone validation
+    if (phone.length !== 10) {
+      setError('Please enter a valid 10-digit phone number.');
+      setLoading(false);
+      return;
+    }
 
     // Client-side password validation
     if (password.length < 8) {
@@ -92,6 +118,7 @@ function SignupForm() {
           email: authData.user.email,
           businessName: businessName.trim(),
           firstName: firstName.trim(),
+          phone,
           referralCode: referralCode || undefined,
         }),
       });
@@ -101,15 +128,13 @@ function SignupForm() {
         throw new Error(result.error || 'Business setup failed');
       }
 
-      // 3. Check if we have a session (no email confirmation) or need to wait
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (session) {
-        // Logged in immediately — go to onboarding
-        router.push('/onboarding');
+      // 3. Redirect to SMS verification screen
+      if (result.requiresVerification) {
+        const masked = maskPhone(phone);
+        router.push(`/auth/verify?uid=${authData.user.id}&phone=${encodeURIComponent(masked)}`);
       } else {
-        // Email confirmation required — show success message
-        setSuccess(true);
+        // Fallback: if verification wasn't triggered (shouldn't happen), go to onboarding
+        router.push('/onboarding');
       }
     } catch (err: any) {
       setError(err?.message || 'Something went wrong. Please try again.');
@@ -117,43 +142,6 @@ function SignupForm() {
       setLoading(false);
     }
   };
-
-  // Success state — waiting for email confirmation
-  if (success) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4 bg-surface-base">
-        <div className="w-full max-w-[420px]">
-          <div className="text-center mb-8">
-            <h1 className="font-display text-4xl font-bold text-accent-600 tracking-tight">
-              Sunstone
-            </h1>
-          </div>
-          <div className="rounded-xl border border-border-default bg-surface-raised shadow-sm p-8 text-center space-y-4">
-            <div className="w-16 h-16 rounded-full bg-[var(--accent-50)] flex items-center justify-center mx-auto">
-              <svg className="w-8 h-8 text-[var(--accent-600)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-semibold text-text-primary">
-              Check your inbox
-            </h2>
-            <p className="text-sm text-text-secondary">
-              We sent a confirmation link to <strong>{email}</strong>.
-              Click the link to activate your account and start your free trial.
-            </p>
-            <div className="pt-2">
-              <Link
-                href="/auth/login"
-                className="text-sm text-accent-600 hover:text-accent-700 font-medium"
-              >
-                Go to Sign In
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-surface-base">
@@ -205,6 +193,15 @@ function SignupForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
+              required
+            />
+
+            <Input
+              label="Phone Number"
+              type="tel"
+              value={formatPhoneDisplay(phone)}
+              onChange={handlePhoneChange}
+              placeholder="(555) 123-4567"
               required
             />
 

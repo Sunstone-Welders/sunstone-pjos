@@ -301,6 +301,20 @@ function OnboardingFlow() {
     }
   }, [isLoading, tenant, router]);
 
+  // Gate: redirect to phone verification if not verified
+  useEffect(() => {
+    if (!isLoading && tenant && !(tenant as any).phone_verified) {
+      // Get the current user ID for the verify page
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          const lastFour = (tenant.phone || '').replace(/\D/g, '').slice(-4);
+          const masked = lastFour ? encodeURIComponent(`(•••) •••-${lastFour}`) : '';
+          router.replace(`/auth/verify?uid=${user.id}${masked ? `&phone=${masked}` : ''}`);
+        }
+      });
+    }
+  }, [isLoading, tenant, router, supabase]);
+
   // Resume from saved step
   useEffect(() => {
     if (tenant) {
