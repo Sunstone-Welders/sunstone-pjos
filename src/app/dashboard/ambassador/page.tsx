@@ -26,7 +26,7 @@ export default function AmbassadorPage() {
 function AmbassadorPageInner() {
   const { tenant } = useTenant();
   const searchParams = useSearchParams();
-  const [ambassador, setAmbassador] = useState<{ id: string } | null>(null);
+  const [ambassador, setAmbassador] = useState<{ id: string; commission_rate?: number; commission_duration_months?: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
 

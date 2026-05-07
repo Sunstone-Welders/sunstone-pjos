@@ -53,6 +53,7 @@ interface TenantDetail {
   };
   members: TenantMember[];
   recent_sales: Array<{ id: string; total: number; platform_fee_amount: number; created_at: string }>;
+  referredBy: { ambassadorName: string; referralCode: string; referralDate: string | null } | null;
 }
 
 interface AdminActivityEntry {
@@ -546,6 +547,29 @@ function TenantProfilePanel({
                 <StatCard label="Sales" value={String(detail.counts.salesCount)} />
                 <StatCard label="Clients" value={String(detail.counts.clients)} />
                 <StatCard label="Members" value={String(detail.counts.members)} />
+              </div>
+            )}
+
+            {/* ── Referred By Ambassador ── */}
+            {detail?.referredBy && (
+              <div className="px-6 pb-6">
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-3">Referred By</h3>
+                <div className="bg-[var(--surface-subtle)] rounded-lg border border-[var(--border-default)] divide-y divide-[var(--border-subtle)]">
+                  <div className="px-4 py-3 flex items-center justify-between">
+                    <span className="text-sm text-[var(--text-secondary)]">Ambassador</span>
+                    <span className="text-sm font-medium text-[var(--text-primary)]">{detail.referredBy.ambassadorName}</span>
+                  </div>
+                  <div className="px-4 py-3 flex items-center justify-between">
+                    <span className="text-sm text-[var(--text-secondary)]">Code Used</span>
+                    <span className="text-sm text-[var(--text-primary)] uppercase">{detail.referredBy.referralCode}</span>
+                  </div>
+                  {detail.referredBy.referralDate && (
+                    <div className="px-4 py-3 flex items-center justify-between">
+                      <span className="text-sm text-[var(--text-secondary)]">Referred On</span>
+                      <span className="text-sm text-[var(--text-primary)]">{new Date(detail.referredBy.referralDate).toLocaleDateString()}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

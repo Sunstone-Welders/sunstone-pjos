@@ -34,6 +34,8 @@ interface Ambassador {
   suspended_at: string | null;
   suspended_reason: string | null;
   created_at: string;
+  commission_rate: number;
+  commission_duration_months: number;
   stats: AmbassadorStats;
   pendingCommission: number;
   lastPayout: { amount: number; date: string } | null;
@@ -103,6 +105,27 @@ export default function AdminAmbassadorsPage() {
     if (filter === 'all') return ambassadors;
     return ambassadors.filter((a) => a.status === filter);
   }, [ambassadors, filter]);
+
+  const handleUpdateAmbassador = async (ambassadorId: string, updates: Record<string, any>) => {
+    setActionLoading(ambassadorId);
+    try {
+      const res = await fetch(`/api/admin/ambassadors/${ambassadorId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update');
+      }
+      toast.success('Ambassador updated');
+      await loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update');
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const handleAction = async (ambassadorId: string, action: 'approve' | 'suspend' | 'reactivate') => {
     setActionLoading(ambassadorId);
@@ -372,55 +395,131 @@ export default function AdminAmbassadorsPage() {
 
                 {/* Expanded Detail */}
                 {expandedId === a.id && (
-                  <div className="px-4 pb-4 pt-1 bg-white/[0.02] border-t border-white/5">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-                      {/* Info */}
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Details</p>
-                        <div className="space-y-1 text-xs">
-                          <p><span className="text-gray-500">Phone:</span> <span className="text-gray-300">{a.phone || '—'}</span></p>
-                          <p><span className="text-gray-500">Joined:</span> <span className="text-gray-300">{format(new Date(a.created_at), 'MMM d, yyyy')}</span></p>
-                          {a.approved_at && <p><span className="text-gray-500">Approved:</span> <span className="text-gray-300">{format(new Date(a.approved_at), 'MMM d, yyyy')}</span></p>}
-                          {a.suspended_at && <p><span className="text-gray-500">Suspended:</span> <span className="text-red-400">{format(new Date(a.suspended_at), 'MMM d, yyyy')}</span></p>}
-                          {a.suspended_reason && <p><span className="text-gray-500">Reason:</span> <span className="text-red-400">{a.suspended_reason}</span></p>}
-                          {a.social_links && <p><span className="text-gray-500">Social:</span> <span className="text-gray-300 break-all">{a.social_links}</span></p>}
-                        </div>
-                        {a.community_description && (
-                          <div className="mt-2">
-                            <p className="text-xs text-gray-500">Community Description:</p>
-                            <p className="text-xs text-gray-300 mt-0.5">{a.community_description}</p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Referral Breakdown */}
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Referral Breakdown</p>
-                        <div className="space-y-1 text-xs">
-                          <p><span className="text-gray-500">Total Referrals:</span> <span className="text-gray-300">{a.stats.totalReferrals}</span></p>
-                          <p><span className="text-gray-500">Signups (trial):</span> <span className="text-blue-400">{a.stats.signups}</span></p>
-                          <p><span className="text-gray-500">Converted (paid):</span> <span className="text-emerald-400">{a.stats.converted}</span></p>
-                          <p><span className="text-gray-500">Conversion Rate:</span> <span className="text-gray-300">{a.stats.totalReferrals > 0 ? ((a.stats.converted / a.stats.totalReferrals) * 100).toFixed(0) : 0}%</span></p>
-                        </div>
-                      </div>
-
-                      {/* Financial */}
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Financials</p>
-                        <div className="space-y-1 text-xs">
-                          <p><span className="text-gray-500">Total Earned:</span> <span className="text-white font-medium">${a.stats.totalEarned.toFixed(2)}</span></p>
-                          <p><span className="text-gray-500">Pending Payout:</span> <span className="text-[#FF7A00]">{a.pendingCommission > 0 ? `$${a.pendingCommission.toFixed(2)}` : '—'}</span></p>
-                          <p><span className="text-gray-500">Last Payout:</span> <span className="text-gray-300">{a.lastPayout ? `$${a.lastPayout.amount.toFixed(2)} on ${format(new Date(a.lastPayout.date), 'MMM d')}` : '—'}</span></p>
-                          <p><span className="text-gray-500">Stripe Connect:</span> <span className={a.stripe_connect_onboarded ? 'text-emerald-400' : 'text-gray-500'}>{a.stripe_connect_onboarded ? 'Connected' : 'Not connected'}</span></p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <AmbassadorDetailPanel
+                    ambassador={a}
+                    onUpdate={(updates) => handleUpdateAmbassador(a.id, updates)}
+                    saving={actionLoading === a.id}
+                  />
                 )}
               </div>
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Ambassador Detail Panel (expanded row) ──────────────────────────────────
+
+function AmbassadorDetailPanel({
+  ambassador: a,
+  onUpdate,
+  saving,
+}: {
+  ambassador: Ambassador;
+  onUpdate: (updates: Record<string, any>) => void;
+  saving: boolean;
+}) {
+  const [editRate, setEditRate] = useState(Math.round(a.commission_rate * 10000) / 100);
+  const [editDuration, setEditDuration] = useState(a.commission_duration_months);
+  const [dirty, setDirty] = useState(false);
+
+  const currentRateDecimal = editRate / 100;
+  const hasChanged = currentRateDecimal !== a.commission_rate || editDuration !== a.commission_duration_months;
+
+  const handleSave = () => {
+    onUpdate({
+      commission_rate: currentRateDecimal,
+      commission_duration_months: editDuration,
+    });
+    setDirty(false);
+  };
+
+  return (
+    <div className="px-4 pb-4 pt-1 bg-white/[0.02] border-t border-white/5">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm">
+        {/* Info */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Details</p>
+          <div className="space-y-1 text-xs">
+            <p><span className="text-gray-500">Phone:</span> <span className="text-gray-300">{a.phone || '—'}</span></p>
+            <p><span className="text-gray-500">Joined:</span> <span className="text-gray-300">{format(new Date(a.created_at), 'MMM d, yyyy')}</span></p>
+            {a.approved_at && <p><span className="text-gray-500">Approved:</span> <span className="text-gray-300">{format(new Date(a.approved_at), 'MMM d, yyyy')}</span></p>}
+            {a.suspended_at && <p><span className="text-gray-500">Suspended:</span> <span className="text-red-400">{format(new Date(a.suspended_at), 'MMM d, yyyy')}</span></p>}
+            {a.suspended_reason && <p><span className="text-gray-500">Reason:</span> <span className="text-red-400">{a.suspended_reason}</span></p>}
+            {a.social_links && <p><span className="text-gray-500">Social:</span> <span className="text-gray-300 break-all">{a.social_links}</span></p>}
+          </div>
+          {a.community_description && (
+            <div className="mt-2">
+              <p className="text-xs text-gray-500">Community Description:</p>
+              <p className="text-xs text-gray-300 mt-0.5">{a.community_description}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Commission Settings (editable) */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Commission Settings</p>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Rate (%)</label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                step={1}
+                value={editRate}
+                onChange={(e) => { setEditRate(Number(e.target.value)); setDirty(true); }}
+                className="w-full h-9 px-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-[#FF7A00] focus:ring-1 focus:ring-[#FF7A00]"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Duration (months)</label>
+              <input
+                type="number"
+                min={1}
+                max={24}
+                step={1}
+                value={editDuration}
+                onChange={(e) => { setEditDuration(Number(e.target.value)); setDirty(true); }}
+                className="w-full h-9 px-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-[#FF7A00] focus:ring-1 focus:ring-[#FF7A00]"
+              />
+            </div>
+            {(dirty && hasChanged) && (
+              <button
+                onClick={handleSave}
+                disabled={saving || editRate < 1 || editRate > 50 || editDuration < 1 || editDuration > 24}
+                className="w-full h-9 rounded-lg text-xs font-medium bg-[#FF7A00] text-white hover:bg-[#FF7A00]/90 disabled:opacity-50 transition-colors"
+              >
+                {saving ? 'Saving...' : 'Save Commission Settings'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Referral Breakdown */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Referral Breakdown</p>
+          <div className="space-y-1 text-xs">
+            <p><span className="text-gray-500">Total Referrals:</span> <span className="text-gray-300">{a.stats.totalReferrals}</span></p>
+            <p><span className="text-gray-500">Signups (trial):</span> <span className="text-blue-400">{a.stats.signups}</span></p>
+            <p><span className="text-gray-500">Converted (paid):</span> <span className="text-emerald-400">{a.stats.converted}</span></p>
+            <p><span className="text-gray-500">Active Referrals:</span> <span className="text-emerald-400">{a.stats.signups}</span></p>
+            <p><span className="text-gray-500">Conversion Rate:</span> <span className="text-gray-300">{a.stats.totalReferrals > 0 ? ((a.stats.converted / a.stats.totalReferrals) * 100).toFixed(0) : 0}%</span></p>
+          </div>
+        </div>
+
+        {/* Financial */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Financials</p>
+          <div className="space-y-1 text-xs">
+            <p><span className="text-gray-500">Total Earned:</span> <span className="text-white font-medium">${a.stats.totalEarned.toFixed(2)}</span></p>
+            <p><span className="text-gray-500">Pending Payout:</span> <span className="text-[#FF7A00]">{a.pendingCommission > 0 ? `$${a.pendingCommission.toFixed(2)}` : '—'}</span></p>
+            <p><span className="text-gray-500">Last Payout:</span> <span className="text-gray-300">{a.lastPayout ? `$${a.lastPayout.amount.toFixed(2)} on ${format(new Date(a.lastPayout.date), 'MMM d')}` : '—'}</span></p>
+            <p><span className="text-gray-500">Stripe Connect:</span> <span className={a.stripe_connect_onboarded ? 'text-emerald-400' : 'text-gray-500'}>{a.stripe_connect_onboarded ? 'Connected' : 'Not connected'}</span></p>
+          </div>
+        </div>
       </div>
     </div>
   );

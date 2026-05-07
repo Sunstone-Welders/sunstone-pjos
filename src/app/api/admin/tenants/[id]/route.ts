@@ -24,6 +24,7 @@ export async function GET(
         crm_enabled, created_at, updated_at, phone, email, website,
         dedicated_phone_number, dedicated_phone_sid, platform_fee_percent,
         admin_tier_override, last_owner_login_at,
+        referred_by_ambassador_id, referral_code_used,
         onboarding_welcome_sent_at, onboarding_inventory_nudge_sent_at,
         onboarding_first_sale_nudge_sent_at, onboarding_week1_active_sent_at,
         onboarding_week1_inactive_sent_at, onboarding_stripe_nudge_sent_at,
@@ -50,6 +51,27 @@ export async function GET(
       serviceClient.from('tenant_members').select('user_id, role, display_name, invited_email, accepted_at').eq('tenant_id', id),
     ]);
 
+    // Look up ambassador attribution if referred
+    let referredByAmbassador: { name: string; referral_code: string } | null = null;
+    let referralDate: string | null = null;
+    if (tenant.referred_by_ambassador_id) {
+      const { data: amb } = await serviceClient
+        .from('ambassadors')
+        .select('name, referral_code')
+        .eq('id', tenant.referred_by_ambassador_id)
+        .single();
+      if (amb) referredByAmbassador = amb;
+
+      const { data: ref } = await serviceClient
+        .from('referrals')
+        .select('created_at')
+        .eq('referred_tenant_id', id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .single();
+      if (ref) referralDate = ref.created_at;
+    }
+
     // Calculate total revenue
     const totalRevenue = (sales.data || []).reduce((sum, s) => sum + Number(s.total), 0);
 
@@ -73,6 +95,11 @@ export async function GET(
       },
       members: membersList,
       recent_sales: sales.data || [],
+      referredBy: referredByAmbassador ? {
+        ambassadorName: referredByAmbassador.name,
+        referralCode: tenant.referral_code_used || referredByAmbassador.referral_code,
+        referralDate,
+      } : null,
     });
   } catch (err) {
     if (err instanceof AdminAuthError) {

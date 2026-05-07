@@ -24,6 +24,8 @@ interface AmbassadorData {
   referral_code: string;
   stripe_connect_onboarded: boolean;
   created_at: string;
+  commission_rate: number;
+  commission_duration_months: number;
 }
 
 interface DashboardStats {
@@ -326,7 +328,7 @@ export default function AmbassadorDashboardContent() {
         )}
 
         <p className="text-xs text-[var(--text-tertiary)]">
-          Share this link with PJ artists. When they sign up and subscribe, you earn 20% of their monthly billing for 8 months.
+          Share this link with PJ artists. When they sign up and subscribe, you earn {Math.round(ambassador.commission_rate * 100)}% of their monthly billing for {ambassador.commission_duration_months} months.
         </p>
       </Card>
 
@@ -580,20 +582,24 @@ export default function AmbassadorDashboardContent() {
                   <div className="text-right">You Earn</div>
                 </div>
                 {[
-                  { plan: 'Starter', price: '$99', earn: '$19.80' },
-                  { plan: 'Pro', price: '$169', earn: '$33.80' },
-                  { plan: 'Business', price: '$279', earn: '$55.80' },
-                ].map((row) => (
-                  <div key={row.plan} className="grid grid-cols-3 gap-0 px-4 py-2.5 border-t border-[var(--border-subtle)] text-sm">
-                    <div className="text-[var(--text-primary)] font-medium">{row.plan}</div>
-                    <div className="text-right text-[var(--text-secondary)]">{row.price}/mo</div>
-                    <div className="text-right text-[var(--accent-600)] font-semibold">{row.earn}/mo</div>
-                  </div>
-                ))}
+                  { plan: 'Starter', price: 99 },
+                  { plan: 'Pro', price: 169 },
+                  { plan: 'Business', price: 279 },
+                ].map((row) => {
+                  const rate = ambassador?.commission_rate ?? 0.20;
+                  const earn = (row.price * rate).toFixed(2);
+                  return (
+                    <div key={row.plan} className="grid grid-cols-3 gap-0 px-4 py-2.5 border-t border-[var(--border-subtle)] text-sm">
+                      <div className="text-[var(--text-primary)] font-medium">{row.plan}</div>
+                      <div className="text-right text-[var(--text-secondary)]">${row.price}/mo</div>
+                      <div className="text-right text-[var(--accent-600)] font-semibold">${earn}/mo</div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <div className="text-xs text-[var(--text-tertiary)] space-y-1">
-              <p>Commission rate: 20% for 8 months from each referral&apos;s first payment.</p>
+              <p>Commission rate: {Math.round((ambassador?.commission_rate ?? 0.20) * 100)}% for {ambassador?.commission_duration_months ?? 8} months from each referral&apos;s first payment.</p>
               <p>Payouts processed on the 15th of each month. Minimum payout: $25.</p>
               <p>Commissions below the minimum roll over to the next month.</p>
             </div>
