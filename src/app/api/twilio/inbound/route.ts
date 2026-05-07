@@ -11,6 +11,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import { normalizePhone, normalizePhoneDigits, validateTwilioWebhook, sendSMS } from '@/lib/twilio';
 import { logSmsCost, logAnthropicCost } from '@/lib/cost-tracker';
 import { sendMulticastNotification } from '@/lib/firebase-admin';
+import { handleAtlasInbound } from '@/lib/atlas-sms';
 
 const TWIML_EMPTY = '<Response></Response>';
 
@@ -39,6 +40,19 @@ export async function POST(request: NextRequest) {
       console.warn('[Inbound] Invalid Twilio signature');
       return new NextResponse(TWIML_EMPTY, {
         status: 403,
+        headers: { 'Content-Type': 'text/xml' },
+      });
+    }
+
+    // ── Atlas SMS routing ──
+    const atlasNumber = process.env.ATLAS_PHONE_NUMBER;
+    if (atlasNumber && normalizePhone(to) === normalizePhone(atlasNumber)) {
+      // Fire-and-forget: Atlas handles its own response and storage
+      handleAtlasInbound(from, body.trim()).catch(err =>
+        console.error('[Inbound] Atlas handler error:', err.message)
+      );
+      return new NextResponse(TWIML_EMPTY, {
+        status: 200,
         headers: { 'Content-Type': 'text/xml' },
       });
     }

@@ -93,8 +93,14 @@ export async function POST(request: NextRequest) {
       to: normalized,
     };
 
+    // Prefer Atlas number so verification codes come from the same number
+    // the user can later text for account help
+    const atlasNumber = process.env.ATLAS_PHONE_NUMBER;
     if (process.env.TWILIO_MESSAGING_SERVICE_SID) {
       messageParams.messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
+      if (atlasNumber) messageParams.from = atlasNumber;
+    } else if (atlasNumber) {
+      messageParams.from = atlasNumber;
     } else if (process.env.TWILIO_PHONE_NUMBER) {
       messageParams.from = process.env.TWILIO_PHONE_NUMBER;
     }
