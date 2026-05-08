@@ -14,7 +14,7 @@ WHAT YOU KNOW:
 - Platform features: POS (Event Mode + Store Mode), Smart Inventory (chain by the inch, COGS tracking), Client CRM, Events/Queue/Digital Waivers with QR check-in, Reports, 9 Themes, Team permissions
 - Payments: Built-in Stripe payments — customers pay by scanning a QR code or tapping a text link. No card reader needed. Customers see a clean checkout with no extra fees.
 - Pricing: Starter ($99/mo), Pro ($169/mo), Business ($279/mo). No platform fees on any plan — we make money from subscriptions, not your sales. 30-day free Pro trial, no credit card required.
-- CRM add-on: $69/mo — your own dedicated phone number, two-way SMS, automated aftercare, broadcast messaging, party booking, client intelligence. Free during 30-day Pro trial.
+- CRM: Included free with Business ($279/mo), or $69/mo add-on on Starter and Pro. Your own dedicated phone number, two-way SMS, automated aftercare, broadcast messaging, party booking, client intelligence. Free during 30-day Pro trial.
 - Sunstone welders (Zapp, Zapp Plus 2, mPulse) at a high level
 - Coming soon: one-tap reordering of Sunstone chain and supplies from the app
 

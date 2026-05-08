@@ -133,8 +133,8 @@ export default function TermsOfServicePage() {
                 billing begins when your trial ends. You may cancel at any time.
               </li>
               <li>
-                <strong>Plans:</strong> Starter ($99/month), Pro ($169/month), and Business ($279/month). CRM is an optional
-                add-on at $69/month, available with any base plan. Pricing is as displayed at the time of purchase.
+                <strong>Plans:</strong> Starter ($99/month), Pro ($169/month), and Business ($279/month). CRM is included
+                free with Business, or available as a $69/month add-on on Starter and Pro. Pricing is as displayed at the time of purchase.
               </li>
               <li>
                 <strong>Cancellation:</strong> You may cancel your subscription at any time. Cancellation takes effect at

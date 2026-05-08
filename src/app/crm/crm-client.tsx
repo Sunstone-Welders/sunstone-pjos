@@ -262,7 +262,7 @@ export default function CRMPageClient({ authState, trialEndDate }: { authState: 
           </Reveal>
           <Reveal delay={0.16}>
             <p style={{ fontSize: 19, color: C.textSec, lineHeight: 1.7, maxWidth: 620, margin: '0 auto 36px' }}>
-              A dedicated phone number, automated marketing, and an AI assistant that texts your clients for you — all for $69/month.
+              A dedicated phone number, automated marketing, and an AI assistant that texts your clients for you — included free with Business, or $69/month on Starter &amp; Pro.
             </p>
           </Reveal>
           <Reveal delay={0.24}>
@@ -560,7 +560,7 @@ export default function CRMPageClient({ authState, trialEndDate }: { authState: 
               <span style={{ color: C.gold }}>$69</span>/month
             </h2>
             <p style={{ fontSize: 18, color: C.darkMuted, lineHeight: 1.7, marginBottom: 12 }}>
-              Add to any Sunstone Studio plan.
+              Add-on for Starter &amp; Pro. Included free with Business.
             </p>
             <p style={{ fontSize: 15, color: C.darkMuted, lineHeight: 1.7, marginBottom: 40 }}>
               Included free in your 30-day trial. Most artists never turn it off.
@@ -614,7 +614,7 @@ export default function CRMPageClient({ authState, trialEndDate }: { authState: 
               },
               {
                 q: 'Is there a contract?',
-                a: 'No contracts, no commitments. Cancel anytime. Your CRM trial is included free for 30 days, and after that it\'s a simple $69/month add-on that you can turn on or off whenever you want.',
+                a: 'No contracts, no commitments. Cancel anytime. Your CRM trial is included free for 30 days. After that, CRM is $69/month on Starter and Pro, or included free with Business ($279/mo).',
               },
             ].map((faq, i) => (
               <Reveal key={i} delay={i * 0.05}>

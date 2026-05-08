@@ -13,6 +13,7 @@ interface CrmStatusInput {
   crm_deactivated_at?: string | null;
   admin_tier_override?: boolean;
   subscription_tier?: string | null;
+  subscription_status?: string | null;
 }
 
 export interface CrmStatus {
@@ -27,8 +28,17 @@ export function getCrmStatus(tenant: CrmStatusInput | null | undefined): CrmStat
     return { active: false, reason: 'none', daysLeft: null, trialExpired: false };
   }
 
-  // Admin override with Pro/Business tier — CRM always active
-  if (tenant.admin_tier_override && (tenant.subscription_tier === 'pro' || tenant.subscription_tier === 'business')) {
+  // Business tier includes CRM — always active regardless of add-on status
+  if (tenant.subscription_tier === 'business') {
+    const hasActiveSub = tenant.admin_tier_override ||
+      ['active', 'past_due', 'trialing'].includes(tenant.subscription_status ?? '');
+    if (hasActiveSub) {
+      return { active: true, reason: 'subscribed', daysLeft: null, trialExpired: false };
+    }
+  }
+
+  // Admin override with Pro tier — CRM always active
+  if (tenant.admin_tier_override && tenant.subscription_tier === 'pro') {
     return { active: true, reason: 'subscribed', daysLeft: null, trialExpired: false };
   }
 

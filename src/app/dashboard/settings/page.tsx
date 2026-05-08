@@ -81,11 +81,13 @@ const PLAN_FEATURES: Record<string, string[]> = {
   ],
   business: [
     'Everything in Pro',
+    'CRM included (no add-on needed)',
     'Unlimited team members',
     'Advanced analytics',
     'Atlas SMS support',
     'White-label receipts',
     'Multi-location support',
+    'Custom Storefront Domain (coming soon)',
   ],
 };
 
@@ -1679,7 +1681,23 @@ function SettingsPage() {
           )}
 
           {/* CRM add-on info */}
-          {trialActive ? (
+          {tier === 'business' ? (
+            <div className="border border-success-200 rounded-2xl p-5 bg-success-50">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-success-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="text-sm font-medium text-success-700">
+                    CRM is included with your Business plan
+                  </p>
+                  <p className="text-sm text-success-600 mt-1">
+                    Dedicated phone number, two-way SMS, automated workflows, broadcasts, aftercare sequences, and more &mdash; all included at no extra cost.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : trialActive ? (
             <div className="border border-[var(--border-default)] rounded-2xl p-5 bg-[var(--surface-base)]">
               <div className="flex items-start gap-3">
                 <svg className="w-5 h-5 text-[var(--accent-primary)] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -1687,7 +1705,7 @@ function SettingsPage() {
                 </svg>
                 <div>
                   <p className="text-sm text-[var(--text-secondary)]">
-                    Your Pro trial includes full CRM (dedicated phone number, two-way SMS, automated aftercare, broadcasts, workflows, and more). After your trial, CRM is $69/mo as an add-on to any plan.
+                    Your Pro trial includes full CRM (dedicated phone number, two-way SMS, automated aftercare, broadcasts, workflows, and more). After your trial, CRM is $69/mo add-on for Starter and Pro, or included free with Business.
                   </p>
                   <a href="/crm" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-[var(--accent-600)] hover:underline mt-2 inline-block">
                     See what&rsquo;s included &rarr;
@@ -1700,7 +1718,7 @@ function SettingsPage() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-sm text-[var(--text-secondary)]">
-                    Add CRM to your plan for $69/mo &mdash; dedicated phone number, two-way SMS, automated workflows, broadcasts, aftercare, and more.
+                    Add CRM to your plan for $69/mo &mdash; or upgrade to Business to get it included free.
                   </p>
                   <a href="/crm" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-[var(--accent-600)] hover:underline mt-2 inline-block">
                     See what&rsquo;s included &rarr;
@@ -1719,7 +1737,7 @@ function SettingsPage() {
                 </svg>
                 <div>
                   <p className="text-sm text-[var(--text-tertiary)]">
-                    CRM is a $69/mo add-on. Choose a base plan above to unlock the CRM add-on.
+                    CRM is a $69/mo add-on for Starter and Pro plans, or included free with Business. Choose a base plan above first.
                   </p>
                 </div>
               </div>
@@ -1814,13 +1832,16 @@ function SettingsPage() {
                     <td className="py-2.5 px-3 text-center text-success-600">✓</td>
                   </tr>
                   <tr>
-                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">
-                      CRM Available
-                      <span className="block text-xs text-[var(--text-tertiary)]">($69/mo add-on, free during trial)</span>
-                    </td>
-                    <td className="py-2.5 px-3 text-center text-success-600">✓</td>
-                    <td className="py-2.5 px-3 text-center text-success-600">✓</td>
-                    <td className="py-2.5 px-3 text-center text-success-600">✓</td>
+                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">CRM</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">$69/mo</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">$69/mo</td>
+                    <td className="py-2.5 px-3 text-center text-success-600 font-semibold">Included</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Custom Storefront Domain</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">—</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">—</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-primary)]">Coming Soon</td>
                   </tr>
                   <tr>
                     <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Price</td>

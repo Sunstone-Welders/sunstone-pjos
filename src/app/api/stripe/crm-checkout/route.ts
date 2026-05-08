@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     // ── Tenant data ──
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
-      .select('id, name, stripe_customer_id, crm_subscription_id, trial_ends_at, subscription_status, stripe_subscription_id')
+      .select('id, name, stripe_customer_id, crm_subscription_id, trial_ends_at, subscription_status, subscription_tier, stripe_subscription_id')
       .eq('id', member.tenant_id)
       .single();
 
@@ -69,6 +69,11 @@ export async function POST(request: NextRequest) {
 
     if (!tenant) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+    }
+
+    // Business tier includes CRM — no add-on needed
+    if (tenant.subscription_tier === 'business') {
+      return NextResponse.json({ error: 'CRM is included with your Business plan — no add-on needed!' }, { status: 400 });
     }
 
     // Already subscribed

@@ -1048,12 +1048,12 @@ function TrialExpiredOverlay() {
           >
             <p className="font-semibold text-[var(--text-primary)]">Business</p>
             <p className="text-lg font-bold text-[var(--text-primary)]">$279<span className="text-sm font-normal text-[var(--text-tertiary)]">/mo</span></p>
-            <p className="text-xs text-[var(--text-tertiary)] mt-1">Unlimited team, advanced analytics</p>
+            <p className="text-xs text-[var(--text-tertiary)] mt-1">Unlimited team, CRM included, advanced analytics</p>
           </button>
         </div>
 
         <p className="text-xs text-[var(--text-tertiary)]">
-          All plans include your existing data, inventory, and client records. Add CRM for $69/mo.
+          All plans include your existing data, inventory, and client records. CRM is $69/mo on Starter &amp; Pro, or included free with Business.
         </p>
 
         <div className="flex items-center justify-center gap-4 text-sm">

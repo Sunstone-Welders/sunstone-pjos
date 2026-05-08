@@ -16,6 +16,7 @@ import {
 } from '@/components/clients';
 import ImportModal from '@/components/ImportModal';
 import UpgradePrompt from '@/components/ui/UpgradePrompt';
+import { getCrmStatus } from '@/lib/crm-status';
 import type { Client, ClientTag, ClientSegment } from '@/types';
 import { downloadCSV, escapeCSVField } from '@/lib/csv-templates';
 import SunnyTutorial from '@/components/SunnyTutorial';
@@ -58,7 +59,7 @@ export default function ClientsPage() {
     return true;
   })();
 
-  const crmEnabled = tenant?.crm_enabled ?? false;
+  const crmEnabled = getCrmStatus(tenant).active;
 
   // ── Fetch clients ─────────────────────────────────────────────────────────
   const fetchClients = useCallback(async () => {

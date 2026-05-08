@@ -528,10 +528,10 @@ function TenantProfilePanel({
               <QuickAction icon={<EnvelopeIcon className="w-5 h-5" />} label="Email" onClick={onEmail} />
               <QuickAction
                 icon={<UsersIcon className="w-5 h-5" />}
-                label={tenant.crm_enabled ? 'CRM On' : 'CRM Off'}
-                active={tenant.crm_enabled}
-                onClick={onToggleCrm}
-                disabled={actionLoading}
+                label={tenant.subscription_tier === 'business' ? 'CRM Incl' : tenant.crm_enabled ? 'CRM On' : 'CRM Off'}
+                active={tenant.subscription_tier === 'business' || tenant.crm_enabled}
+                onClick={tenant.subscription_tier === 'business' ? () => {} : onToggleCrm}
+                disabled={actionLoading || tenant.subscription_tier === 'business'}
               />
               <QuickAction
                 icon={<GearIcon className="w-5 h-5" />}
@@ -669,18 +669,27 @@ function TenantProfilePanel({
 
                 {/* CRM toggle */}
                 <div className="px-4 py-3 flex items-center justify-between">
-                  <span className="text-sm text-[var(--text-secondary)]">CRM Features</span>
-                  <button
-                    onClick={onToggleCrm}
-                    disabled={actionLoading}
-                    className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
-                      tenant.crm_enabled ? 'bg-[#FF7A00]' : 'bg-[var(--surface-raised)] border border-[var(--border-default)]'
-                    }`}
-                  >
-                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
-                      tenant.crm_enabled ? 'translate-x-5' : 'translate-x-0'
-                    }`} />
-                  </button>
+                  <span className="text-sm text-[var(--text-secondary)]">
+                    CRM Features
+                    {tenant.subscription_tier === 'business' && (
+                      <span className="ml-1 text-xs text-green-600">(included)</span>
+                    )}
+                  </span>
+                  {tenant.subscription_tier === 'business' ? (
+                    <span className="text-xs text-green-600 font-medium">Included</span>
+                  ) : (
+                    <button
+                      onClick={onToggleCrm}
+                      disabled={actionLoading}
+                      className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
+                        tenant.crm_enabled ? 'bg-[#FF7A00]' : 'bg-[var(--surface-raised)] border border-[var(--border-default)]'
+                      }`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                        tenant.crm_enabled ? 'translate-x-5' : 'translate-x-0'
+                      }`} />
+                    </button>
+                  )}
                 </div>
 
                 {/* Suspend toggle */}

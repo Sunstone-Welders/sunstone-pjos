@@ -13,6 +13,7 @@ export type Feature =
   | 'full_reports'
   | 'csv_export'
   | 'crm'
+  | 'crm_included'
   | 'unlimited_sunny'
   | 'team_members_5'
   | 'team_members_unlimited'
@@ -22,24 +23,27 @@ export type Feature =
   | 'advanced_analytics'
   | 'atlas_sms_support'
   | 'white_label_receipts'
-  | 'multi_location';
+  | 'multi_location'
+  | 'custom_storefront_domain';
 
 // Feature access matrix — tiers differentiate by features, not fees (May 2026)
 const FEATURE_ACCESS: Record<Feature, SubscriptionTier[]> = {
-  ai_insights:            ['pro', 'business'],
-  full_reports:           ['pro', 'business'],
-  csv_export:             ['pro', 'business'],
-  crm:                    ['pro', 'business'],
-  unlimited_sunny:        ['pro', 'business'],
-  team_members_5:         ['pro', 'business'],
-  team_members_unlimited: ['business'],
-  artist_storefront:      ['pro', 'business'],
-  party_booking:          ['pro', 'business'],
-  warranty_program:       ['pro', 'business'],
-  advanced_analytics:     ['business'],
-  atlas_sms_support:      ['business'],
-  white_label_receipts:   ['business'],
-  multi_location:         ['business'],
+  ai_insights:              ['pro', 'business'],
+  full_reports:             ['pro', 'business'],
+  csv_export:               ['pro', 'business'],
+  crm:                      ['pro', 'business'],
+  crm_included:             ['business'],           // CRM bundled free with Business
+  unlimited_sunny:          ['pro', 'business'],
+  team_members_5:           ['pro', 'business'],
+  team_members_unlimited:   ['business'],
+  artist_storefront:        ['pro', 'business'],
+  party_booking:            ['pro', 'business'],
+  warranty_program:         ['pro', 'business'],
+  advanced_analytics:       ['business'],
+  atlas_sms_support:        ['business'],
+  white_label_receipts:     ['business'],
+  multi_location:           ['business'],
+  custom_storefront_domain: ['business'],           // Coming soon
 };
 
 // Platform fee rates by tier (as decimal) — fees removed from all tiers May 2026
@@ -159,6 +163,14 @@ export function getPlatformFeePercent(tier: SubscriptionTier): number {
  */
 export function canAccessFeature(tier: SubscriptionTier, feature: Feature): boolean {
   return FEATURE_ACCESS[feature]?.includes(tier) ?? false;
+}
+
+/**
+ * Whether CRM is bundled with the given tier (no add-on purchase needed).
+ * Business tier includes CRM for free. Starter/Pro require $69/mo add-on.
+ */
+export function isCrmIncludedInTier(tier: SubscriptionTier): boolean {
+  return canAccessFeature(tier, 'crm_included');
 }
 
 /**

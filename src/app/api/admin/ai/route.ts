@@ -447,10 +447,10 @@ Core Feature Set:
 Subscription Tiers (no platform fees on any plan):
 - Starter ($99/month): No platform fee, 10 Sunny questions/month, up to 2 team members, full POS, inventory, clients, gift cards, basic reports, Stripe or Square payments
 - Pro ($169/month): No platform fee, unlimited Sunny, full reports & CSV export, AI business insights, Artist Storefront & Party Booking, Warranty Program, up to 5 team members
-- Business ($279/month): No platform fee, everything in Pro, unlimited team members, advanced analytics, Atlas SMS support, white-label receipts, multi-location support
+- Business ($279/month): No platform fee, everything in Pro, CRM included (no add-on needed), unlimited team members, advanced analytics, Atlas SMS support, white-label receipts, multi-location support, Custom Storefront Domain (coming soon)
 - Trial: 30-day Pro trial for new accounts, defaults to Starter after expiry
-- CRM Add-On: $69/mo add-on to any plan — dedicated business phone number, two-way SMS, automated aftercare, broadcasts, workflows, party booking, client intelligence. Included free during 30-day Pro trial.
-- CRM: Currently enabled per-tenant by admin toggle (crm_enabled flag on tenants table). Gives access to workflows, templates, broadcast messaging, dedicated phone number, two-way SMS, and automated follow-ups.
+- CRM Add-On: $69/mo add-on on Starter and Pro — dedicated business phone number, two-way SMS, automated aftercare, broadcasts, workflows, party booking, client intelligence. Included free during 30-day Pro trial. Business tier includes CRM at no extra cost.
+- CRM: Enabled per-tenant by admin toggle (crm_enabled flag), CRM subscription ($69/mo Stripe), or Business tier (automatic). Business tier tenants always have CRM active regardless of crm_enabled flag.
 
 Payment Model:
 - Integrated Stripe Payment Links — customers pay via QR code scan or text-to-pay link through Stripe Checkout
@@ -461,7 +461,7 @@ Payment Model:
 
 Revenue Model:
 - Monthly subscriptions (Starter $99, Pro $169, Business $279) — this is the primary revenue source
-- CRM add-on revenue ($69/mo per subscriber)
+- CRM add-on revenue ($69/mo per subscriber on Starter/Pro; included free with Business)
 - No platform fees on sales (removed May 2026). Historical sales may have platform_fee_collected values.
 
 TENANT HEALTH SIGNALS — How to interpret the data:

@@ -431,7 +431,7 @@ export async function POST(request: NextRequest) {
 
         const { data: tenant } = await serviceRole
           .from('tenants')
-          .select('id, crm_subscription_id, stripe_subscription_id')
+          .select('id, crm_subscription_id, stripe_subscription_id, subscription_tier')
           .eq('stripe_customer_id', customerId)
           .single();
 
@@ -442,6 +442,16 @@ export async function POST(request: NextRequest) {
 
         // Check if this is the CRM add-on subscription being canceled
         if (tenant.crm_subscription_id === subscription.id) {
+          // Business tier includes CRM — clear the subscription ID but keep CRM active
+          if (tenant.subscription_tier === 'business') {
+            await serviceRole
+              .from('tenants')
+              .update({ crm_subscription_id: null })
+              .eq('id', tenant.id);
+            console.log(`[Webhook] CRM subscription.deleted — tenant ${tenant.id} (Business tier) → CRM stays active`);
+            break;
+          }
+
           await serviceRole
             .from('tenants')
             .update({

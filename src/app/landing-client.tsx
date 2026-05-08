@@ -36,7 +36,7 @@ const PRICING = [
     name: 'Starter',
     price: '$99',
     period: '/mo',
-    tagline: 'Everything you need to launch',
+    tagline: 'Run your events like a pro',
     popular: false,
     features: [
       'Full POS \u2014 Event & Store Mode',
@@ -47,6 +47,7 @@ const PRICING = [
       'Up to 2 team members',
       'Sunny AI \u2014 10 questions/mo',
       'Basic reports',
+      'CRM available ($69/mo add-on)',
       '30-day Pro trial included',
     ],
   },
@@ -54,7 +55,7 @@ const PRICING = [
     name: 'Pro',
     price: '$169',
     period: '/mo',
-    tagline: 'Unlock powerful tools as you grow',
+    tagline: 'Grow your business between events',
     popular: true,
     features: [
       'Everything in Starter, plus:',
@@ -64,6 +65,7 @@ const PRICING = [
       'Artist Storefront & Party Booking',
       'Warranty Program',
       'Up to 5 team members',
+      'CRM available ($69/mo add-on)',
       '30-day Pro trial included',
     ],
   },
@@ -71,16 +73,17 @@ const PRICING = [
     name: 'Business',
     price: '$279',
     period: '/mo',
-    tagline: 'For serious operators',
+    tagline: 'Everything, all in one place',
     popular: false,
     features: [
       'Everything in Pro, plus:',
+      'CRM included \u2014 no add-on needed',
       'Unlimited team members',
       'Advanced analytics',
       'Atlas SMS support',
       'White-label receipts',
       'Multi-location support',
-      'Dedicated support',
+      'Custom Storefront Domain (coming soon)',
       '30-day Pro trial included',
     ],
   },
@@ -126,11 +129,11 @@ const FAQS = [
   },
   {
     q: 'What happens after my 30-day trial?',
-    a: 'You pick your plan (Starter $99, Pro $169, or Business $279). CRM features (workflows, broadcasts, dedicated number, aftercare) become a $69/mo add-on. Your client data and conversation history are preserved indefinitely \u2014 just reactivate CRM to pick up where you left off.',
+    a: 'You pick your plan (Starter $99, Pro $169, or Business $279). CRM features (workflows, broadcasts, dedicated number, aftercare) are $69/mo as an add-on on Starter and Pro, or included free with Business. Your client data and conversation history are preserved indefinitely \u2014 just reactivate CRM to pick up where you left off.',
   },
   {
     q: "What's included in the CRM?",
-    a: 'Your own dedicated business phone number, two-way SMS conversations, automated aftercare sequences, broadcast messaging, client workflows, birthday automations, message templates, advanced party booking (deposits, RSVP tracking, automated reminders, host rewards), and client intelligence. $69/mo add-on to any plan \u2014 all included free during your 30-day Pro trial. Basic party booking and your artist storefront are included free on every plan.',
+    a: 'Your own dedicated business phone number, two-way SMS conversations, automated aftercare sequences, broadcast messaging, client workflows, birthday automations, message templates, advanced party booking (deposits, RSVP tracking, automated reminders, host rewards), and client intelligence. $69/mo add-on on Starter and Pro plans, or included free with Business \u2014 all included during your 30-day Pro trial.',
   },
 ]
 
@@ -1210,7 +1213,7 @@ export default function LandingPageClient() {
           <Reveal>
             <div style={{ textAlign: 'center', marginBottom: 48 }}>
               <h2 style={{ fontFamily: FONT.display, fontWeight: 400, fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', color: B.blackBrown }}>
-                Unlock Powerful Tools as You Grow
+                A Plan for Every Stage of Your Journey
               </h2>
               <p style={{ fontSize: 16, fontWeight: 500, color: B.softBrown, marginTop: 12 }}>
                 No platform fees on any plan. Start with a 30-day free Pro trial.
@@ -1294,7 +1297,7 @@ export default function LandingPageClient() {
 
           <Reveal delay={0.3}>
             <p style={{ textAlign: 'center', fontSize: 14, color: B.softBrown, marginTop: 32 }}>
-              Add CRM tools for $69/mo &mdash; included free during your 30-day trial.
+              CRM is $69/mo on Starter &amp; Pro, or included free with Business. Try it all during your 30-day trial.
             </p>
           </Reveal>
         </div>

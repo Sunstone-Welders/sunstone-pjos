@@ -4,7 +4,7 @@ import CRMPageClient from './crm-client'
 
 export const metadata: Metadata = {
   title: 'CRM — Your AI-Powered Business Phone | Sunstone Studio',
-  description: 'A dedicated phone number, automated marketing, and an AI assistant that texts your clients for you — all for $69/month. Replace $200-900/month in tools with one platform built for permanent jewelry artists.',
+  description: 'A dedicated phone number, automated marketing, and an AI assistant that texts your clients for you — included free with Business, or $69/month on Starter & Pro. Replace $200-900/month in tools with one platform built for permanent jewelry artists.',
   openGraph: {
     title: 'CRM — Your AI-Powered Business Phone | Sunstone Studio',
     description: 'Sunny AI answers your client texts, sends aftercare, books appointments, and keeps your business top of mind — automatically.',
@@ -34,7 +34,7 @@ export default async function CRMPage() {
     if (member) {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('trial_ends_at, subscription_status, stripe_subscription_id, crm_subscription_id, crm_enabled')
+        .select('trial_ends_at, subscription_status, subscription_tier, stripe_subscription_id, crm_subscription_id, crm_enabled')
         .eq('id', member.tenant_id)
         .single()
 
@@ -43,7 +43,7 @@ export default async function CRMPage() {
         const trialEnd = tenant.trial_ends_at ? new Date(tenant.trial_ends_at) : null
         const inTrial = tenant.subscription_status === 'trialing' && trialEnd && trialEnd > now
         const hasBaseSub = tenant.subscription_status === 'active' || tenant.subscription_status === 'past_due'
-        const hasCrm = !!tenant.crm_subscription_id || (tenant.crm_enabled && inTrial)
+        const hasCrm = tenant.subscription_tier === 'business' || !!tenant.crm_subscription_id || (tenant.crm_enabled && inTrial)
 
         if (hasCrm) {
           authState = 'has_crm'

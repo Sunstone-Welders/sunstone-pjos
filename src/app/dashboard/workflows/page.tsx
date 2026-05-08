@@ -1,10 +1,12 @@
 'use client';
 
 import { useTenant } from '@/hooks/use-tenant';
+import { getCrmStatus } from '@/lib/crm-status';
 import UpgradePrompt from '@/components/ui/UpgradePrompt';
 
 export default function WorkflowsPage() {
   const { tenant, isLoading } = useTenant();
+  const crmStatus = getCrmStatus(tenant);
 
   if (isLoading) {
     return (
@@ -14,7 +16,7 @@ export default function WorkflowsPage() {
     );
   }
 
-  if (!tenant?.crm_enabled) {
+  if (!crmStatus.active) {
     return (
       <div className="max-w-2xl mx-auto py-12">
         <UpgradePrompt

@@ -32,7 +32,7 @@ export async function POST() {
 
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('crm_enabled, crm_trial_start, crm_trial_end, crm_subscription_id, crm_deactivated_at, admin_tier_override, subscription_tier')
+      .select('crm_enabled, crm_trial_start, crm_trial_end, crm_subscription_id, crm_deactivated_at, admin_tier_override, subscription_tier, subscription_status')
       .eq('id', member.tenant_id)
       .single();
 
@@ -40,8 +40,17 @@ export async function POST() {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
-    // Admin override with Pro/Business tier — CRM always active, skip trial logic
-    if (tenant.admin_tier_override && (tenant.subscription_tier === 'pro' || tenant.subscription_tier === 'business')) {
+    // Business tier includes CRM — always active, skip trial logic
+    if (tenant.subscription_tier === 'business') {
+      const hasActiveSub = tenant.admin_tier_override ||
+        ['active', 'past_due', 'trialing'].includes(tenant.subscription_status ?? '');
+      if (hasActiveSub) {
+        return NextResponse.json({ active: true, reason: 'subscribed', daysLeft: null, trialExpired: false });
+      }
+    }
+
+    // Admin override with Pro tier — CRM always active, skip trial logic
+    if (tenant.admin_tier_override && tenant.subscription_tier === 'pro') {
       return NextResponse.json({ active: true, reason: 'subscribed', daysLeft: null, trialExpired: false });
     }
 

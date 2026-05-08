@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui';
 import { getTagColor } from '@/lib/tag-colors';
+import { getCrmStatus } from '@/lib/crm-status';
 import { downloadWaiverPDF, generateWaiverPDF } from '@/lib/generate-waiver-pdf';
 import { getThemeById } from '@/lib/themes';
 import type { Client, ClientTag, ClientPhoneNumber, Waiver, Sale, SaleItem } from '@/types';
@@ -524,15 +525,15 @@ export default function ClientProfile({ clientId, tenantId, onClose, onEdit, onT
                 { label: 'Tag', icon: TagIcon, onClick: () => setShowTagDropdown(!showTagDropdown) },
                 {
                   label: 'Workflow',
-                  icon: tenant?.crm_enabled ? ZapIconAction : LockIcon,
+                  icon: getCrmStatus(tenant).active ? ZapIconAction : LockIcon,
                   onClick: () => {
-                    if (tenant?.crm_enabled) {
+                    if (getCrmStatus(tenant).active) {
                       openWorkflowModal();
                     } else {
-                      toast('Available with CRM add-on', { description: 'Contact Sunstone to enable CRM features.' });
+                      toast('Available with CRM add-on', { description: 'Upgrade to Business or add CRM to your plan.' });
                     }
                   },
-                  disabled: !tenant?.crm_enabled,
+                  disabled: !getCrmStatus(tenant).active,
                 },
                 { label: 'Waiver', icon: FileTextIcon, onClick: () => setShowWaiverModal(true) },
               ].map(({ label, icon: Icon, onClick, disabled }: any) => (
