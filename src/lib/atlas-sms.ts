@@ -20,26 +20,39 @@ const ATLAS_MODEL = 'claude-sonnet-4-20250514';
 // ============================================================================
 
 export async function handleAtlasInbound(phone: string, messageBody: string) {
-  const supabase = await createServiceRoleClient();
+  console.log('[Atlas] handleAtlasInbound START', { phone, bodyLen: messageBody.length });
+  let supabase: any;
+  try {
+    supabase = await createServiceRoleClient();
+  } catch (err: any) {
+    console.error('[Atlas] STEP createServiceRoleClient FAILED', err.message, err.stack);
+    throw err;
+  }
   const normalizedPhone = normalizePhone(phone);
   const last10 = normalizePhoneDigits(phone);
 
   // ------------------------------------------------------------------
   // 1. Look up tenant by phone number
   // ------------------------------------------------------------------
+  console.log('[Atlas] STEP 1: Phone lookup', { normalizedPhone, last10 });
   let tenant: any = null;
   let userId: string | null = null;
 
   // Check tenants.phone
-  const { data: tenantByPhone } = await supabase
+  const { data: tenantByPhone, error: tenantPhoneErr } = await supabase
     .from('tenants')
     .select('id, owner_id, name, subscription_tier, subscription_status, trial_ends_at, subscription_period_end, crm_enabled, phone_verified, admin_tier_override, created_at, phone')
     .ilike('phone', `%${last10.slice(-10)}%`)
     .limit(5);
 
+  if (tenantPhoneErr) {
+    console.error('[Atlas] STEP 1a: tenants.phone query error', tenantPhoneErr.message, tenantPhoneErr);
+  }
+  console.log('[Atlas] STEP 1a: tenants.phone results', { count: tenantByPhone?.length || 0 });
+
   if (tenantByPhone && tenantByPhone.length > 0) {
     // Find exact match by normalized digits
-    tenant = tenantByPhone.find(t => {
+    tenant = tenantByPhone.find((t: any) => {
       if (!t.phone) return false;
       return normalizePhoneDigits(t.phone) === last10;
     }) || tenantByPhone[0];
@@ -50,7 +63,7 @@ export async function handleAtlasInbound(phone: string, messageBody: string) {
   if (!tenant) {
     const { data: users } = await supabase.auth.admin.listUsers({ perPage: 1000 });
     if (users?.users) {
-      const matchedUser = users.users.find(u => {
+      const matchedUser = users.users.find((u: any) => {
         const userPhone = u.phone || u.user_metadata?.phone || '';
         return userPhone && normalizePhoneDigits(userPhone) === last10;
       });
@@ -88,6 +101,7 @@ export async function handleAtlasInbound(phone: string, messageBody: string) {
   }
 
   // No account found — send generic response
+  console.log('[Atlas] STEP 1 result', { tenantFound: !!tenant, tenantId: tenant?.id || null, userId });
   if (!tenant) {
     const noAccountMsg = "Hi! I'm Atlas, the Sunstone Studio account assistant. I couldn't find an account linked to this number. If you have a Sunstone Studio account, please text from the phone number you used to sign up, or log in at sunstonepj.app for help.";
     await sendAtlasSMS(normalizedPhone, noAccountMsg);
@@ -98,6 +112,7 @@ export async function handleAtlasInbound(phone: string, messageBody: string) {
   // ------------------------------------------------------------------
   // 2. Gather account context
   // ------------------------------------------------------------------
+  console.log('[Atlas] STEP 2: Gathering account context for tenant', tenant.id);
   const effectiveTier = getSubscriptionTier(tenant);
   const trialActive = isTrialActive(tenant);
   const trialDays = getTrialDaysRemaining(tenant);
@@ -130,6 +145,7 @@ export async function handleAtlasInbound(phone: string, messageBody: string) {
   // ------------------------------------------------------------------
   // 3. Get conversation history
   // ------------------------------------------------------------------
+  console.log('[Atlas] STEP 3: Fetching conversation history');
   const { data: history } = await supabase
     .from('atlas_sms_messages')
     .select('direction, message, created_at')
@@ -193,15 +209,26 @@ RULES:
     { role: 'user', content: messageBody },
   ];
 
-  const response = await anthropic.messages.create({
-    model: ATLAS_MODEL,
-    max_tokens: 300,
-    system: systemPrompt,
-    messages,
-  });
+  console.log('[Atlas] STEP 4: Calling Anthropic', { model: ATLAS_MODEL, msgCount: messages.length });
+  let response: any;
+  try {
+    response = await anthropic.messages.create({
+      model: ATLAS_MODEL,
+      max_tokens: 300,
+      system: systemPrompt,
+      messages,
+    });
+    console.log('[Atlas] STEP 4: Anthropic response received', { stopReason: response.stop_reason, contentLen: response.content?.length });
+  } catch (err: any) {
+    console.error('[Atlas] STEP 4: Anthropic API call FAILED', err.message, err.stack);
+    throw err;
+  }
 
   const reply = response.content[0]?.type === 'text' ? response.content[0].text.trim() : '';
-  if (!reply) return;
+  if (!reply) {
+    console.warn('[Atlas] STEP 4: Empty reply from Anthropic — aborting');
+    return;
+  }
 
   // ------------------------------------------------------------------
   // 5. Check for escalation
@@ -211,12 +238,26 @@ RULES:
   // ------------------------------------------------------------------
   // 6. Store messages
   // ------------------------------------------------------------------
-  await storeMessages(supabase, tenant.id, userId, normalizedPhone, messageBody, reply, escalated);
+  console.log('[Atlas] STEP 6: Storing messages');
+  try {
+    await storeMessages(supabase, tenant.id, userId, normalizedPhone, messageBody, reply, escalated);
+    console.log('[Atlas] STEP 6: Messages stored successfully');
+  } catch (err: any) {
+    console.error('[Atlas] STEP 6: storeMessages FAILED', err.message, err.stack);
+    throw err;
+  }
 
   // ------------------------------------------------------------------
   // 7. Send the response
   // ------------------------------------------------------------------
-  await sendAtlasSMS(normalizedPhone, reply);
+  console.log('[Atlas] STEP 7: Sending SMS reply', { to: normalizedPhone, replyLen: reply.length });
+  try {
+    await sendAtlasSMS(normalizedPhone, reply);
+    console.log('[Atlas] STEP 7: SMS sent successfully');
+  } catch (err: any) {
+    console.error('[Atlas] STEP 7: sendAtlasSMS FAILED', err.message, err.stack);
+    throw err;
+  }
 
   // ------------------------------------------------------------------
   // 8. Escalation notification
@@ -269,7 +310,12 @@ async function sendAtlasSMS(to: string, body: string) {
     messageParams.from = process.env.TWILIO_PHONE_NUMBER;
   }
 
-  await client.messages.create(messageParams);
+  try {
+    await client.messages.create(messageParams);
+  } catch (err: any) {
+    console.error('[Atlas] sendAtlasSMS Twilio create FAILED', { to, from: messageParams.from, err: err.message, stack: err.stack });
+    throw err;
+  }
 }
 
 async function storeMessages(
