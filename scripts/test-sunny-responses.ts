@@ -452,10 +452,10 @@ const TEST_CASES: ResponseTestCase[] = [
   {
     id: 'pm-003',
     category: 'Payment Model',
-    question: 'should I set up Square for payments in the app',
-    mustContain: ['Stripe'],
-    mustNotContain: ['set up Square', 'recommend Square'],
-    notes: 'Never recommend Square inside the app.',
+    question: 'what payment options does the app support',
+    mustContain: ['Stripe', 'Square'],
+    mustNotContain: ['platform fee'],
+    notes: 'App supports Stripe, Square, and Venmo. No platform fees.',
   },
   {
     id: 'pm-004',

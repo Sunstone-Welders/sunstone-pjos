@@ -7,7 +7,7 @@
 // Compiled from 45+ official Sunstone documents, training materials, and
 // founder interviews. This is the single source of truth for Sunny's responses.
 //
-// Last updated: 2026-03-14
+// Last updated: 2026-05-08
 // =============================================================================
 
 // =============================================================================
@@ -932,15 +932,15 @@ export const BUSINESS_STRATEGY_KNOWLEDGE = {
   // Payment Processing
   // ---------------------------------------------------------------------------
   paymentProcessing: {
-    overview: 'Sunstone Studio has built-in Stripe payments — no card reader or extra hardware needed. Customers pay by scanning a QR code or tapping a text link that opens Stripe Checkout on their phone.',
+    overview: 'Sunstone Studio has built-in payments via Stripe or Square — no card reader or extra hardware needed. Customers pay by scanning a QR code or tapping a text link on their phone. Venmo deep links are also available.',
     howItWorks: [
       '1. You ring up the sale in the POS and tap "Charge Customer."',
       '2. A QR code appears on your screen. The customer scans it with their phone camera.',
-      '3. They pay on Stripe Checkout (Apple Pay, Google Pay, or card) and you see the confirmation instantly.',
+      '3. They pay on Stripe or Square Checkout (Apple Pay, Google Pay, or card) and you see the confirmation instantly.',
       '4. Alternatively, you can send a payment link via text message if the customer is remote or prefers that.',
     ],
     processingFees: {
-      model: 'Sunstone Studio charges no platform fees on any plan. Your customers see a clean checkout with no extra fees — they pay exactly what you quote. Connect your Stripe or Square account and payments go directly to you.',
+      model: 'Sunstone Studio charges NO platform fees on ANY plan. Zero. We make money from subscriptions, not your sales. Your customers see a clean checkout with no extra fees — they pay exactly what you quote. Connect your Stripe or Square account and payments go directly to you.',
       rates: {
         starter: 'No platform fee',
         pro: 'No platform fee',
@@ -948,14 +948,19 @@ export const BUSINESS_STRATEGY_KNOWLEDGE = {
       },
       example: 'If a bracelet costs $50, the customer pays $50 and you receive the full amount minus standard Stripe/Square processing fees.',
     },
-    noCardReader: 'You do NOT need a Square reader, card terminal, or any external hardware. Everything runs through the customer\'s phone via Stripe Checkout.',
-    otherPaymentMethods: ['Cash', 'Venmo', 'External card (your own Square/Clover reader outside the app)'],
+    paymentOptions: {
+      stripe: 'Primary option. Connect your Stripe account in Settings → Payments. If you don\'t have one, the app walks you through creating one in about 5 minutes. Payments go directly to your Stripe account.',
+      square: 'Alternative option. Connect your Square account via OAuth in Settings → Payments. Works identically to Stripe for POS — same sale data, inventory deduction, reporting. You can have both Stripe and Square connected and choose a default processor.',
+      venmo: 'Enter your Venmo username in Settings → Payments. The POS generates a pre-filled Venmo payment link sent to the customer via SMS. The customer taps the link, Venmo opens with the amount and recipient ready, they pay, and you confirm receipt in the app. No Venmo business account needed.',
+      cash: 'Record cash payments in the POS. If you have a cash drawer open, the amount is automatically logged.',
+      externalCard: 'Use your own card reader (Square reader, Clover, etc.) outside the app and record the payment in the POS.',
+    },
+    noCardReader: 'You do NOT need a card reader, terminal, or any external hardware. Everything runs through the customer\'s phone. Connect your Stripe or Square account and you\'re ready to go.',
     tipping: {
       stance:
         'Enable tipping in your POS. PJ qualifies as a beauty service — customers who tip their hair stylist or nail tech will likely tip you too.',
-      note: 'Tipping culture is regional. Sunstone Studio has tipping enabled by default. Tips are collected through Stripe Checkout.',
+      note: 'Tipping culture is regional. Sunstone Studio has tipping enabled by default. Tips are collected through Stripe or Square Checkout.',
     },
-    stripeConnect: 'To accept payments, connect your Stripe account in Settings → Payments. If you don\'t have a Stripe account, the app walks you through creating one — it takes about 5 minutes.',
   },
 
   // ---------------------------------------------------------------------------
@@ -1505,7 +1510,7 @@ export const MARKETING_KNOWLEDGE = {
     ],
     paymentAndPOS: [
       'Cash and cash box/money bag', 'Phone/tablet/laptop with chargers',
-      'Credit card reader', 'Printer', 'Portable WiFi stick',
+      'Credit card reader (optional — Sunstone Studio uses QR/text payments, no reader needed)', 'Printer', 'Portable WiFi stick',
     ],
     extras: [
       'Pens, pencils, markers', 'Extra paper/notebook', 'Stapler',
@@ -1893,6 +1898,8 @@ export const PJOS_PLATFORM_GUIDE = {
     ],
     qrCode: 'Every event gets a QR code. Click the QR icon on the event card to display it. You can go full-screen to display it at your booth — customers scan it to fill out your waiver and join your queue.',
     editingEvents: 'Click the Edit button on any event card to update the name, time, location, booth fee, or product availability.',
+    duplicatingEvents: 'Duplicate any event to create a new one with the same settings but a different date. Click the duplicate icon on the event card, pick a new date and time, and you have a ready-to-go copy. Great for recurring weekly markets.',
+    recurringEvents: 'Set up recurring events that repeat weekly, bi-weekly, or monthly. When creating or duplicating an event, choose a recurrence pattern and how many occurrences (up to 52 at once). All instances are created with the same name, location, booth fee, and product selection. Each occurrence is its own event with its own P&L tracking.',
     viewingPL: 'For past events, click "View P&L" to see a full profit-and-loss breakdown including revenue, costs, and your actual profit.',
   },
 
@@ -1918,7 +1925,7 @@ export const PJOS_PLATFORM_GUIDE = {
       tips: 'Use per-item discounts for targeted promotions on specific products. Use cart-level discounts for broader offers across the entire order.',
     },
     tips: 'During checkout, your customer can add a tip. You will see preset amounts (like $3, $5, $10, $15, $20) or they can enter a custom amount.',
-    paymentMethods: 'Choose how they are paying: Card, Cash, Venmo, or Other. For card payments, you will need your payment processor (Square or Stripe) connected in Settings.',
+    paymentMethods: 'Choose how they are paying: Stripe, Square, Venmo, Cash, or External Card. For Stripe or Square payments, connect your account in Settings → Payments. For Venmo, enter your Venmo username in Settings.',
     completingASale: [
       '1. Review the cart — items, discounts, tax, and tip.',
       '2. Select the payment method.',
@@ -2067,17 +2074,17 @@ export const PJOS_PLATFORM_GUIDE = {
   // 9.9 Payments & Checkout
   // ---------------------------------------------------------------------------
   paymentsAndCheckout: {
-    overview: 'Sunstone Studio has integrated Stripe payments built right into the POS. Customers pay by scanning a QR code or tapping a text link — no card reader needed.',
+    overview: 'Sunstone Studio has integrated payments built right into the POS via Stripe or Square. Customers pay by scanning a QR code or tapping a text link — no card reader needed. Venmo deep links are also available.',
     howCustomersPay: [
       '1. You ring up the sale in the POS (add items to cart, apply discounts/tips).',
-      '2. Tap "Charge Customer" to generate a Stripe Checkout session.',
+      '2. Tap "Charge Customer" to generate a checkout session via your connected Stripe or Square account.',
       '3. A QR code appears on your screen. The customer scans it with their phone camera.',
-      '4. They complete payment on Stripe Checkout — Apple Pay, Google Pay, or credit/debit card.',
+      '4. They complete payment via Apple Pay, Google Pay, or credit/debit card.',
       '5. You see the confirmation instantly in the POS and the sale is recorded.',
     ],
-    textToPayOption: 'If the customer is remote or prefers a text, tap "Send via Text" to send a payment link to their phone number. They tap the link and pay through the same Stripe Checkout experience.',
+    textToPayOption: 'If the customer is remote or prefers a text, tap "Send via Text" to send a payment link to their phone number. They tap the link and pay through checkout.',
     processingFees: {
-      model: 'Sunstone Studio charges no platform fees on any plan. Payments go directly to your connected Stripe or Square account.',
+      model: 'Sunstone Studio charges NO platform fees on ANY plan. Zero. We make money from subscriptions, not your sales. Payments go directly to your connected Stripe or Square account.',
       rates: {
         starter: 'No platform fee',
         pro: 'No platform fee',
@@ -2085,21 +2092,22 @@ export const PJOS_PLATFORM_GUIDE = {
       },
       example: 'A $50 bracelet: customer pays $50 and you receive the full amount minus standard Stripe/Square processing fees.',
     },
-    externalPayments: {
-      overview: 'Not every customer wants to pay through the app. You can record external payments for customers who pay with cash, Venmo, or their own card reader.',
-      methods: ['Cash — record the amount received', 'Venmo — customer sends you payment via Venmo', 'External card — use your own Square reader, Clover, or any card terminal outside the app'],
-      howTo: 'In the POS payment screen, tap "Record External Payment" instead of "Charge Customer." Select the payment method and confirm.',
-    },
-    stripeConnect: {
-      setup: 'Go to Settings → Payments and click "Connect Stripe." If you already have a Stripe account, sign in. If not, creating one takes about 5 minutes.',
-      whatItDoes: 'Once connected, all payments flow through your Stripe account. You can see deposits, refunds, and payout history in your Stripe Dashboard.',
+    paymentProcessors: {
+      stripe: 'Go to Settings → Payments and click "Connect Stripe." If you already have a Stripe account, sign in. If not, creating one takes about 5 minutes. Once connected, payments flow directly to your Stripe account.',
+      square: 'Go to Settings → Payments and click "Connect Square." Sign in to your Square account via OAuth. Works identically to Stripe — same sale data, inventory deduction, reporting. You can have both Stripe and Square connected and choose a default.',
+      venmo: 'Enter your Venmo username in Settings → Payments. The POS sends a pre-filled Venmo payment link to the customer via SMS. They tap the link, Venmo opens with amount and recipient ready, they pay, and you confirm receipt. No Venmo business account needed.',
       noHardware: 'You do NOT need a card reader, terminal, or any external hardware. The customer\'s phone is the payment terminal.',
+    },
+    externalPayments: {
+      overview: 'You can also record external payments for customers who pay with cash or their own card reader.',
+      methods: ['Cash — record the amount received', 'External card — use your own card reader outside the app and record the payment'],
+      howTo: 'In the POS payment screen, tap "Record External Payment" instead of "Charge Customer." Select the payment method and confirm.',
     },
     pendingPayments: 'If a customer starts a payment but hasn\'t completed it, you\'ll see it in the "Pending Payments" section. You can resend the link or cancel the session.',
     tips: [
       'Display the QR code on your iPad facing the customer — they scan and pay in seconds.',
       'For busy events, text-to-pay lets you keep the line moving while customers pay on their own time.',
-      'Cash and Venmo sales are recorded in the POS for accurate reporting even though they don\'t go through Stripe.',
+      'Cash and Venmo sales are recorded in the POS for accurate reporting even though they don\'t go through Stripe/Square checkout.',
     ],
   },
 
@@ -2134,7 +2142,7 @@ export const PJOS_PLATFORM_GUIDE = {
       warrantyProtection: 'Enable and configure warranty protection — set default per-item and per-invoice amounts, duration, tax settings, and coverage terms.',
       gearIcon: 'The gear icon on the Inventory page is a shortcut that takes you directly to Settings → Default Pricing.',
     },
-    payments: 'Connect your Stripe account to accept payments via QR code and text link. No card reader needed — customers pay on their phone through Stripe Checkout.',
+    payments: 'Connect your Stripe or Square account to accept payments via QR code and text link. No card reader needed. You can also add your Venmo username for Venmo deep link payments via SMS. You can have both Stripe and Square connected and choose a default processor.',
     taxProfiles: 'Add tax profiles with a name and rate (like "State Sales Tax — 6.5%"). Assign them to events so tax calculates automatically.',
     waiverText: 'Customize the waiver your customers see and sign. Write it to cover your local requirements.',
     subscriptionTab: 'See your current plan, trial status, and plan features. Upgrade or manage your subscription here.',
@@ -2210,7 +2218,7 @@ export const PJOS_PLATFORM_GUIDE = {
     permissions: 'Each role has specific permissions. Admins see everything, managers see most things, and staff see what they need to serve customers.',
     tierLimits: {
       starter: 'Up to 2 team members.',
-      pro: 'Up to 3 team members.',
+      pro: 'Up to 5 team members.',
       business: 'Unlimited team members.',
     },
     removing: 'To remove a team member, go to Settings → Team and click the delete icon next to their name.',
@@ -2240,7 +2248,7 @@ export const PJOS_PLATFORM_GUIDE = {
       'Starter kit setup — "Add my Dream kit to inventory" with automatic chain details and pricing',
     ],
     questionLimits: {
-      starter: '5 questions per month on the Starter plan.',
+      starter: '10 questions per month on the Starter plan.',
       proAndBusiness: 'Unlimited questions on Pro and Business plans.',
     },
     tips: [
@@ -2287,11 +2295,11 @@ export const PJOS_PLATFORM_GUIDE = {
       symptom: 'You cannot charge customers through the app, or the "Charge Customer" button is disabled.',
       fix: [
         '1. Go to Settings → Payments section.',
-        '2. Click "Connect Stripe" and follow the onboarding flow.',
-        '3. If you already have a Stripe account, sign in. If not, creating one takes about 5 minutes.',
+        '2. Click "Connect Stripe" or "Connect Square" and follow the onboarding flow.',
+        '3. If you already have a Stripe or Square account, sign in. If not, creating one takes about 5 minutes.',
         '4. Once connected, go back to the POS and try again.',
       ],
-      tip: 'While you wait for Stripe, you can still use Cash, Venmo, or any external card reader by choosing "Record External Payment" in the POS.',
+      tip: 'While you wait for Stripe or Square, you can still use Cash, Venmo, or any external card reader by choosing "Record External Payment" in the POS.',
     },
     inventoryNotDeducting: {
       symptom: 'Your chain footage or jump ring count does not go down after a sale.',
@@ -2314,7 +2322,7 @@ export const PJOS_PLATFORM_GUIDE = {
     cantInviteTeamMembers: {
       symptom: 'The "Invite Team Member" button is not working or you cannot add more people.',
       fix: [
-        '1. Check your subscription tier — Starter allows up to 2 members, Pro allows 3, Business is unlimited.',
+        '1. Check your subscription tier — Starter allows up to 2 members, Pro allows 5, Business is unlimited.',
         '2. If you have hit your limit, upgrade your plan in Settings → Subscription.',
         '3. Make sure you are entering a valid email address.',
         '4. The invited person needs to check their email (including spam folder) for the invitation.',
@@ -2461,11 +2469,16 @@ export const PJOS_PLATFORM_GUIDE = {
         '2. Under Pricing Mode, select "By Tier."',
         '3. Click "+ Add Tier" to create your first tier.',
         '4. Name each tier (e.g., "Sterling Silver," "Gold Filled," "14K Gold").',
-        '5. Set the product prices for each tier (bracelet, anklet, ring, necklace, hand chain).',
+        '5. Set the product prices for each tier — the 5 built-in product types (bracelet, anklet, ring, necklace, hand chain) plus any custom categories you\'ve added.',
         '6. Reorder tiers with the up/down arrows — this controls display order.',
         '7. Edit or delete tiers anytime.',
       ],
       tip: 'Most artists create 2-3 tiers based on metal type. Keep it simple — customers understand "silver tier" vs "gold tier" intuitively.',
+    },
+    customProductCategories: {
+      overview: 'Beyond the 5 built-in product types (bracelet, anklet, ring, necklace, hand chain), you can add custom product categories for non-PJ items — like body butter, accessories, ear cuffs, candles, or anything else you sell.',
+      howTo: 'Go to Settings → Default Pricing → Product Types and click "+ Add Product Type." Name it, set the jump ring count (0 for non-jewelry items), and optionally set a default measurement. Custom categories get per-tier pricing just like built-in types.',
+      inPOS: 'Custom product categories appear in the POS product selection alongside built-in types, so you can ring up anything you sell.',
     },
     assigningChains: {
       steps: [

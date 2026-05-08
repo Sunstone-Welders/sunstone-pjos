@@ -432,10 +432,10 @@ PLATFORM ARCHITECTURE & OPERATIONS:
 Sunstone PJOS is a multi-tenant SaaS platform for permanent jewelry artists. Built with Next.js 15, Supabase, and Tailwind CSS. Deployed at sunstonepj.app.
 
 Core Feature Set:
-- Events: Artists create events (pop-ups, private parties, bridal), each with its own POS, queue, QR code, and P&L tracking
-- Event Mode POS: Step-through product selection (product type → material → chain → measure), cart with discounts/tips, integrated Stripe payments (QR code + text-to-pay), plus cash/Venmo/external card
+- Events: Artists create events (pop-ups, private parties, bridal), each with its own POS, queue, QR code, and P&L tracking. Event duplication and recurring events (weekly/bi-weekly/monthly, up to 52 at once) are supported.
+- Event Mode POS: Step-through product selection (product type → material → chain → measure), cart with discounts/tips, integrated Stripe or Square payments (QR code + text-to-pay), Venmo deep links, plus cash/external card
 - Store Mode POS: Same POS for everyday walk-in sales without an event context
-- Inventory: Chain products (buy by inch, sell by piece), jump rings (auto-deducted on sale), charms, connectors — with reorder thresholds and low-stock alerts
+- Inventory: Chain products (buy by inch, sell by piece), jump rings (auto-deducted on sale), charms, connectors — with reorder thresholds and low-stock alerts. Custom product categories for non-PJ items (body butter, accessories, etc.) with per-tier pricing.
 - Queue: QR-code-based waiver check-in, SMS notifications, real-time status tracking (Waiting → Notified → Served/No Show)
 - Digital Waivers: Built-in waiver with signature capture, PDF generation, shareable link
 - Clients/CRM: Customer database built from waiver signatures, waiver history per client
@@ -453,10 +453,11 @@ Subscription Tiers (no platform fees on any plan):
 - CRM: Enabled per-tenant by admin toggle (crm_enabled flag), CRM subscription ($69/mo Stripe), or Business tier (automatic). Business tier tenants always have CRM active regardless of crm_enabled flag.
 
 Payment Model:
-- Integrated Stripe Payment Links — customers pay via QR code scan or text-to-pay link through Stripe Checkout
+- Integrated Stripe or Square payments — customers pay via QR code scan or text-to-pay link through checkout. Artists connect Stripe, Square, or both in Settings.
+- Venmo deep links — artists enter their Venmo username, POS sends a pre-filled Venmo payment link to the customer via SMS.
 - No platform fees — payments go directly to the artist's Stripe or Square account. Sunstone makes money from subscriptions only.
 - Historical data: Old sales may have platform_fee_collected values from when fees existed. New sales all have 0.
-- Alternative payment methods: Cash, Venmo, external card reader (recorded manually, not through Stripe)
+- Alternative payment methods: Cash, external card reader (recorded manually)
 - No card reader or hardware needed — the customer's phone is the payment terminal
 
 Revenue Model:
@@ -478,7 +479,7 @@ COMMON TENANT ISSUES & RESOLUTIONS:
 - "Payment processor not connected" → They need to connect Stripe in Settings → Payments. No API keys needed — it's a one-click OAuth connect flow.
 - "Inventory not deducting" → Product types may not be configured, or chain pricing mode is not set up correctly
 - "SMS not sending" → Customer may not have provided a phone number on the waiver, or carrier delay
-- "Can't invite team members" → Hit tier limit (Starter=2, Pro=3, Business=unlimited) — upgrade needed
+- "Can't invite team members" → Hit tier limit (Starter=2, Pro=5, Business=unlimited) — upgrade needed
 - "Reports not showing" → Starter tier only gets basic metrics, need Pro or Business for full reports
 - "QR code not working" → Usually a display size issue or customer internet connectivity
 - "Customer didn't complete payment" → Check Pending Payments in POS — can resend the Stripe payment link or cancel the session
