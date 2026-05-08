@@ -302,16 +302,21 @@ function OnboardingFlow() {
   }, [isLoading, tenant, router]);
 
   // Gate: redirect to phone verification if not verified
+  // Only enforce for recently created tenants (< 10 min) to avoid loops for legacy signups
   useEffect(() => {
     if (!isLoading && tenant && !(tenant as any).phone_verified) {
-      // Get the current user ID for the verify page
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        if (user) {
-          const lastFour = (tenant.phone || '').replace(/\D/g, '').slice(-4);
-          const masked = lastFour ? encodeURIComponent(`(•••) •••-${lastFour}`) : '';
-          router.replace(`/auth/verify?uid=${user.id}${masked ? `&phone=${masked}` : ''}`);
-        }
-      });
+      const createdAt = (tenant as any).created_at;
+      const tenantAge = createdAt ? Date.now() - new Date(createdAt).getTime() : Infinity;
+      const TEN_MINUTES = 10 * 60 * 1000;
+      if (tenantAge < TEN_MINUTES) {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+          if (user) {
+            const lastFour = (tenant.phone || '').replace(/\D/g, '').slice(-4);
+            const masked = lastFour ? encodeURIComponent(`(•••) •••-${lastFour}`) : '';
+            router.replace(`/auth/verify?uid=${user.id}${masked ? `&phone=${masked}` : ''}`);
+          }
+        });
+      }
     }
   }, [isLoading, tenant, router, supabase]);
 
