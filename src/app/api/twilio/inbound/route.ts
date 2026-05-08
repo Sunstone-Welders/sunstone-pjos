@@ -15,6 +15,8 @@ import { handleAtlasInbound } from '@/lib/atlas-sms';
 
 const TWIML_EMPTY = '<Response></Response>';
 
+export const maxDuration = 30;
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -48,11 +50,13 @@ export async function POST(request: NextRequest) {
     const atlasNumber = process.env.ATLAS_PHONE_NUMBER;
     console.log('[Inbound] Atlas routing check', { to, atlasPhone: atlasNumber, toNorm: normalizePhone(to), atlasNorm: atlasNumber ? normalizePhone(atlasNumber) : 'N/A', match: atlasNumber ? normalizePhone(to) === normalizePhone(atlasNumber) : false });
     if (atlasNumber && normalizePhone(to) === normalizePhone(atlasNumber)) {
-      console.log('[Inbound] Atlas routing matched — dispatching handleAtlasInbound', { from, bodyLen: body.trim().length });
-      // Fire-and-forget: Atlas handles its own response and storage
-      handleAtlasInbound(from, body.trim()).catch(err =>
-        console.error('[Inbound] Atlas handler error:', err.message, err.stack)
-      );
+      console.log('[Inbound] Atlas routing matched — awaiting handleAtlasInbound', { from, bodyLen: body.trim().length });
+      try {
+        await handleAtlasInbound(from, body.trim());
+        console.log('[Inbound] Atlas handler completed successfully');
+      } catch (err: any) {
+        console.error('[Inbound] Atlas handler error:', err.message, err.stack);
+      }
       return new NextResponse(TWIML_EMPTY, {
         status: 200,
         headers: { 'Content-Type': 'text/xml' },
