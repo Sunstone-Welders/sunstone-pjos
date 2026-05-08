@@ -145,11 +145,12 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Redirect authenticated users away from auth pages
-  // EXCEPT /auth/update-password (password reset flow needs this)
-  const isPasswordResetPage =
-    request.nextUrl.pathname === '/auth/update-password';
+  // EXCEPT /auth/update-password (password reset flow) and /auth/verify (SMS verification)
+  const isAuthExemptPage =
+    request.nextUrl.pathname === '/auth/update-password' ||
+    request.nextUrl.pathname === '/auth/verify';
 
-  if (user && request.nextUrl.pathname.startsWith('/auth') && !isPasswordResetPage) {
+  if (user && request.nextUrl.pathname.startsWith('/auth') && !isAuthExemptPage) {
     const url = request.nextUrl.clone();
     // Send to root page which handles admin vs dashboard redirect
     url.pathname = '/';

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -42,6 +42,22 @@ function SignupForm() {
   const searchParams = useSearchParams();
   const supabase = createClient();
 
+  // Guard: while signup is in flight, suppress any auth-triggered redirects.
+  // signUp() creates a session immediately (email confirmation off), which could
+  // trigger middleware or listener redirects before the API response arrives.
+  const isSubmittingRef = useRef(false);
+
+  // Suppress auth state redirects during signup submission
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' && isSubmittingRef.current) {
+        // Do nothing — the handleSignup response handler controls navigation
+        return;
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [supabase]);
+
   // Pre-fill referral code from URL param or cookie
   useEffect(() => {
     const ref = searchParams.get('ref');
@@ -75,6 +91,7 @@ function SignupForm() {
     e.preventDefault();
     setLoading(true);
     setError('');
+    isSubmittingRef.current = true;
 
     // Client-side phone validation
     if (phone.length !== 10) {
@@ -140,6 +157,7 @@ function SignupForm() {
       setError(err?.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
