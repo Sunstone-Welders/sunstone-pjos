@@ -109,7 +109,7 @@ export default function UpgradePrompt({ feature, variant, description, trialExpi
           </Button>
 
           <p className="text-xs text-[var(--text-tertiary)] mt-3">
-            Available on Pro ($169/mo) and Business ($279/mo)
+            Available on Pro and Business plans
           </p>
         </div>
       </CardContent>

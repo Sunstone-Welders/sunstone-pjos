@@ -1023,7 +1023,7 @@ function TrialExpiredOverlay() {
           >
             <p className="font-semibold text-[var(--text-primary)]">Starter</p>
             <p className="text-lg font-bold text-[var(--text-primary)]">$99<span className="text-sm font-normal text-[var(--text-tertiary)]">/mo</span></p>
-            <p className="text-xs text-[var(--text-tertiary)] mt-1">Up to 2 team members, 3% fee</p>
+            <p className="text-xs text-[var(--text-tertiary)] mt-1">Up to 2 team members, basic reports</p>
           </button>
 
           {/* Pro — recommended */}
@@ -1037,7 +1037,7 @@ function TrialExpiredOverlay() {
             </span>
             <p className="font-semibold text-[var(--text-primary)]">Pro</p>
             <p className="text-lg font-bold text-[var(--text-primary)]">$169<span className="text-sm font-normal text-[var(--text-tertiary)]">/mo</span></p>
-            <p className="text-xs text-[var(--text-tertiary)] mt-1">Up to 3 team members, 1.5% fee</p>
+            <p className="text-xs text-[var(--text-tertiary)] mt-1">Up to 5 team members, full reports</p>
           </button>
 
           {/* Business */}
@@ -1048,7 +1048,7 @@ function TrialExpiredOverlay() {
           >
             <p className="font-semibold text-[var(--text-primary)]">Business</p>
             <p className="text-lg font-bold text-[var(--text-primary)]">$279<span className="text-sm font-normal text-[var(--text-tertiary)]">/mo</span></p>
-            <p className="text-xs text-[var(--text-tertiary)] mt-1">Unlimited team, 0% fee</p>
+            <p className="text-xs text-[var(--text-tertiary)] mt-1">Unlimited team, advanced analytics</p>
           </button>
         </div>
 

@@ -461,9 +461,9 @@ const TEST_CASES: ResponseTestCase[] = [
     id: 'pm-004',
     category: 'Payment Model',
     question: 'what is the platform fee on starter plan',
-    mustContain: ['3%'],
+    mustContain: ['no platform fee'],
     mustNotContain: ['customer pays'],
-    notes: 'Starter = 3%, deducted from artist payout.',
+    notes: 'No platform fees on any plan.',
   },
 ];
 

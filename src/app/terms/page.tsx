@@ -157,8 +157,9 @@ export default function TermsOfServicePage() {
               </a>.
             </p>
             <p>
-              A platform fee is deducted from service provider payouts based on their subscription tier
-              (Starter: 3%, Pro: 1.5%, Business: 0%). Customers are not charged any additional processing fees.
+              No platform fee is deducted from service provider payouts. Sunstone Studio generates revenue through
+              subscription fees only. Standard card processing fees from the payment processor (Stripe or Square) apply.
+              Customers are not charged any additional processing fees.
             </p>
           </Section>
 

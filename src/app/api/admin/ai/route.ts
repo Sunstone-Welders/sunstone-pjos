@@ -444,25 +444,25 @@ Core Feature Set:
 - Sunny AI Mentor: Tenant-facing AI with keyword-matched knowledge base, question metering on Starter
 - Atlas AI: Platform admin intelligence (this is you)
 
-Subscription Tiers:
-- Starter ($99/month): 3% platform fee (deducted from artist's Stripe payouts), 5 Sunny questions/month, up to 2 team members, basic POS and inventory, integrated Stripe payments
-- Pro ($169/month): 1.5% platform fee (deducted from payouts), unlimited Sunny, full reports, AI insights, up to 3 team members
-- Business ($279/month): 0% platform fee (artist keeps 100%), everything in Pro, unlimited team members, priority support
+Subscription Tiers (no platform fees on any plan):
+- Starter ($99/month): No platform fee, 10 Sunny questions/month, up to 2 team members, full POS, inventory, clients, gift cards, basic reports, Stripe or Square payments
+- Pro ($169/month): No platform fee, unlimited Sunny, full reports & CSV export, AI business insights, Artist Storefront & Party Booking, Warranty Program, up to 5 team members
+- Business ($279/month): No platform fee, everything in Pro, unlimited team members, advanced analytics, Atlas SMS support, white-label receipts, multi-location support
 - Trial: 30-day Pro trial for new accounts, defaults to Starter after expiry
 - CRM Add-On: $69/mo add-on to any plan — dedicated business phone number, two-way SMS, automated aftercare, broadcasts, workflows, party booking, client intelligence. Included free during 30-day Pro trial.
 - CRM: Currently enabled per-tenant by admin toggle (crm_enabled flag on tenants table). Gives access to workflows, templates, broadcast messaging, dedicated phone number, two-way SMS, and automated follow-ups.
 
 Payment Model:
 - Integrated Stripe Payment Links — customers pay via QR code scan or text-to-pay link through Stripe Checkout
-- Platform fee is DEDUCTED from the artist's Stripe payout (artist-absorbed). Customers see a clean checkout with no extra fees.
-- Fee rates: Starter 3%, Pro 1.5%, Business 0%. Collected via Stripe Connect application_fee_amount, stored in platform_fee_collected column on sales
+- No platform fees — payments go directly to the artist's Stripe or Square account. Sunstone makes money from subscriptions only.
+- Historical data: Old sales may have platform_fee_collected values from when fees existed. New sales all have 0.
 - Alternative payment methods: Cash, Venmo, external card reader (recorded manually, not through Stripe)
 - No card reader or hardware needed — the customer's phone is the payment terminal
 
 Revenue Model:
-- Platform fees on each Stripe sale (3%/1.5%/0% by tier) — deducted from artist payouts via application_fee_amount
-- Monthly subscriptions (Starter $99, Pro $169, Business $279)
+- Monthly subscriptions (Starter $99, Pro $169, Business $279) — this is the primary revenue source
 - CRM add-on revenue ($69/mo per subscriber)
+- No platform fees on sales (removed May 2026). Historical sales may have platform_fee_collected values.
 
 TENANT HEALTH SIGNALS — How to interpret the data:
 - Active events in last 30 days = healthy, engaged tenant

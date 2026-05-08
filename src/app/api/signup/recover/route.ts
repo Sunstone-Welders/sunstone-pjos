@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
         subscription_tier: 'pro',
         subscription_status: 'trialing',
         trial_ends_at: trialEndsAt.toISOString(),
-        platform_fee_percent: 1.5,
+        platform_fee_percent: 0,
         crm_enabled: true,
         crm_activated_at: new Date().toISOString(),
         crm_trial_start: new Date().toISOString(),

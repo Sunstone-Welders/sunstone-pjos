@@ -33,7 +33,7 @@ import {
 import { applyTheme } from '@/lib/theme';
 import { THEMES, LIGHT_THEMES, DARK_THEMES, getThemeById, DEFAULT_THEME_ID, type ThemeDefinition } from '@/lib/themes';
 import type { TaxProfile, SubscriptionTier, PricingTier, TenantPricingMode } from '@/types';
-import { PLATFORM_FEE_RATES, SUBSCRIPTION_PRICES } from '@/types';
+import { SUBSCRIPTION_PRICES } from '@/types';
 import { getSubscriptionTier } from '@/lib/subscription';
 import { getCrmStatus } from '@/lib/crm-status';
 import SunnyTutorial from '@/components/SunnyTutorial';
@@ -47,7 +47,7 @@ import { canShowBillingUI } from '@/lib/billing-gate';
 
 const TEAM_MEMBER_LIMITS: Record<string, number> = {
   starter: 2,
-  pro: 3,
+  pro: 5,
   business: Infinity,
 };
 
@@ -63,18 +63,29 @@ const ALL_ROLE_OPTIONS = [
 ];
 
 const PLAN_FEATURES: Record<string, string[]> = {
+  starter: [
+    'Full POS — Event & Store Mode',
+    'Inventory, Clients, Gift Cards',
+    'Up to 2 team members',
+    'Sunny AI — 10 questions/mo',
+    'Basic reports',
+  ],
   pro: [
-    '1.5% platform fee (deducted from payouts)',
+    'Everything in Starter',
     'Unlimited Sunny AI questions',
-    'Business insights & analytics',
-    'Full P&L reports',
-    'Up to 3 team members',
+    'Full reports & CSV export',
+    'AI business insights',
+    'Artist Storefront & Party Booking',
+    'Warranty Program',
+    'Up to 5 team members',
   ],
   business: [
-    '0% platform fee',
     'Everything in Pro',
     'Unlimited team members',
-    'Priority support',
+    'Advanced analytics',
+    'Atlas SMS support',
+    'White-label receipts',
+    'Multi-location support',
   ],
 };
 
@@ -1017,7 +1028,6 @@ function SettingsPage() {
 
   // Derived state
   const tier = tenant.subscription_tier;
-  const feeRate = PLATFORM_FEE_RATES[tier];
   const squareConnected = !!(tenant as any).square_merchant_id;
   const stripeConnected = !!tenant.stripe_account_id;
   const showTeamSection = can('team:manage');
@@ -1449,7 +1459,7 @@ function SettingsPage() {
             {stripeConnected ? (
               <>
                 <p className="text-sm text-[var(--text-secondary)]">
-                  Stripe Connected — Accept payments via QR code and text link in the POS. Processing fee ({(feeRate * 100).toFixed(feeRate > 0 ? 1 : 0)}% based on your plan) is added to the customer&apos;s total.
+                  Stripe Connected — Accept payments via QR code and text link in the POS. No platform fees — payments go directly to you.
                 </p>
                 <Button variant="danger" size="sm" onClick={disconnectStripe} loading={disconnectingStripe}>
                   Disconnect Stripe
@@ -1467,29 +1477,16 @@ function SettingsPage() {
             )}
           </div>
 
-          {/* Platform Fee Info */}
+          {/* Payment Info */}
           <div className="border-t border-[var(--border-subtle)]" />
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-[var(--text-primary)]">Platform Fee</span>
-              <Badge variant="default" size="sm">{(feeRate * 100).toFixed(feeRate > 0 ? 1 : 0)}%</Badge>
+              <span className="text-sm font-medium text-[var(--text-primary)]">No Platform Fees</span>
+              <Badge variant="default" size="sm">0%</Badge>
             </div>
-            {feeRate > 0 ? (
-              <>
-                <p className="text-sm text-[var(--text-secondary)]">
-                  A {(feeRate * 100).toFixed(1)}% platform fee is deducted from your Stripe payouts. Standard card processing fees from Stripe also apply &mdash; just like any payment processor. Your customers see a clean checkout with no extra fees &mdash; they pay exactly what you quote.
-                </p>
-                <p className="text-xs text-[var(--text-tertiary)]">
-                  {tier === 'starter'
-                    ? 'Upgrade to Pro to reduce the fee to 1.5%, or Business to eliminate it entirely.'
-                    : 'Upgrade to Business to eliminate the platform fee.'}
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-[var(--text-secondary)]">
-                No platform fee &mdash; you keep 100% of every sale. This is a Business plan benefit.
-              </p>
-            )}
+            <p className="text-sm text-[var(--text-secondary)]">
+              Sunstone Studio never takes a cut of your sales. Connect your Stripe or Square account and payments go directly to you. Standard card processing fees from your payment processor still apply.
+            </p>
           </div>
         </div>
       </AccordionSection>
@@ -1632,7 +1629,7 @@ function SettingsPage() {
                   <div>
                     <h3 className="text-lg font-bold text-[var(--text-primary)]">Business</h3>
                     <div className="flex items-baseline gap-1 mt-1">
-                      <span className="text-3xl font-bold text-[var(--text-primary)]">$279</span>
+                      <span className="text-3xl font-bold text-[var(--text-primary)]">${SUBSCRIPTION_PRICES.business}</span>
                       <span className="text-sm text-[var(--text-tertiary)]">/mo</span>
                     </div>
                   </div>
@@ -1751,36 +1748,69 @@ function SettingsPage() {
                 </thead>
                 <tbody className="divide-y divide-[var(--border-subtle)]">
                   <tr>
-                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">
-                      Processing fee
-                      <span className="block text-xs text-[var(--text-tertiary)]">(deducted from payouts)</span>
-                    </td>
-                    <td className="py-2.5 px-3 text-center text-[var(--text-primary)]">3%</td>
-                    <td className="py-2.5 px-3 text-center text-[var(--text-primary)]">1.5%</td>
+                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Platform fees</td>
+                    <td className="py-2.5 px-3 text-center text-success-600 font-semibold">0%</td>
+                    <td className="py-2.5 px-3 text-center text-success-600 font-semibold">0%</td>
                     <td className="py-2.5 px-3 text-center text-success-600 font-semibold">0%</td>
                   </tr>
                   <tr>
-                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Integrated payments</td>
+                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Stripe or Square payments</td>
                     <td className="py-2.5 px-3 text-center text-success-600">✓</td>
                     <td className="py-2.5 px-3 text-center text-success-600">✓</td>
                     <td className="py-2.5 px-3 text-center text-success-600">✓</td>
                   </tr>
                   <tr>
                     <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Sunny AI</td>
-                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">5/mo</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">10/mo</td>
                     <td className="py-2.5 px-3 text-center text-[var(--text-primary)]">Unlimited</td>
                     <td className="py-2.5 px-3 text-center text-[var(--text-primary)]">Unlimited</td>
                   </tr>
                   <tr>
-                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Business insights</td>
+                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Team members</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-primary)]">2</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-primary)]">5</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-primary)]">Unlimited</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Reports &amp; CSV export</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">Basic</td>
+                    <td className="py-2.5 px-3 text-center text-success-600">Full</td>
+                    <td className="py-2.5 px-3 text-center text-success-600">Full</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">AI business insights</td>
                     <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">—</td>
                     <td className="py-2.5 px-3 text-center text-success-600">✓</td>
                     <td className="py-2.5 px-3 text-center text-success-600">✓</td>
                   </tr>
                   <tr>
-                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Full P&amp;L reports</td>
+                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Artist Storefront &amp; Party Booking</td>
                     <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">—</td>
                     <td className="py-2.5 px-3 text-center text-success-600">✓</td>
+                    <td className="py-2.5 px-3 text-center text-success-600">✓</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Warranty Program</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">—</td>
+                    <td className="py-2.5 px-3 text-center text-success-600">✓</td>
+                    <td className="py-2.5 px-3 text-center text-success-600">✓</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Advanced analytics</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">—</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">—</td>
+                    <td className="py-2.5 px-3 text-center text-success-600">✓</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">White-label receipts</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">—</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">—</td>
+                    <td className="py-2.5 px-3 text-center text-success-600">✓</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Multi-location support</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">—</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">—</td>
                     <td className="py-2.5 px-3 text-center text-success-600">✓</td>
                   </tr>
                   <tr>
@@ -1791,12 +1821,6 @@ function SettingsPage() {
                     <td className="py-2.5 px-3 text-center text-success-600">✓</td>
                     <td className="py-2.5 px-3 text-center text-success-600">✓</td>
                     <td className="py-2.5 px-3 text-center text-success-600">✓</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Team members</td>
-                    <td className="py-2.5 px-3 text-center text-[var(--text-primary)]">1</td>
-                    <td className="py-2.5 px-3 text-center text-[var(--text-primary)]">3</td>
-                    <td className="py-2.5 px-3 text-center text-[var(--text-primary)]">Unlimited</td>
                   </tr>
                   <tr>
                     <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Price</td>

@@ -5,7 +5,7 @@
 // The gift card itself is NOT created here — it's created by the client after
 // payment is confirmed, ensuring cards are only activated after payment.
 //
-// Platform fee applies to gift card sales the same as regular sales.
+// No platform fee — payments go directly to the artist.
 // ============================================================================
 
 export const runtime = 'nodejs';
@@ -95,9 +95,8 @@ export async function POST(request: NextRequest) {
       console.error('[GiftCard Checkout] Sale item insert failed:', itemError);
     }
 
-    // ── Calculate platform fee ──────────────────────────────────────────
-    const feeRate = PLATFORM_FEE_RATES[(tenant.subscription_tier as SubscriptionTier)] || 0.03;
-    const platformFeeCents = Math.round(amountCents * feeRate);
+    // ── Platform fee removed from all tiers (May 2026) ──────────────────
+    const platformFeeCents = 0;
 
     // ── Create Stripe Checkout Session ──────────────────────────────────
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sunstonepj.app';

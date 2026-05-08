@@ -342,7 +342,7 @@ export function generateMidSeed(tenantId: string): { data: SeedData; tenantOverr
       warranty_per_item_default: 0,
       warranty_per_invoice_default: 15,
       warranty_duration_days: 365,
-      platform_fee_percent: 1.5,
+      platform_fee_percent: 0,
       fee_handling: 'absorb',
     },
   };

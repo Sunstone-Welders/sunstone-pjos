@@ -30,62 +30,58 @@ const FONT = {
   body: "'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif",
 }
 
-/* ─── PRICING DATA (preserved exactly) ─── */
+/* ─── PRICING DATA ─── */
 const PRICING = [
   {
     name: 'Starter',
     price: '$99',
     period: '/mo',
-    fee: '3% platform fee',
-    tagline: 'Everything your team needs to launch',
+    tagline: 'Everything you need to launch',
     popular: false,
     features: [
-      'Up to 2 team members',
       'Full POS \u2014 Event & Store Mode',
-      'Integrated Stripe payments (QR + text link)',
-      'Smart Inventory management',
-      'Client database',
+      'Stripe or Square payments',
+      'Inventory, Clients, Gift Cards',
       'Digital waivers & QR check-in',
-      'Artist Storefront (public booking page)',
-      'Private party booking requests',
+      'Digital receipts (SMS + email)',
+      'Up to 2 team members',
+      'Sunny AI \u2014 10 questions/mo',
       'Basic reports',
-      'Sunny AI \u2014 5 questions/mo',
-      '30-day Pro trial with full CRM',
+      '30-day Pro trial included',
     ],
   },
   {
     name: 'Pro',
     price: '$169',
     period: '/mo',
-    fee: '1.5% platform fee',
-    tagline: 'For growing businesses',
+    tagline: 'Unlock powerful tools as you grow',
     popular: true,
     features: [
       'Everything in Starter, plus:',
       'Unlimited Sunny AI access',
-      'Advanced reports & insights',
-      'Up to 3 team members',
-      'Custom brand themes',
-      'Artist Storefront & party booking',
-      'Priority support',
-      '30-day Pro trial with full CRM',
+      'Full reports & CSV export',
+      'AI business insights',
+      'Artist Storefront & Party Booking',
+      'Warranty Program',
+      'Up to 5 team members',
+      '30-day Pro trial included',
     ],
   },
   {
     name: 'Business',
     price: '$279',
     period: '/mo',
-    fee: 'Zero platform fee',
     tagline: 'For serious operators',
     popular: false,
     features: [
       'Everything in Pro, plus:',
-      'Zero platform fee \u2014 you keep 100% of every sale',
       'Unlimited team members',
-      'Artist Storefront & party booking',
-      'White-glove onboarding',
+      'Advanced analytics',
+      'Atlas SMS support',
+      'White-label receipts',
+      'Multi-location support',
       'Dedicated support',
-      '30-day Pro trial with full CRM',
+      '30-day Pro trial included',
     ],
   },
 ]
@@ -97,8 +93,8 @@ const FAQS = [
     a: "You build the order in the POS, then tap 'Charge Customer' and choose QR Code or Text Link. A secure Stripe checkout page is created instantly. Your customer scans the QR code with their phone camera or receives a text message with a payment link \u2014 they pay on their own phone. No card reader needed. The POS updates in real time when payment is received.",
   },
   {
-    q: 'How does the platform fee work?',
-    a: "A small platform fee is deducted from your Stripe payouts \u2014 your customers never see it. They pay exactly what you quote with a clean, professional checkout. On Starter it's 3%, Pro is 1.5%, and the Business plan has zero fee \u2014 you keep 100% of every sale. For example, on a $100 sale with the Starter plan, your customer pays $100 and you receive $97 after the platform fee. The fee covers secure payment processing, instant digital receipts, and automatic transaction tracking.",
+    q: 'Are there any platform fees on my sales?',
+    a: "No. Sunstone Studio never takes a cut of your sales \u2014 on any plan. We make money from subscriptions, not your revenue. Connect your own Stripe or Square account and payments go directly to you. Standard card processing fees from your payment processor still apply, just like any payment solution.",
   },
   {
     q: 'Can I still use my Square reader?',
@@ -1214,10 +1210,10 @@ export default function LandingPageClient() {
           <Reveal>
             <div style={{ textAlign: 'center', marginBottom: 48 }}>
               <h2 style={{ fontFamily: FONT.display, fontWeight: 400, fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', color: B.blackBrown }}>
-                Simple, Transparent Pricing
+                Unlock Powerful Tools as You Grow
               </h2>
               <p style={{ fontSize: 16, fontWeight: 500, color: B.softBrown, marginTop: 12 }}>
-                Start with a 30-day free Pro trial. No credit card required.
+                No platform fees on any plan. Start with a 30-day free Pro trial.
               </p>
             </div>
           </Reveal>
@@ -1262,7 +1258,7 @@ export default function LandingPageClient() {
                     <span style={{ fontFamily: FONT.display, fontWeight: 700, fontSize: 42, color: B.blackBrown }}>{tier.price}</span>
                     <span style={{ fontSize: 15, color: B.softBrown }}>{tier.period}</span>
                   </div>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: B.deepWine, marginBottom: 20 }}>{tier.fee}</p>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: B.forest, marginBottom: 20 }}>No platform fees</p>
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, flex: 1 }}>
                     {tier.features.map((f, fi) => (
                       <li key={fi} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '6px 0', fontSize: 13.5, color: B.blackBrown }}>

@@ -553,9 +553,9 @@ export interface BroadcastMessage {
 // ============================================================================
 
 export const PLATFORM_FEE_RATES: Record<SubscriptionTier, number> = {
-  starter:  0.03,   // 3%
-  pro:      0.015,  // 1.5%
-  business: 0,      // 0%
+  starter:  0,
+  pro:      0,
+  business: 0,
 };
 
 export const SUBSCRIPTION_PRICES: Record<SubscriptionTier, number> = {

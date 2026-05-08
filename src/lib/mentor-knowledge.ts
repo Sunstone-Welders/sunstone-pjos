@@ -940,13 +940,13 @@ export const BUSINESS_STRATEGY_KNOWLEDGE = {
       '4. Alternatively, you can send a payment link via text message if the customer is remote or prefers that.',
     ],
     processingFees: {
-      model: 'The platform fee is deducted from your Stripe payouts — your customers see a clean checkout with no extra fees. They pay exactly what you quote.',
+      model: 'Sunstone Studio charges no platform fees on any plan. Your customers see a clean checkout with no extra fees — they pay exactly what you quote. Connect your Stripe or Square account and payments go directly to you.',
       rates: {
-        starter: '3% deducted from your payouts',
-        pro: '1.5% deducted from your payouts',
-        business: '0% — you keep 100% of every sale',
+        starter: 'No platform fee',
+        pro: 'No platform fee',
+        business: 'No platform fee',
       },
-      example: 'If a bracelet costs $50 on the Starter plan, the customer pays $50 and you receive $48.50 after the 3% platform fee.',
+      example: 'If a bracelet costs $50, the customer pays $50 and you receive the full amount minus standard Stripe/Square processing fees.',
     },
     noCardReader: 'You do NOT need a Square reader, card terminal, or any external hardware. Everything runs through the customer\'s phone via Stripe Checkout.',
     otherPaymentMethods: ['Cash', 'Venmo', 'External card (your own Square/Clover reader outside the app)'],
@@ -2077,13 +2077,13 @@ export const PJOS_PLATFORM_GUIDE = {
     ],
     textToPayOption: 'If the customer is remote or prefers a text, tap "Send via Text" to send a payment link to their phone number. They tap the link and pay through the same Stripe Checkout experience.',
     processingFees: {
-      model: 'The platform fee is deducted from your Stripe payouts. Your customers see a clean checkout with no extra fees.',
+      model: 'Sunstone Studio charges no platform fees on any plan. Payments go directly to your connected Stripe or Square account.',
       rates: {
-        starter: '3% deducted from your payouts',
-        pro: '1.5% deducted from your payouts',
-        business: '0% — you keep 100% of every sale',
+        starter: 'No platform fee',
+        pro: 'No platform fee',
+        business: 'No platform fee',
       },
-      example: 'A $50 bracelet on Starter: customer pays $50, you receive $48.50. On Business: customer pays $50, you receive $50.',
+      example: 'A $50 bracelet: customer pays $50 and you receive the full amount minus standard Stripe/Square processing fees.',
     },
     externalPayments: {
       overview: 'Not every customer wants to pay through the app. You can record external payments for customers who pay with cash, Venmo, or their own card reader.',
@@ -2112,7 +2112,7 @@ export const PJOS_PLATFORM_GUIDE = {
     overviewTab: {
       metricsCards: 'At the top you will see Total Revenue, Total Sales Count, Average Sale Value, and Net Profit.',
       filters: 'Filter by date range (YTD, this month, last month, quarterly, or custom) and by source (all sales, events only, or store only).',
-      revenueBreakdown: 'See your revenue split into subtotal, tax collected, tips, platform fees, and discounts. Your COGS (cost of goods sold) shows chain material costs and jump ring costs.',
+      revenueBreakdown: 'See your revenue split into subtotal, tax collected, tips, and discounts. Your COGS (cost of goods sold) shows chain material costs and jump ring costs.',
       paymentBreakdown: 'See how customers are paying — Card, Cash, Venmo, or Other.',
     },
     eventsTab: 'View a list of past events with full P&L for each one. See sales count, revenue, costs, and profit per event. Click any event for the detailed breakdown.',
@@ -2139,32 +2139,32 @@ export const PJOS_PLATFORM_GUIDE = {
     waiverText: 'Customize the waiver your customers see and sign. Write it to cover your local requirements.',
     subscriptionTab: 'See your current plan, trial status, and plan features. Upgrade or manage your subscription here.',
     teamTab: 'View your team members, their roles, and invite new ones. Manage who has access to what.',
-    feeHandling: 'A small platform fee is deducted from your Stripe payouts — your customers see a clean checkout with no extra fees. On Starter it is 3%, Pro is 1.5%, and Business is 0%. You can reduce it by upgrading your plan, and Business plan eliminates it entirely.',
+    feeHandling: 'Sunstone Studio charges no platform fees on any plan. Connect your Stripe or Square account in Settings → Payments and payments go directly to you. Standard card processing fees from your payment processor still apply.',
   },
 
   // ---------------------------------------------------------------------------
   // 9.12 Subscription & Billing
   // ---------------------------------------------------------------------------
   subscriptionAndBilling: {
-    overview: 'Sunstone Studio has three subscription tiers designed to grow with your business. All plans include integrated Stripe payments — no card reader needed.',
+    overview: 'Sunstone Studio has three subscription tiers designed to grow with your business. No platform fees on any plan — connect your Stripe or Square account and payments go directly to you.',
     tiers: {
       starter: {
         price: '$99/month',
-        processingFee: '3% platform fee (deducted from your payouts)',
-        features: ['Basic POS (Event Mode and Store Mode)', 'Integrated Stripe payments (QR + text link)', 'Inventory management', 'Queue and waivers', '5 Sunny AI questions per month', 'Up to 2 team members'],
-        bestFor: 'Teams just getting started who want to try the platform.',
+        processingFee: 'No platform fee',
+        features: ['Full POS (Event Mode and Store Mode)', 'Stripe or Square payments', 'Inventory, Clients, Gift Cards', 'Digital waivers & QR check-in', 'Digital receipts (SMS + email)', '10 Sunny AI questions per month', 'Up to 2 team members', 'Basic reports'],
+        bestFor: 'Teams just getting started who want a complete POS platform.',
       },
       pro: {
         price: '$169/month',
-        processingFee: '1.5% platform fee (deducted from your payouts)',
-        features: ['Everything in Starter', 'Unlimited Sunny AI questions', 'Full business reports with P&L', 'AI insights', 'Client CRM', 'Up to 3 team members'],
+        processingFee: 'No platform fee',
+        features: ['Everything in Starter', 'Unlimited Sunny AI questions', 'Full reports & CSV export', 'AI business insights', 'Artist Storefront & Party Booking', 'Warranty Program', 'Up to 5 team members'],
         bestFor: 'Active artists who do regular events and want full business intelligence.',
       },
       business: {
         price: '$279/month',
-        processingFee: '0% — you keep 100% of every sale',
-        features: ['Everything in Pro', 'Unlimited team members', 'Priority support', 'Zero platform fee'],
-        bestFor: 'High-volume artists or teams who want zero fees and unlimited team access.',
+        processingFee: 'No platform fee',
+        features: ['Everything in Pro', 'Unlimited team members', 'Advanced analytics', 'Atlas SMS support', 'White-label receipts', 'Multi-location support'],
+        bestFor: 'High-volume artists or multi-location teams who need the most powerful tools.',
       },
     },
     crmAddOn: {
@@ -2188,7 +2188,7 @@ export const PJOS_PLATFORM_GUIDE = {
     upgrading: 'Go to Settings → Plan & Billing to see your current plan, select a new one, or manage your subscription through Stripe.',
     whatHappensAfterTrial: 'If your trial expires without choosing a plan, your dashboard is locked — you can see your data but can\'t use POS, CRM, or other features until you select a plan. All your data, events, inventory, clients, and conversation history are preserved — nothing is ever deleted. Just choose a plan from the lockout screen or Settings to pick up right where you left off.',
     crmRequiresBasePlan: 'CRM ($69/mo) is an add-on that requires a base plan (Starter, Pro, or Business). You can\'t purchase CRM standalone after your trial expires. During your trial, CRM is included free. After the trial, choose a base plan first, then add CRM.',
-    feeExplainer: 'A small platform fee (Starter 3%, Pro 1.5%, Business 0%) is deducted from your Stripe payouts. Your customers see a clean checkout with no extra fees — they pay exactly what you quote. The fee covers secure payment processing, instant receipts, and transaction tracking. Upgrade your plan to reduce or eliminate it.',
+    feeExplainer: 'Sunstone Studio charges no platform fees on any plan. We make money from subscriptions, not your sales. Connect your Stripe or Square account and payments go directly to you. Standard card processing fees from your payment processor still apply.',
   },
 
   // ---------------------------------------------------------------------------

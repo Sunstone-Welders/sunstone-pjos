@@ -2,8 +2,7 @@
 // Stripe Payment Link API — POST /api/stripe/payment-link
 // ============================================================================
 // Creates a Stripe Checkout Session on the artist's connected account.
-// Platform fee is silently deducted from the artist's payout via
-// application_fee_amount — the customer never sees a processing fee.
+// Payments go directly to the artist — no platform fee is charged.
 //
 // SECURITY: Auth required. Line items + amounts are fetched from the DB —
 // the client only supplies saleId and mode. Prices are never trusted from
@@ -131,9 +130,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ── Calculate platform fee on the subtotal (not on tax/tip) ─────────
-    const feeRate = PLATFORM_FEE_RATES[(tenant.subscription_tier as SubscriptionTier)] || 0.03;
-    const platformFeeCents = Math.round(subtotalCents * feeRate);
+    // ── Platform fee removed from all tiers (May 2026) ──────────────────
+    const platformFeeCents = 0;
 
     // ── Determine success/cancel URLs ───────────────────────────────────
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sunstonepj.app';

@@ -1181,7 +1181,7 @@ export default function ReportsPage() {
       <SunnyTutorial
         pageKey="reports"
         tips={[
-          { title: 'Revenue vs profit', body: 'Revenue is your total sales. Profit subtracts material costs, booth fees, and platform fees. Check both to understand your margins.' },
+          { title: 'Revenue vs profit', body: 'Revenue is your total sales. Profit subtracts material costs and booth fees. Check both to understand your margins.' },
           { title: 'Compare events', body: 'Switch to the Events tab to see performance by event. Compare revenue, average sale, and profit across different markets.' },
         ]}
       />

@@ -11,39 +11,62 @@ export type SubscriptionStatus = 'none' | 'trialing' | 'active' | 'past_due' | '
 export type Feature =
   | 'ai_insights'
   | 'full_reports'
+  | 'csv_export'
   | 'crm'
   | 'unlimited_sunny'
-  | 'team_members_3'
-  | 'team_members_unlimited';
+  | 'team_members_5'
+  | 'team_members_unlimited'
+  | 'artist_storefront'
+  | 'party_booking'
+  | 'warranty_program'
+  | 'advanced_analytics'
+  | 'atlas_sms_support'
+  | 'white_label_receipts'
+  | 'multi_location';
 
-// Feature access matrix
+// Feature access matrix — tiers differentiate by features, not fees (May 2026)
 const FEATURE_ACCESS: Record<Feature, SubscriptionTier[]> = {
   ai_insights:            ['pro', 'business'],
   full_reports:           ['pro', 'business'],
+  csv_export:             ['pro', 'business'],
   crm:                    ['pro', 'business'],
   unlimited_sunny:        ['pro', 'business'],
-  team_members_3:         ['pro', 'business'],
+  team_members_5:         ['pro', 'business'],
   team_members_unlimited: ['business'],
+  artist_storefront:      ['pro', 'business'],
+  party_booking:          ['pro', 'business'],
+  warranty_program:       ['pro', 'business'],
+  advanced_analytics:     ['business'],
+  atlas_sms_support:      ['business'],
+  white_label_receipts:   ['business'],
+  multi_location:         ['business'],
 };
 
-// Platform fee rates by tier (as decimal — 0.03 = 3%)
+// Platform fee rates by tier (as decimal) — fees removed from all tiers May 2026
 const FEE_RATES: Record<SubscriptionTier, number> = {
-  starter:  0.03,   // 3%
-  pro:      0.015,  // 1.5%
-  business: 0,      // 0%
+  starter:  0,
+  pro:      0,
+  business: 0,
 };
 
-// Platform fee rates as stored in DB (percentage number — 3 = 3%)
+// Platform fee rates as stored in DB (percentage number) — fees removed May 2026
 const FEE_PERCENT: Record<SubscriptionTier, number> = {
-  starter:  3,
-  pro:      1.5,
+  starter:  0,
+  pro:      0,
   business: 0,
 };
 
 // Sunny question limits per tier
 const SUNNY_LIMITS: Record<SubscriptionTier, number> = {
-  starter:  5,
+  starter:  10,
   pro:      Infinity,
+  business: Infinity,
+};
+
+// Team member limits per tier
+export const TEAM_MEMBER_LIMITS: Record<SubscriptionTier, number> = {
+  starter:  2,
+  pro:      5,
   business: Infinity,
 };
 
@@ -120,7 +143,7 @@ export function getTrialDaysRemaining(tenant: TenantSubscriptionFields): number 
  * Platform fee rate as a decimal (0.03, 0.015, 0) for the given tier.
  */
 export function getPlatformFeeRate(tier: SubscriptionTier): number {
-  return FEE_RATES[tier] ?? 0.03;
+  return FEE_RATES[tier] ?? 0;
 }
 
 /**
@@ -128,7 +151,7 @@ export function getPlatformFeeRate(tier: SubscriptionTier): number {
  * This matches the `platform_fee_percent` DB column format.
  */
 export function getPlatformFeePercent(tier: SubscriptionTier): number {
-  return FEE_PERCENT[tier] ?? 3;
+  return FEE_PERCENT[tier] ?? 0;
 }
 
 /**
