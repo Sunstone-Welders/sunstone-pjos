@@ -329,10 +329,21 @@ export interface Event {
   notes: string | null;
   selected_chain_ids: string[] | null;
   queue_mode: boolean;
+  recurring_group_id: string | null;
   created_at: string;
   updated_at: string;
   // Joined
   tax_profile?: TaxProfile | null;
+}
+
+export interface PricingTierCustomPrice {
+  id: string;
+  tenant_id: string;
+  pricing_tier_id: string;
+  product_type_id: string;
+  price: number;
+  created_at: string;
+  updated_at: string;
 }
 
 // ============================================================================

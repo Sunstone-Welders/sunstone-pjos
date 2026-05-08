@@ -30,6 +30,7 @@ import type { CompletedSaleData, CheckoutStep, GiftCardData } from '@/components
 import type { QueueEntry } from '@/components/MiniQueueStrip';
 import type {
   InventoryItem, InventoryItemVariant, Event, TaxProfile, ProductType, ChainProductPrice, JumpRingResolution, CartItem,
+  PricingTier, PricingTierCustomPrice,
 } from '@/types';
 
 const BackArrow = () => (
@@ -127,6 +128,8 @@ function EventModePageInner() {
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [chainPrices, setChainPrices] = useState<ChainProductPrice[]>([]);
   const [pricingTiers, setPricingTiers] = useState<{ id: string; name: string }[]>([]);
+  const [fullPricingTiers, setFullPricingTiers] = useState<PricingTier[]>([]);
+  const [customTierPrices, setCustomTierPrices] = useState<PricingTierCustomPrice[]>([]);
   const [step, setStep] = useState<CheckoutStep>('items');
   const [receiptEmail, setReceiptEmail] = useState('');
   const [receiptPhone, setReceiptPhone] = useState('');
@@ -277,6 +280,12 @@ function EventModePageInner() {
         const { data: tiers } = await supabase
           .from('pricing_tiers').select('id, name').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order');
         setPricingTiers(tiers || []);
+        const { data: fullTiers } = await supabase
+          .from('pricing_tiers').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order');
+        setFullPricingTiers((fullTiers || []) as PricingTier[]);
+        const { data: ctPrices } = await supabase
+          .from('pricing_tier_custom_prices').select('*').eq('tenant_id', tenant.id);
+        setCustomTierPrices((ctPrices || []) as PricingTierCustomPrice[]);
       }
 
       cart.setPlatformFeeRate(PLATFORM_FEE_RATES[tenant.subscription_tier]);
@@ -931,6 +940,8 @@ function EventModePageInner() {
                 mode="event"
                 tenantPricingMode={tenant?.pricing_mode}
                 pricingTiers={pricingTiers}
+                fullPricingTiers={fullPricingTiers}
+                customTierPrices={customTierPrices}
                 itemVariants={itemVariants}
                 onAddToCart={(item) => {
                   // Event Mode enriches with jump ring metadata

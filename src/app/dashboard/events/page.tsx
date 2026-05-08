@@ -48,6 +48,7 @@ function EventsContent() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Event | null>(null);
+  const [duplicating, setDuplicating] = useState<Event | null>(null);
   const [prefill, setPrefill] = useState<{ name?: string; date?: string } | null>(null);
   const [qrEvent, setQrEvent] = useState<Event | null>(null);
   const [fullScreenQR, setFullScreenQR] = useState(false);
@@ -89,7 +90,7 @@ function EventsContent() {
     fetchData();
   }, [tenant]);
 
-  // ─── handleSave now accepts product type filter data ───
+  // ─── handleSave now accepts product type filter data + recurring ───
   const handleSave = async (
     data: Partial<Event> & {
       _productTypeFilter?: {
@@ -97,15 +98,47 @@ function EventsContent() {
         selectedProductTypeIds: string[];
       };
       _chainSelection?: string[];
+      _recurring?: { frequency: string; repeatUntil: string };
     }
   ) => {
     if (!tenant) return;
 
-    // Separate product filter data and chain selection from event data
-    const { _productTypeFilter, _chainSelection, ...eventData } = data;
-    let savedEventId: string | null = null;
+    // Separate product filter data, chain selection, and recurring from event data
+    const { _productTypeFilter, _chainSelection, _recurring, ...eventData } = data;
+
+    // Helper to save product types and chain selection for an event
+    const saveEventExtras = async (eventId: string) => {
+      if (_productTypeFilter) {
+        await supabase
+          .from('event_product_types')
+          .delete()
+          .eq('event_id', eventId);
+
+        if (
+          _productTypeFilter.limitProducts &&
+          _productTypeFilter.selectedProductTypeIds.length > 0
+        ) {
+          await supabase
+            .from('event_product_types')
+            .insert(
+              _productTypeFilter.selectedProductTypeIds.map((ptId: string) => ({
+                event_id: eventId,
+                product_type_id: ptId,
+                tenant_id: tenant.id,
+              }))
+            );
+        }
+      }
+      if (_chainSelection !== undefined) {
+        await supabase
+          .from('events')
+          .update({ selected_chain_ids: _chainSelection.length > 0 ? _chainSelection : null })
+          .eq('id', eventId);
+      }
+    };
 
     if (editing) {
+      // Edit existing event
       const { error } = await supabase
         .from('events')
         .update(eventData)
@@ -114,9 +147,53 @@ function EventsContent() {
         toast.error(error.message);
         return;
       }
-      savedEventId = editing.id;
+      await saveEventExtras(editing.id);
       toast.success('Event updated');
+    } else if (_recurring && eventData.start_time) {
+      // Create recurring events
+      const recurringGroupId = crypto.randomUUID();
+      const startTime = new Date(eventData.start_time);
+      const endTime = eventData.end_time ? new Date(eventData.end_time) : null;
+      const duration = endTime ? endTime.getTime() - startTime.getTime() : null;
+      const untilDate = new Date(_recurring.repeatUntil + 'T23:59:59');
+      const events: (typeof eventData & { tenant_id: string; recurring_group_id: string })[] = [];
+
+      let d = new Date(startTime);
+      while (d <= untilDate && events.length < 52) {
+        events.push({
+          ...eventData,
+          tenant_id: tenant.id,
+          recurring_group_id: recurringGroupId,
+          start_time: d.toISOString(),
+          end_time: duration ? new Date(d.getTime() + duration).toISOString() : null,
+        });
+        const next = new Date(d);
+        if (_recurring.frequency === 'weekly') next.setDate(next.getDate() + 7);
+        else if (_recurring.frequency === 'biweekly') next.setDate(next.getDate() + 14);
+        else next.setMonth(next.getMonth() + 1);
+        d = next;
+      }
+
+      const { data: created, error } = await supabase
+        .from('events')
+        .insert(events)
+        .select('id');
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      // Save extras for each created event
+      if (created) {
+        for (const ev of created) {
+          await saveEventExtras(ev.id);
+        }
+      }
+
+      toast.success(`${events.length} recurring events created`);
     } else {
+      // Create single event
       const { data: newEvent, error } = await supabase
         .from('events')
         .insert({ ...eventData, tenant_id: tenant.id })
@@ -126,48 +203,13 @@ function EventsContent() {
         toast.error(error.message);
         return;
       }
-      savedEventId = newEvent.id;
+      await saveEventExtras(newEvent.id);
       toast.success('Event created');
-    }
-
-    // Save product type filtering (after event exists)
-    if (_productTypeFilter && savedEventId) {
-      // Always delete existing rows first
-      await supabase
-        .from('event_product_types')
-        .delete()
-        .eq('event_id', savedEventId);
-
-      // If limiting, insert new selections
-      if (
-        _productTypeFilter.limitProducts &&
-        _productTypeFilter.selectedProductTypeIds.length > 0
-      ) {
-        const { error: ptError } = await supabase
-          .from('event_product_types')
-          .insert(
-            _productTypeFilter.selectedProductTypeIds.map((ptId: string) => ({
-              event_id: savedEventId,
-              product_type_id: ptId,
-              tenant_id: tenant.id,
-            }))
-          );
-        if (ptError) {
-          toast.error('Event saved but product filtering failed: ' + ptError.message);
-        }
-      }
-    }
-
-    // Save chain selection (tier-based events)
-    if (_chainSelection !== undefined && savedEventId) {
-      await supabase
-        .from('events')
-        .update({ selected_chain_ids: _chainSelection.length > 0 ? _chainSelection : null })
-        .eq('id', savedEventId);
     }
 
     setShowForm(false);
     setEditing(null);
+    setDuplicating(null);
     fetchData();
   };
 
@@ -212,6 +254,7 @@ function EventsContent() {
               variant="primary"
               onClick={() => {
                 setEditing(null);
+                setDuplicating(null);
                 setShowForm(true);
               }}
             >
@@ -272,6 +315,12 @@ function EventsContent() {
                     canEdit={can('events:edit')}
                     onEdit={() => {
                       setEditing(event);
+                      setDuplicating(null);
+                      setShowForm(true);
+                    }}
+                    onDuplicate={() => {
+                      setEditing(null);
+                      setDuplicating(event);
                       setShowForm(true);
                     }}
                     onShowQR={() => setQrEvent(event)}
@@ -296,6 +345,12 @@ function EventsContent() {
                     canEdit={can('events:edit')}
                     onEdit={() => {
                       setEditing(event);
+                      setDuplicating(null);
+                      setShowForm(true);
+                    }}
+                    onDuplicate={() => {
+                      setEditing(null);
+                      setDuplicating(event);
                       setShowForm(true);
                     }}
                     onShowQR={() => setQrEvent(event)}
@@ -320,6 +375,12 @@ function EventsContent() {
                     canEdit={can('events:edit')}
                     onEdit={() => {
                       setEditing(event);
+                      setDuplicating(null);
+                      setShowForm(true);
+                    }}
+                    onDuplicate={() => {
+                      setEditing(null);
+                      setDuplicating(event);
                       setShowForm(true);
                     }}
                     onShowQR={() => setQrEvent(event)}
@@ -335,6 +396,7 @@ function EventsContent() {
       <EventFormModal
         isOpen={showForm}
         event={editing}
+        duplicating={duplicating}
         prefill={prefill}
         taxProfiles={taxProfiles}
         tenantId={tenant?.id || ''}
@@ -343,6 +405,7 @@ function EventsContent() {
         onClose={() => {
           setShowForm(false);
           setEditing(null);
+          setDuplicating(null);
           setPrefill(null);
         }}
       />
@@ -414,12 +477,14 @@ function EventCard({
   status,
   canEdit,
   onEdit,
+  onDuplicate,
   onShowQR,
 }: {
   event: Event;
   status: 'active' | 'upcoming' | 'past';
   canEdit: boolean;
   onEdit: () => void;
+  onDuplicate: () => void;
   onShowQR: () => void;
 }) {
   return (
@@ -496,15 +561,27 @@ function EventCard({
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm14 3h.01M17 17h.01M14 14h3v3h-3v-3zm0 4h.01M17 20h.01M20 14h.01M20 17h.01M20 20h.01" />
             </svg>
           </Button>
-          {/* ─── PERMISSION GUARD: Edit button ─── */}
+          {/* ─── PERMISSION GUARD: Edit / Duplicate buttons ─── */}
           {canEdit && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onEdit}
-            >
-              Edit
-            </Button>
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onDuplicate}
+                title="Duplicate event"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+                </svg>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onEdit}
+              >
+                Edit
+              </Button>
+            </>
           )}
         </div>
       </CardContent>
@@ -517,6 +594,7 @@ function EventCard({
 function EventFormModal({
   isOpen,
   event,
+  duplicating,
   prefill,
   taxProfiles,
   tenantId,
@@ -526,11 +604,12 @@ function EventFormModal({
 }: {
   isOpen: boolean;
   event: Event | null;
+  duplicating?: Event | null;
   prefill?: { name?: string; date?: string } | null;
   taxProfiles: TaxProfile[];
   tenantId: string;
   tenantPricingMode?: string;
-  onSave: (data: Partial<Event> & { _productTypeFilter?: { limitProducts: boolean; selectedProductTypeIds: string[] }; _chainSelection?: string[] }) => void;
+  onSave: (data: Partial<Event> & { _productTypeFilter?: { limitProducts: boolean; selectedProductTypeIds: string[] }; _chainSelection?: string[]; _recurring?: { frequency: string; repeatUntil: string } }) => void;
   onClose: () => void;
 }) {
   const [form, setForm] = useState({
@@ -543,6 +622,12 @@ function EventFormModal({
     tax_profile_id: '',
     queue_mode: false,
   });
+
+  // ─── Recurring event state ───
+  const [repeatFrequency, setRepeatFrequency] = useState<'none' | 'weekly' | 'biweekly' | 'monthly'>('none');
+  const [repeatUntil, setRepeatUntil] = useState('');
+  const [showRecurringConfirm, setShowRecurringConfirm] = useState(false);
+  const [recurringCount, setRecurringCount] = useState(0);
 
   // ─── Product type filtering state ───
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
@@ -559,25 +644,34 @@ function EventFormModal({
   useEffect(() => {
     if (!isOpen) return;
 
+    // Source for pre-fill: editing event or duplicating event
+    const source = event || duplicating;
+
     // Reset event form fields — merge prefill values for new events
-    const prefillStartTime = !event && prefill?.date
+    const prefillStartTime = !source && prefill?.date
       ? format(new Date(prefill.date + 'T18:00'), "yyyy-MM-dd'T'HH:mm")
       : '';
 
     setForm({
-      name: event?.name || prefill?.name || '',
-      description: event?.description || '',
-      location: event?.location || '',
+      name: source?.name ? (duplicating ? `${source.name} (Copy)` : source.name) : prefill?.name || '',
+      description: source?.description || '',
+      location: source?.location || '',
+      // When duplicating, leave date blank so user must pick a new one
       start_time: event?.start_time
         ? format(new Date(event.start_time), "yyyy-MM-dd'T'HH:mm")
         : prefillStartTime,
       end_time: event?.end_time
         ? format(new Date(event.end_time), "yyyy-MM-dd'T'HH:mm")
         : '',
-      booth_fee: event?.booth_fee?.toString() || '0',
-      queue_mode: event?.queue_mode ?? false,
-      tax_profile_id: event?.tax_profile_id || '',
+      booth_fee: source?.booth_fee?.toString() || '0',
+      queue_mode: source?.queue_mode ?? false,
+      tax_profile_id: source?.tax_profile_id || '',
     });
+
+    // Reset recurring state
+    setRepeatFrequency('none');
+    setRepeatUntil('');
+    setShowRecurringConfirm(false);
 
     // Load product types for the checkbox list
     const loadProductTypes = async () => {
@@ -595,12 +689,13 @@ function EventFormModal({
 
       setProductTypes(types || []);
 
-      // If editing, load existing event product type selections
-      if (event?.id) {
+      // If editing or duplicating, load existing event product type selections
+      const sourceEventId = event?.id || duplicating?.id;
+      if (sourceEventId) {
         const { data: selected } = await supabase
           .from('event_product_types')
           .select('product_type_id')
-          .eq('event_id', event.id);
+          .eq('event_id', sourceEventId);
 
         if (selected && selected.length > 0) {
           setLimitProducts(true);
@@ -633,12 +728,12 @@ function EventFormModal({
           .order('sort_order');
         setEventTiers(tierData || []);
 
-        // Load existing chain selections
-        if (event?.id) {
+        // Load existing chain selections (from editing or duplicating source)
+        if (sourceEventId) {
           const { data: ev } = await supabase
             .from('events')
             .select('selected_chain_ids')
-            .eq('id', event.id)
+            .eq('id', sourceEventId)
             .single();
           setSelectedChainIds((ev?.selected_chain_ids as string[]) || []);
         } else {
@@ -654,10 +749,27 @@ function EventFormModal({
     };
 
     loadProductTypes();
-  }, [isOpen, event?.id, tenantId, tenantPricingMode]);
+  }, [isOpen, event?.id, duplicating?.id, tenantId, tenantPricingMode]);
 
   const set = (key: string, val: string) =>
     setForm((f) => ({ ...f, [key]: val }));
+
+  // ─── Calculate recurring event count ───
+  const calculateRecurringCount = () => {
+    if (repeatFrequency === 'none' || !form.start_time || !repeatUntil) return 0;
+    const start = new Date(form.start_time);
+    const until = new Date(repeatUntil + 'T23:59:59');
+    if (until <= start) return 0;
+    let count = 0;
+    let d = new Date(start);
+    while (d <= until && count < 52) {
+      count++;
+      if (repeatFrequency === 'weekly') d.setDate(d.getDate() + 7);
+      else if (repeatFrequency === 'biweekly') d.setDate(d.getDate() + 14);
+      else d.setMonth(d.getMonth() + 1);
+    }
+    return count;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -679,6 +791,29 @@ function EventFormModal({
       }
     }
 
+    // If recurring, show confirmation dialog first
+    if (!event && repeatFrequency !== 'none' && repeatUntil) {
+      const count = calculateRecurringCount();
+      if (count <= 0) {
+        toast.error('Repeat until date must be after the start date.');
+        return;
+      }
+      if (count > 52) {
+        toast.error('Maximum 52 recurring events allowed.');
+        return;
+      }
+      setRecurringCount(count);
+      setShowRecurringConfirm(true);
+      return;
+    }
+
+    submitForm();
+  };
+
+  const submitForm = () => {
+    const startTime = new Date(form.start_time);
+    setShowRecurringConfirm(false);
+
     onSave({
       name: form.name,
       description: form.description || null,
@@ -696,6 +831,7 @@ function EventFormModal({
         selectedProductTypeIds,
       },
       _chainSelection: tenantPricingMode === 'tier' ? selectedChainIds : undefined,
+      _recurring: repeatFrequency !== 'none' && repeatUntil ? { frequency: repeatFrequency, repeatUntil } : undefined,
     });
   };
 
@@ -717,11 +853,13 @@ function EventFormModal({
       <form onSubmit={handleSubmit}>
         <ModalHeader>
           <h2 className="text-xl font-semibold text-text-primary">
-            {event ? 'Edit Event' : 'New Event'}
+            {event ? 'Edit Event' : duplicating ? 'Duplicate Event' : 'New Event'}
           </h2>
           <p className="text-sm text-text-tertiary mt-1">
             {event
               ? 'Update the event details below.'
+              : duplicating
+              ? 'All details copied. Pick a new date and save.'
               : 'Fill in the details to create a new event.'}
           </p>
         </ModalHeader>
@@ -806,6 +944,40 @@ function EventFormModal({
               </button>
             </label>
           </div>
+
+          {/* ─── Repeat / Recurring ─── */}
+          {!event && (
+            <div className="pt-4 border-t border-[var(--border-primary)]">
+              <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">Repeat</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Select
+                  label=""
+                  value={repeatFrequency}
+                  onChange={(e) => setRepeatFrequency(e.target.value as typeof repeatFrequency)}
+                  options={[
+                    { value: 'none', label: 'No repeat' },
+                    { value: 'weekly', label: 'Weekly' },
+                    { value: 'biweekly', label: 'Bi-weekly' },
+                    { value: 'monthly', label: 'Monthly' },
+                  ]}
+                />
+                {repeatFrequency !== 'none' && (
+                  <Input
+                    label="Repeat until"
+                    type="date"
+                    value={repeatUntil}
+                    onChange={(e) => setRepeatUntil(e.target.value)}
+                    required
+                  />
+                )}
+              </div>
+              {repeatFrequency !== 'none' && form.start_time && repeatUntil && (
+                <p className="text-xs text-[var(--text-tertiary)] mt-2">
+                  This will create {calculateRecurringCount()} event{calculateRecurringCount() !== 1 ? 's' : ''}.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* ─── Product Availability ─── */}
           <div className="pt-4 border-t border-[var(--border-primary)]">
@@ -1002,10 +1174,34 @@ function EventFormModal({
             Cancel
           </Button>
           <Button variant="primary" type="submit" disabled={isSubmitDisabled}>
-            {event ? 'Update Event' : 'Create Event'}
+            {event ? 'Update Event' : duplicating ? 'Duplicate Event' : repeatFrequency !== 'none' ? 'Create Recurring Events' : 'Create Event'}
           </Button>
         </ModalFooter>
       </form>
+
+      {/* ─── Recurring Confirmation Dialog ─── */}
+      {showRecurringConfirm && (
+        <Modal isOpen onClose={() => setShowRecurringConfirm(false)} size="sm">
+          <ModalHeader>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">Confirm Recurring Events</h2>
+          </ModalHeader>
+          <ModalBody>
+            <p className="text-sm text-[var(--text-secondary)]">
+              This will create <strong>{recurringCount}</strong> event{recurringCount !== 1 ? 's' : ''} from{' '}
+              <strong>{format(new Date(form.start_time), 'MMM d, yyyy')}</strong> to{' '}
+              <strong>{format(new Date(repeatUntil + 'T00:00'), 'MMM d, yyyy')}</strong>,{' '}
+              repeating {repeatFrequency === 'weekly' ? 'every week' : repeatFrequency === 'biweekly' ? 'every 2 weeks' : 'every month'}.
+            </p>
+            <p className="text-xs text-[var(--text-tertiary)] mt-2">
+              Each event will be independent and can be edited individually.
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="secondary" size="sm" onClick={() => setShowRecurringConfirm(false)}>Cancel</Button>
+            <Button variant="primary" size="sm" onClick={submitForm}>Create {recurringCount} Events</Button>
+          </ModalFooter>
+        </Modal>
+      )}
     </Modal>
   );
 }

@@ -1,13 +1,22 @@
 'use client';
 
 import { useState, useMemo, useCallback, useRef } from 'react';
-import type { InventoryItem, InventoryItemVariant, ProductType, ChainProductPrice, CartItem } from '@/types';
+import type { InventoryItem, InventoryItemVariant, ProductType, ChainProductPrice, CartItem, PricingTier, PricingTierCustomPrice } from '@/types';
 import { MaterialTabs } from './MaterialTabs';
 import { ChainGrid } from './ChainGrid';
 import { ProductTypeRow } from './ProductTypeRow';
 import { InchAdjuster } from './InchAdjuster';
 import { AddOnsSection } from './AddOnsSection';
 import { VariantPicker } from './VariantPicker';
+
+/** Map of product type name (lowercase) → pricing_tiers column key */
+const BUILTIN_TIER_COLUMNS: Record<string, keyof PricingTier> = {
+  bracelet: 'bracelet_price',
+  anklet: 'anklet_price',
+  ring: 'ring_price',
+  necklace: 'necklace_price_per_inch',
+  'hand chain': 'hand_chain_price',
+};
 
 export interface ProductSelectorProps {
   chains: InventoryItem[];
@@ -18,6 +27,10 @@ export interface ProductSelectorProps {
   mode: 'store' | 'event';
   tenantPricingMode?: string;
   pricingTiers?: { id: string; name: string }[];
+  /** Full pricing tier data for tier-based price resolution */
+  fullPricingTiers?: PricingTier[];
+  /** Custom tier prices for non-built-in product types */
+  customTierPrices?: PricingTierCustomPrice[];
   itemVariants?: Record<string, InventoryItemVariant[]>;
 }
 
@@ -30,6 +43,8 @@ export function ProductSelector({
   mode,
   tenantPricingMode,
   pricingTiers = [],
+  fullPricingTiers = [],
+  customTierPrices = [],
   itemVariants,
 }: ProductSelectorProps) {
   // ── View toggle: chains vs add-ons ──
@@ -223,6 +238,29 @@ export function ProductSelector({
     [onAddToCart]
   );
 
+  // ── Build tier price map for selected chain ──
+  const selectedChainTierPriceMap = useMemo(() => {
+    if (!selectedChain?.pricing_tier_id || tenantPricingMode !== 'tier') return undefined;
+    const tier = fullPricingTiers.find((t) => t.id === selectedChain.pricing_tier_id);
+    if (!tier) return undefined;
+
+    const map: Record<string, number> = {};
+    // Built-in product type prices from tier columns
+    for (const pt of productTypes) {
+      const col = BUILTIN_TIER_COLUMNS[pt.name.toLowerCase()];
+      if (col && tier[col] != null) {
+        map[pt.id] = Number(tier[col]);
+      }
+    }
+    // Custom product type prices from pricing_tier_custom_prices
+    for (const cp of customTierPrices) {
+      if (cp.pricing_tier_id === tier.id) {
+        map[cp.product_type_id] = Number(cp.price);
+      }
+    }
+    return Object.keys(map).length > 0 ? map : undefined;
+  }, [selectedChain, tenantPricingMode, fullPricingTiers, customTierPrices, productTypes]);
+
   // ── Toggle styling ──
   const toggleActive = 'bg-[var(--text-primary)] text-[var(--surface-base)]';
   const toggleInactive = 'bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]';
@@ -341,6 +379,7 @@ export function ProductSelector({
                     chain={selectedChain}
                     productTypes={productTypes}
                     chainPrices={chainPrices}
+                    tierPriceMap={selectedChainTierPriceMap}
                     onSelectFlatRate={handleFlatRateSelect}
                     onSelectPerInch={handlePerInchSelect}
                   />

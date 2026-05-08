@@ -32,7 +32,7 @@ import {
 } from '@/components/ui';
 import { applyTheme } from '@/lib/theme';
 import { THEMES, LIGHT_THEMES, DARK_THEMES, getThemeById, DEFAULT_THEME_ID, type ThemeDefinition } from '@/lib/themes';
-import type { TaxProfile, SubscriptionTier, PricingTier, TenantPricingMode } from '@/types';
+import type { TaxProfile, SubscriptionTier, PricingTier, TenantPricingMode, ProductType, PricingTierCustomPrice } from '@/types';
 import { SUBSCRIPTION_PRICES } from '@/types';
 import { getSubscriptionTier } from '@/lib/subscription';
 import { getCrmStatus } from '@/lib/crm-status';
@@ -3462,6 +3462,11 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
   const [showTierForm, setShowTierForm] = useState(false);
   const [savingMode, setSavingMode] = useState(false);
 
+  // Custom product types (non-default)
+  const [customProductTypes, setCustomProductTypes] = useState<ProductType[]>([]);
+  // Custom tier prices: { [tierId]: { [productTypeId]: price } }
+  const [customTierPrices, setCustomTierPrices] = useState<Record<string, Record<string, number>>>({});
+
   // Tier form state
   const [tierName, setTierName] = useState('');
   const [braceletPrice, setBraceletPrice] = useState('');
@@ -3469,17 +3474,43 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
   const [ringPrice, setRingPrice] = useState('');
   const [necklacePrice, setNecklacePrice] = useState('');
   const [handChainPrice, setHandChainPrice] = useState('');
+  // Custom product type prices in the form: { [productTypeId]: string }
+  const [customFormPrices, setCustomFormPrices] = useState<Record<string, string>>({});
 
   const loadTiers = useCallback(async () => {
     if (!tenant) return;
     setLoadingTiers(true);
-    const { data } = await supabase
-      .from('pricing_tiers')
-      .select('*')
-      .eq('tenant_id', tenant.id)
-      .eq('is_active', true)
-      .order('sort_order');
-    setTiers(data || []);
+
+    const [tiersRes, customPtsRes, customPricesRes] = await Promise.all([
+      supabase
+        .from('pricing_tiers')
+        .select('*')
+        .eq('tenant_id', tenant.id)
+        .eq('is_active', true)
+        .order('sort_order'),
+      supabase
+        .from('product_types')
+        .select('*')
+        .eq('tenant_id', tenant.id)
+        .eq('is_active', true)
+        .eq('is_default', false)
+        .order('sort_order'),
+      supabase
+        .from('pricing_tier_custom_prices')
+        .select('*')
+        .eq('tenant_id', tenant.id),
+    ]);
+
+    setTiers(tiersRes.data || []);
+    setCustomProductTypes((customPtsRes.data || []) as ProductType[]);
+
+    // Build lookup: { tierId: { productTypeId: price } }
+    const priceMap: Record<string, Record<string, number>> = {};
+    for (const cp of (customPricesRes.data || []) as PricingTierCustomPrice[]) {
+      if (!priceMap[cp.pricing_tier_id]) priceMap[cp.pricing_tier_id] = {};
+      priceMap[cp.pricing_tier_id][cp.product_type_id] = Number(cp.price);
+    }
+    setCustomTierPrices(priceMap);
     setLoadingTiers(false);
   }, [tenant, supabase]);
 
@@ -3511,6 +3542,13 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
       setRingPrice(tier.ring_price != null ? String(tier.ring_price) : '');
       setNecklacePrice(tier.necklace_price_per_inch != null ? String(tier.necklace_price_per_inch) : '');
       setHandChainPrice(tier.hand_chain_price != null ? String(tier.hand_chain_price) : '');
+      // Load custom prices for this tier
+      const tierCustom = customTierPrices[tier.id] || {};
+      const formPrices: Record<string, string> = {};
+      for (const pt of customProductTypes) {
+        formPrices[pt.id] = tierCustom[pt.id] != null ? String(tierCustom[pt.id]) : '';
+      }
+      setCustomFormPrices(formPrices);
     } else {
       setEditingTier(null);
       setTierName('');
@@ -3519,6 +3557,7 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
       setRingPrice('');
       setNecklacePrice('');
       setHandChainPrice('');
+      setCustomFormPrices({});
     }
     setShowTierForm(true);
   };
@@ -3538,21 +3577,53 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
       hand_chain_price: handChainPrice ? Number(handChainPrice) : null,
     };
 
+    let tierId: string;
+
     if (editingTier) {
       const { error } = await supabase
         .from('pricing_tiers')
         .update({ ...payload, updated_at: new Date().toISOString() })
         .eq('id', editingTier.id);
       if (error) { toast.error('Failed to update tier'); return; }
+      tierId = editingTier.id;
       toast.success('Tier updated');
     } else {
       const maxSort = tiers.length > 0 ? Math.max(...tiers.map(t => t.sort_order)) + 1 : 0;
-      const { error } = await supabase
+      const { data: newTier, error } = await supabase
         .from('pricing_tiers')
-        .insert({ ...payload, sort_order: maxSort });
-      if (error) { toast.error('Failed to create tier'); return; }
+        .insert({ ...payload, sort_order: maxSort })
+        .select('id')
+        .single();
+      if (error || !newTier) { toast.error('Failed to create tier'); return; }
+      tierId = newTier.id;
       toast.success('Tier created');
     }
+
+    // Save custom product type prices
+    // Delete existing custom prices for this tier, then insert new ones
+    await supabase
+      .from('pricing_tier_custom_prices')
+      .delete()
+      .eq('pricing_tier_id', tierId);
+
+    const customInserts = Object.entries(customFormPrices)
+      .filter(([, val]) => val !== '' && val != null)
+      .map(([productTypeId, val]) => ({
+        tenant_id: tenant.id,
+        pricing_tier_id: tierId,
+        product_type_id: productTypeId,
+        price: Number(val),
+      }));
+
+    if (customInserts.length > 0) {
+      const { error: cpError } = await supabase
+        .from('pricing_tier_custom_prices')
+        .insert(customInserts);
+      if (cpError) {
+        toast.error('Tier saved but custom prices failed: ' + cpError.message);
+      }
+    }
+
     setShowTierForm(false);
     loadTiers();
   };
@@ -3564,6 +3635,8 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
       .update({ is_active: false })
       .eq('id', tier.id);
     if (error) { toast.error('Failed to delete tier'); return; }
+    // Also clean up custom prices
+    await supabase.from('pricing_tier_custom_prices').delete().eq('pricing_tier_id', tier.id);
     toast.success('Tier deleted');
     loadTiers();
   };
@@ -3639,7 +3712,9 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
             </div>
           ) : (
             <div className="space-y-2">
-              {tiers.map((tier, idx) => (
+              {tiers.map((tier, idx) => {
+                const tierCustom = customTierPrices[tier.id] || {};
+                return (
                 <div
                   key={tier.id}
                   className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border-default)] bg-[var(--surface-base)] hover:bg-[var(--surface-subtle)] transition-colors"
@@ -3675,6 +3750,12 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
                       {tier.ring_price != null && <span className="text-xs text-[var(--text-tertiary)]">Ring {formatPrice(tier.ring_price)}</span>}
                       {tier.necklace_price_per_inch != null && <span className="text-xs text-[var(--text-tertiary)]">Necklace {formatPrice(tier.necklace_price_per_inch)}</span>}
                       {tier.hand_chain_price != null && <span className="text-xs text-[var(--text-tertiary)]">Hand Chain {formatPrice(tier.hand_chain_price)}</span>}
+                      {customProductTypes.map(pt => {
+                        const price = tierCustom[pt.id];
+                        return price != null ? (
+                          <span key={pt.id} className="text-xs text-[var(--accent-primary)]">{pt.name} {formatPrice(price)}</span>
+                        ) : null;
+                      })}
                     </div>
                   </div>
 
@@ -3700,7 +3781,8 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -3722,53 +3804,77 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
                 onChange={(e) => setTierName(e.target.value)}
                 placeholder="e.g., Gold Filled"
               />
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label="Bracelet Price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={braceletPrice}
-                  onChange={(e) => setBraceletPrice(e.target.value)}
-                  placeholder="$0.00"
-                />
-                <Input
-                  label="Anklet Price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={ankletPrice}
-                  onChange={(e) => setAnkletPrice(e.target.value)}
-                  placeholder="$0.00"
-                />
-                <Input
-                  label="Ring Price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={ringPrice}
-                  onChange={(e) => setRingPrice(e.target.value)}
-                  placeholder="$0.00"
-                />
-                <Input
-                  label="Necklace Price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={necklacePrice}
-                  onChange={(e) => setNecklacePrice(e.target.value)}
-                  placeholder="$0.00"
-                />
-                <Input
-                  label="Hand Chain Price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={handChainPrice}
-                  onChange={(e) => setHandChainPrice(e.target.value)}
-                  placeholder="$0.00"
-                />
+              {/* Built-in product types */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.05em] text-[var(--text-tertiary)] mb-2">Standard Products</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Bracelet"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={braceletPrice}
+                    onChange={(e) => setBraceletPrice(e.target.value)}
+                    placeholder="$0.00"
+                  />
+                  <Input
+                    label="Anklet"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={ankletPrice}
+                    onChange={(e) => setAnkletPrice(e.target.value)}
+                    placeholder="$0.00"
+                  />
+                  <Input
+                    label="Ring"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={ringPrice}
+                    onChange={(e) => setRingPrice(e.target.value)}
+                    placeholder="$0.00"
+                  />
+                  <Input
+                    label="Necklace/in"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={necklacePrice}
+                    onChange={(e) => setNecklacePrice(e.target.value)}
+                    placeholder="$0.00"
+                  />
+                  <Input
+                    label="Hand Chain"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={handChainPrice}
+                    onChange={(e) => setHandChainPrice(e.target.value)}
+                    placeholder="$0.00"
+                  />
+                </div>
               </div>
+              {/* Custom product types */}
+              {customProductTypes.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.05em] text-[var(--text-tertiary)] mb-2">Custom Products</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {customProductTypes.map(pt => (
+                      <Input
+                        key={pt.id}
+                        label={pt.name}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={customFormPrices[pt.id] || ''}
+                        onChange={(e) => setCustomFormPrices(prev => ({ ...prev, [pt.id]: e.target.value }))}
+                        placeholder="$0.00"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </ModalBody>
           <ModalFooter>

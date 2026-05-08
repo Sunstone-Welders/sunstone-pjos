@@ -6,6 +6,8 @@ export interface ProductTypeRowProps {
   chain: InventoryItem;
   productTypes: ProductType[];
   chainPrices: ChainProductPrice[];
+  /** Map of product_type_id → tier price for the chain's tier (only in tier mode) */
+  tierPriceMap?: Record<string, number>;
   onSelectFlatRate: (chain: InventoryItem, productType: ProductType, price: number, inches: number) => void;
   onSelectPerInch: (chain: InventoryItem, productType: ProductType) => void;
 }
@@ -14,16 +16,18 @@ export function ProductTypeRow({
   chain,
   productTypes,
   chainPrices,
+  tierPriceMap,
   onSelectFlatRate,
   onSelectPerInch,
 }: ProductTypeRowProps) {
   // Per-inch chains: show ALL product types (price is per-inch regardless of type)
-  // Per-product chains: only show types that have a price configured
+  // Per-product chains: only show types that have a price configured (chain_product_prices or tier price)
   const isPerInch = chain.pricing_mode === 'per_inch';
   const availableTypes = isPerInch
     ? productTypes
     : productTypes.filter((pt) =>
-        chainPrices.some((p) => p.inventory_item_id === chain.id && p.product_type_id === pt.id)
+        chainPrices.some((p) => p.inventory_item_id === chain.id && p.product_type_id === pt.id) ||
+        (tierPriceMap && tierPriceMap[pt.id] != null)
       );
 
   if (availableTypes.length === 0) {
@@ -45,11 +49,14 @@ export function ProductTypeRow({
             (p) => p.inventory_item_id === chain.id && p.product_type_id === pt.id
           );
           const isPerInch = chain.pricing_mode === 'per_inch';
+          // Price resolution: per-inch → chain.sell_price, else chain_product_prices → tier price → chain.sell_price
           const price = isPerInch
             ? Number(chain.sell_price)
             : priceRow
               ? Number(priceRow.sell_price)
-              : Number(chain.sell_price);
+              : tierPriceMap && tierPriceMap[pt.id] != null
+                ? tierPriceMap[pt.id]
+                : Number(chain.sell_price);
           const inches = priceRow?.default_inches
             ? Number(priceRow.default_inches)
             : Number(pt.default_inches);
