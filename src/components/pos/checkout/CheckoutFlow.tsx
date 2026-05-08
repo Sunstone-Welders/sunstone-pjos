@@ -45,8 +45,11 @@ interface CheckoutFlowProps {
   items: Array<{ name: string; quantity: number; unitPrice: number; lineTotal: number }>;
   activeQueueEntry?: { name: string } | null;
   cardProcessor?: string | null;
-  // Stripe payment link props
+  // Payment processor props
   stripeConnected?: boolean;
+  squareConnected?: boolean;
+  venmoUsername?: string;
+  defaultProcessor?: string | null;
   tenantId?: string;
   saleId?: string | null;
   onCreatePendingSale?: () => Promise<string | null>;
@@ -96,6 +99,9 @@ export function CheckoutFlow({
   activeQueueEntry,
   cardProcessor,
   stripeConnected,
+  squareConnected,
+  venmoUsername,
+  defaultProcessor,
   tenantId,
   saleId,
   onCreatePendingSale,
@@ -154,6 +160,9 @@ export function CheckoutFlow({
         platformFeeAmount={platformFeeAmount ?? 0}
         activeQueueEntry={activeQueueEntry}
         stripeConnected={stripeConnected ?? false}
+        squareConnected={squareConnected}
+        venmoUsername={venmoUsername}
+        defaultProcessor={defaultProcessor}
         tenantId={tenantId ?? ''}
         saleId={saleId ?? null}
         onCreatePendingSale={onCreatePendingSale ?? (async () => null)}

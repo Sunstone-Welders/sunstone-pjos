@@ -1,10 +1,11 @@
 // ============================================================================
-// PaymentScreen — Redesigned for Stripe Payment Links
+// PaymentScreen — Stripe + Square Payment Links + Venmo Deep Link
 // src/components/pos/checkout/PaymentScreen.tsx
 // ============================================================================
-// Two clear paths:
-//   1. "Charge Customer" — Stripe Checkout via QR code or text link
-//   2. "Record External Payment" — cash, venmo, external card reader
+// Three payment paths:
+//   1. "Charge Customer" — Stripe or Square Checkout via QR code or text link
+//   2. "Send Venmo Link" — deep link to artist's Venmo, manual confirmation
+//   3. "Record External Payment" — cash, external card reader
 // Plus: "Apply Gift Card" — partial or full gift card redemption
 // ============================================================================
 
@@ -39,8 +40,11 @@ interface PaymentScreenProps {
   tipAmount: number;
   platformFeeAmount: number;
   activeQueueEntry?: { name: string } | null;
-  // Stripe payment link
+  // Payment processors
   stripeConnected: boolean;
+  squareConnected?: boolean;
+  venmoUsername?: string;
+  defaultProcessor?: string | null;
   tenantId: string;
   saleId: string | null;
   onCreatePendingSale: () => Promise<string | null>;
@@ -52,7 +56,7 @@ interface PaymentScreenProps {
   onGiftCardApplied?: (data: GiftCardData | null) => void;
 }
 
-type PaymentPath = null | 'charge' | 'external';
+type PaymentPath = null | 'charge' | 'venmo' | 'external';
 type ChargeMethod = null | 'qr' | 'text';
 
 // ── SVG Icons ──
@@ -109,6 +113,9 @@ export function PaymentScreen({
   platformFeeAmount,
   activeQueueEntry,
   stripeConnected,
+  squareConnected,
+  venmoUsername,
+  defaultProcessor,
   tenantId,
   saleId: existingSaleId,
   onCreatePendingSale,
@@ -124,6 +131,8 @@ export function PaymentScreen({
   const [chargeMethod, setChargeMethod] = useState<ChargeMethod>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
+  const [squareOrderId, setSquareOrderId] = useState<string | null>(null);
+  const [activeProcessor, setActiveProcessor] = useState<'stripe' | 'square'>('stripe');
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [pendingSaleId, setPendingSaleId] = useState<string | null>(existingSaleId);
   const [creating, setCreating] = useState(false);
@@ -132,9 +141,23 @@ export function PaymentScreen({
   const [smsPhone, setSmsPhone] = useState(initialPhone || '');
   const [sendingSms, setSendingSms] = useState(false);
   const [smsSent, setSmsSent] = useState(false);
+  // Venmo deep link state
+  const [venmoLinkSent, setVenmoLinkSent] = useState(false);
+  const [venmoSending, setVenmoSending] = useState(false);
+  const [venmoPhone, setVenmoPhone] = useState(initialPhone || '');
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const pollCountRef = useRef(0);
   const supabase = createClient();
+
+  // Determine which processor to use for "Charge Customer"
+  const canCharge = stripeConnected || squareConnected;
+  const chargeProcessor: 'stripe' | 'square' = (() => {
+    if (defaultProcessor === 'square' && squareConnected) return 'square';
+    if (defaultProcessor === 'stripe' && stripeConnected) return 'stripe';
+    if (stripeConnected) return 'stripe';
+    if (squareConnected) return 'square';
+    return 'stripe';
+  })();
 
   // Clean up polling on unmount
   useEffect(() => {
@@ -143,17 +166,17 @@ export function PaymentScreen({
     };
   }, []);
 
-  // ── Create pending sale + Stripe session ──
+  // ── Create pending sale + Stripe/Square checkout session ──
 
-  const startStripePayment = useCallback(async (method: 'qr' | 'text') => {
-    // Guard: check Stripe connection before making any calls
-    if (!stripeConnected) {
-      toast.error('Connect your Stripe account in Settings to accept card payments.');
+  const startChargePayment = useCallback(async (method: 'qr' | 'text') => {
+    if (!canCharge) {
+      toast.error('Connect Stripe or Square in Settings to accept card payments.');
       return;
     }
 
     setCreating(true);
     setChargeMethod(method);
+    setActiveProcessor(chargeProcessor);
 
     try {
       // Create the sale record if not already created
@@ -164,8 +187,12 @@ export function PaymentScreen({
         setPendingSaleId(saleId);
       }
 
-      // Create Stripe Checkout session — amounts are verified server-side from DB
-      const res = await fetch('/api/stripe/payment-link', {
+      // Route to the correct processor's payment link API
+      const apiUrl = chargeProcessor === 'square'
+        ? '/api/square/payment-link'
+        : '/api/stripe/payment-link';
+
+      const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -182,8 +209,14 @@ export function PaymentScreen({
 
       const data = await res.json();
       setCheckoutUrl(data.url);
-      setCheckoutSessionId(data.sessionId || null);
-      console.log('Starting poll for session:', data.sessionId);
+
+      if (chargeProcessor === 'square') {
+        setSquareOrderId(data.orderId || null);
+        setCheckoutSessionId(null);
+      } else {
+        setCheckoutSessionId(data.sessionId || null);
+        setSquareOrderId(null);
+      }
 
       // Generate QR code
       if (data.url) {
@@ -195,9 +228,8 @@ export function PaymentScreen({
         setQrDataUrl(qr);
       }
 
-      // Start polling for payment completion — pass sessionId directly
-      // to avoid stale closure (setState hasn't re-rendered yet)
-      startPolling(saleId, data.sessionId || null);
+      // Start polling for payment completion
+      startPolling(saleId, data.sessionId || null, data.orderId || null);
     } catch (err: any) {
       console.error('[PaymentScreen] Error:', err);
       toast.error(err.message || 'Payment setup failed. Please try again.');
@@ -205,11 +237,11 @@ export function PaymentScreen({
     } finally {
       setCreating(false);
     }
-  }, [pendingSaleId, mode, stripeConnected]);
+  }, [pendingSaleId, mode, canCharge, chargeProcessor]);
 
-  // ── Poll for payment status (DB + Stripe API fallback) ──
+  // ── Poll for payment status (DB + Stripe/Square API fallback) ──
 
-  const startPolling = useCallback((saleId: string, sessionId: string | null) => {
+  const startPolling = useCallback((saleId: string, sessionId: string | null, orderId?: string | null) => {
     if (pollRef.current) clearInterval(pollRef.current);
     pollCountRef.current = 0;
     setPaymentTimedOut(false);
@@ -238,21 +270,26 @@ export function PaymentScreen({
         return;
       }
 
-      // 2. Every 3rd poll, also check Stripe directly as fallback
-      if (sessionId && pollCountRef.current % 3 === 0) {
+      // 2. Every 3rd poll, check processor API directly as fallback
+      if (pollCountRef.current % 3 === 0) {
         try {
-          const res = await fetch(`/api/stripe/session-status?sessionId=${sessionId}`);
-          const stripeData = await res.json();
-          console.log('Poll result:', {
-            sessionId,
-            responseOk: res.ok,
-            status: stripeData.status,
-            rawData: stripeData,
-          });
-          if (res.ok) {
-            if (stripeData.status === 'paid') {
+          // Square polling
+          if (orderId) {
+            const res = await fetch(`/api/square/check-payment?orderId=${orderId}&saleId=${saleId}`);
+            const sqData = await res.json();
+            if (res.ok && sqData.status === 'paid') {
               if (pollRef.current) clearInterval(pollRef.current);
-              // Belt-and-suspenders: update sale status in case webhook is delayed
+              setPaymentComplete(true);
+              setTimeout(() => { onPaymentCompleted(saleId); }, 2000);
+              return;
+            }
+          }
+          // Stripe polling
+          if (sessionId) {
+            const res = await fetch(`/api/stripe/session-status?sessionId=${sessionId}`);
+            const stripeData = await res.json();
+            if (res.ok && stripeData.status === 'paid') {
+              if (pollRef.current) clearInterval(pollRef.current);
               await supabase.from('sales').update({
                 payment_status: 'completed',
               }).eq('id', saleId).eq('payment_status', 'pending');
@@ -300,6 +337,41 @@ export function PaymentScreen({
     }
   };
 
+  // ── Send Venmo deep link via SMS ──
+
+  const sendVenmoLink = async () => {
+    if (!venmoPhone.trim() || !venmoUsername) return;
+    setVenmoSending(true);
+    try {
+      const res = await fetch('/api/venmo/send-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          phone: venmoPhone.trim(),
+          venmoUsername,
+          amount: effectiveTotal,
+          businessName: tenantName,
+        }),
+      });
+      const data = await res.json();
+      if (data.sent) {
+        setVenmoLinkSent(true);
+      } else {
+        toast.error(data.error || 'Failed to send Venmo link.');
+      }
+    } catch {
+      toast.error('Network error. Please check your connection.');
+    } finally {
+      setVenmoSending(false);
+    }
+  };
+
+  const confirmVenmoPayment = () => {
+    onSelectMethod('venmo');
+    setTimeout(() => onCompleteSale(), 150);
+  };
+
   // ── Cancel pending payment ──
 
   const cancelPending = () => {
@@ -307,15 +379,22 @@ export function PaymentScreen({
     setChargeMethod(null);
     setCheckoutUrl(null);
     setCheckoutSessionId(null);
+    setSquareOrderId(null);
     setQrDataUrl(null);
     setSmsSent(false);
     setPaymentTimedOut(false);
   };
 
+  const cancelVenmo = () => {
+    setPath(null);
+    setVenmoLinkSent(false);
+    setVenmoSending(false);
+  };
+
   const retryPolling = () => {
     if (pendingSaleId) {
       setPaymentTimedOut(false);
-      startPolling(pendingSaleId, checkoutSessionId);
+      startPolling(pendingSaleId, checkoutSessionId, squareOrderId);
     }
   };
 
@@ -629,19 +708,19 @@ export function PaymentScreen({
           {/* Right column — Payment Paths */}
           <div className="md:w-1/2 space-y-4">
 
-            {/* ── Stripe not connected banner ── */}
-            {!stripeConnected && (
+            {/* ── No processor connected banner ── */}
+            {!canCharge && !venmoUsername && (
               <div className="bg-[var(--surface-subtle)] border border-[var(--border-default)] rounded-xl p-4 mb-2">
                 <p className="text-sm text-[var(--text-secondary)]">
-                  Connect Stripe in Settings to accept card payments directly through Sunstone Studio. Customers pay via QR code or text link with automatic tracking.
+                  Connect Stripe or Square in Settings to accept card payments directly through Sunstone Studio. Customers pay via QR code or text link with automatic tracking.
                 </p>
               </div>
             )}
 
-            {/* ── PATH 1: Charge Customer ── */}
-            {stripeConnected && (
+            {/* ── PATH 1: Charge Customer (Stripe or Square) ── */}
+            {canCharge && (
               <>
-                {path !== 'external' && (
+                {path !== 'external' && path !== 'venmo' && (
                   <div className="space-y-3">
                     {path !== 'charge' && (
                       <button
@@ -650,7 +729,9 @@ export function PaymentScreen({
                         style={{ backgroundColor: 'var(--accent-primary)', color: 'white' }}
                       >
                         <div className="text-lg font-bold">Charge Customer</div>
-                        <p className="text-sm opacity-80 mt-0.5">QR code or text link — card payment</p>
+                        <p className="text-sm opacity-80 mt-0.5">
+                          QR code or text link — card payment via {chargeProcessor === 'square' ? 'Square' : 'Stripe'}
+                        </p>
                       </button>
                     )}
 
@@ -661,7 +742,7 @@ export function PaymentScreen({
                         </p>
                         <div className="grid grid-cols-2 gap-3">
                           <button
-                            onClick={() => startStripePayment('qr')}
+                            onClick={() => startChargePayment('qr')}
                             disabled={creating}
                             className="py-6 rounded-2xl text-center transition-all min-h-[100px] flex flex-col items-center justify-center gap-2 bg-[var(--surface-raised)] border border-[var(--border-default)] text-[var(--text-primary)] hover:border-[var(--accent-primary)] hover:shadow-sm disabled:opacity-50"
                           >
@@ -670,7 +751,7 @@ export function PaymentScreen({
                             <p className="text-xs text-[var(--text-tertiary)] px-2">Customer scans & pays on their phone</p>
                           </button>
                           <button
-                            onClick={() => startStripePayment('text')}
+                            onClick={() => startChargePayment('text')}
                             disabled={creating}
                             className="py-6 rounded-2xl text-center transition-all min-h-[100px] flex flex-col items-center justify-center gap-2 bg-[var(--surface-raised)] border border-[var(--border-default)] text-[var(--text-primary)] hover:border-[var(--accent-primary)] hover:shadow-sm disabled:opacity-50"
                           >
@@ -696,6 +777,95 @@ export function PaymentScreen({
                   </div>
                 )}
               </>
+            )}
+
+            {/* ── PATH 2: Send Venmo Link ── */}
+            {venmoUsername && path !== 'charge' && path !== 'external' && (
+              <div className="space-y-3">
+                {path !== 'venmo' && (
+                  <button
+                    onClick={() => setPath('venmo')}
+                    className="w-full rounded-2xl p-4 text-left transition-all border-2 border-[#3D95CE] bg-[var(--surface-raised)] hover:bg-[#3D95CE]/5 min-h-[64px]"
+                  >
+                    <div className="flex items-center gap-2">
+                      <VenmoIcon />
+                      <div>
+                        <div className="text-base font-semibold text-[var(--text-primary)]">Send Venmo Link</div>
+                        <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Text a Venmo payment link to the customer</p>
+                      </div>
+                    </div>
+                  </button>
+                )}
+
+                {path === 'venmo' && !venmoLinkSent && (
+                  <>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-tertiary)]">
+                      Send Venmo Link — ${effectiveTotal.toFixed(2)}
+                    </p>
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wide mb-1.5">
+                        Customer Phone
+                      </label>
+                      <input
+                        type="tel"
+                        value={venmoPhone}
+                        onChange={(e) => setVenmoPhone(e.target.value)}
+                        placeholder="(555) 123-4567"
+                        className="w-full h-12 px-4 rounded-xl border border-[var(--border-default)] bg-[var(--surface-raised)] text-[var(--text-primary)] text-base focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-primary)]/20"
+                      />
+                    </div>
+                    <button
+                      onClick={sendVenmoLink}
+                      disabled={venmoSending || !venmoPhone.trim()}
+                      className="w-full h-12 rounded-xl font-semibold text-base transition-all disabled:opacity-50 min-h-[48px]"
+                      style={{ backgroundColor: '#3D95CE', color: 'white' }}
+                    >
+                      {venmoSending ? 'Sending...' : `Send Venmo Link — $${effectiveTotal.toFixed(2)}`}
+                    </button>
+                    <button
+                      onClick={cancelVenmo}
+                      className="text-sm text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors min-h-[44px]"
+                    >
+                      Back
+                    </button>
+                  </>
+                )}
+
+                {path === 'venmo' && venmoLinkSent && (
+                  <>
+                    <div className="bg-[var(--surface-subtle)] rounded-xl p-4 text-center space-y-2">
+                      <p className="text-sm font-medium text-[var(--text-primary)]">
+                        Venmo link sent to {venmoPhone}
+                      </p>
+                      <p className="text-xs text-[var(--text-tertiary)]">
+                        When you see the Venmo notification on your phone, tap below to record the sale.
+                      </p>
+                    </div>
+                    <button
+                      onClick={confirmVenmoPayment}
+                      disabled={processing}
+                      className="w-full h-14 rounded-xl font-semibold text-base transition-all active:scale-[0.97] shadow-sm disabled:opacity-60 min-h-[48px]"
+                      style={{ backgroundColor: 'var(--accent-primary)', color: 'white' }}
+                    >
+                      {processing ? 'Processing...' : `Confirm Payment Received — $${effectiveTotal.toFixed(2)}`}
+                    </button>
+                    <div className="flex justify-center gap-3">
+                      <button
+                        onClick={() => { setVenmoLinkSent(false); sendVenmoLink(); }}
+                        className="text-sm text-[var(--accent-primary)] hover:underline min-h-[44px]"
+                      >
+                        Resend Link
+                      </button>
+                      <button
+                        onClick={cancelVenmo}
+                        className="text-sm text-[var(--text-tertiary)] hover:text-[var(--text-primary)] min-h-[44px]"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
 
             {/* ── Gift Card ── */}
@@ -739,8 +909,8 @@ export function PaymentScreen({
               </div>
             )}
 
-            {/* ── PATH 2: Record External Payment ── */}
-            {path !== 'charge' && (
+            {/* ── PATH 3: Record External Payment ── */}
+            {path !== 'charge' && path !== 'venmo' && (
               <div className="space-y-3">
                 {path !== 'external' && (
                   <button

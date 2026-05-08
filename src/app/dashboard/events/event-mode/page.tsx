@@ -398,13 +398,23 @@ function EventModePageInner() {
         };
       });
 
+      // Determine which processor to use for pending sale
+      const defaultProc = (tenant as any).default_payment_processor;
+      const hasSquare = !!(tenant as any).square_merchant_id;
+      const hasStripe = !!tenant.stripe_account_id;
+      const processor = (defaultProc === 'square' && hasSquare) ? 'square'
+        : (defaultProc === 'stripe' && hasStripe) ? 'stripe'
+        : hasStripe ? 'stripe'
+        : hasSquare ? 'square' : 'stripe';
+      const payMethod = processor === 'square' ? 'square_link' : 'stripe_link';
+
       // No inventory deductions for pending sales — webhook deducts on payment completion
       const { data: saleId, error: rpcError } = await supabase.rpc('create_sale_transaction', {
         p_tenant_id: tenant.id, p_event_id: eventId, p_client_id: clientId || null,
         p_subtotal: cart.subtotal, p_discount_amount: cart.discount_amount,
         p_tax_amount: cart.tax_amount, p_tip_amount: cart.tip_amount,
         p_platform_fee_amount: cart.platform_fee_amount, p_total: cart.total,
-        p_payment_method: 'stripe_link', p_payment_status: 'pending', p_payment_provider: 'stripe',
+        p_payment_method: payMethod, p_payment_status: 'pending', p_payment_provider: processor,
         p_platform_fee_rate: PLATFORM_FEE_RATES[tenant.subscription_tier],
         p_fee_handling: tenant.fee_handling || null, p_status: 'completed',
         p_receipt_email: receiptEmail || null, p_receipt_phone: receiptPhone || null,
@@ -995,6 +1005,9 @@ function EventModePageInner() {
               items={cart.items.map((i: any) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price, lineTotal: i.line_total }))}
               activeQueueEntry={activeQueueEntry}
               stripeConnected={!!tenant?.stripe_account_id}
+              squareConnected={!!(tenant as any)?.square_merchant_id}
+              venmoUsername={(tenant as any)?.venmo_username || ''}
+              defaultProcessor={(tenant as any)?.default_payment_processor || null}
               tenantId={tenant?.id || ''}
               onCreatePendingSale={createPendingSale}
               onPaymentCompleted={handlePaymentCompleted}

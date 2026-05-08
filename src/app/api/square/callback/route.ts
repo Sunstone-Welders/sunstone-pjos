@@ -46,15 +46,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(settingsUrl);
     }
 
-    const applicationId = process.env.SQUARE_APPLICATION_ID!;
-    const applicationSecret = process.env.SQUARE_APPLICATION_SECRET!;
+    const applicationId = process.env.SQUARE_APP_ID!;
+    const applicationSecret = process.env.SQUARE_APP_SECRET!;
     const environment = process.env.SQUARE_ENVIRONMENT || 'sandbox';
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
     // Log config (safe — no secrets)
     console.log('[Square Callback] Config:', {
-      hasApplicationId: !!applicationId,
-      hasApplicationSecret: !!applicationSecret,
+      hasAppId: !!applicationId,
+      hasAppSecret: !!applicationSecret,
       environment,
       appUrl,
       tenantId: state.tenant_id,

@@ -12,7 +12,7 @@ export type BusinessType = 'permanent_jewelry' | 'salon_spa' | 'boutique' | 'pop
 export type InventoryType = 'chain' | 'jump_ring' | 'charm' | 'connector' | 'clasp' | 'other';
 export type InventoryUnit = 'ft' | 'in' | 'each' | 'pack';
 export type MovementType = 'restock' | 'sale' | 'waste' | 'adjustment';
-export type PaymentMethod = 'stripe_link' | 'cash' | 'venmo' | 'card_external' | 'gift_card';
+export type PaymentMethod = 'stripe_link' | 'square_link' | 'cash' | 'venmo' | 'card_external' | 'gift_card';
 export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'refunded';
 export type QueueStatus = 'waiting' | 'notified' | 'served' | 'no_show';
 export type SaleStatus = 'draft' | 'completed' | 'voided';
@@ -106,6 +106,8 @@ export interface Tenant {
   auto_sms_receipt: boolean;
   receipt_footer: string;
   receipt_tagline: string;
+  // Venmo
+  venmo_username: string | null;
   // Salesforce + Supply Reorder
   sf_account_id: string | null;
   stripe_reorder_customer_id: string | null;

@@ -408,6 +408,8 @@ function SettingsPage() {
   const [disconnectingStripe, setDisconnectingStripe] = useState(false);
   const [defaultProcessor, setDefaultProcessor] = useState<string | null>(null);
   const [savingProcessor, setSavingProcessor] = useState(false);
+  const [venmoUsername, setVenmoUsername] = useState('');
+  const [savingVenmo, setSavingVenmo] = useState(false);
 
   // ── Suppliers state (for summary count) ──
   const [suppliers, setSuppliers] = useState<{ id: string }[]>([]);
@@ -560,8 +562,9 @@ function SettingsPage() {
       setSelectedThemeId(tenant.theme_id);
     }
 
-    // Load default payment processor
+    // Load default payment processor + Venmo
     setDefaultProcessor((tenant as any).default_payment_processor || null);
+    setVenmoUsername((tenant as any).venmo_username || '');
 
     // Load profile settings
     const ps = (tenant as any).profile_settings;
@@ -925,6 +928,21 @@ function SettingsPage() {
     }
   };
 
+  const saveVenmoUsername = async () => {
+    if (!tenant) return;
+    setSavingVenmo(true);
+    const clean = venmoUsername.replace(/^@/, '').trim();
+    const { error } = await supabase
+      .from('tenants')
+      .update({ venmo_username: clean || null })
+      .eq('id', tenant.id);
+    setSavingVenmo(false);
+    if (error) { toast.error(error.message); return; }
+    setVenmoUsername(clean);
+    toast.success(clean ? `Venmo connected as @${clean}` : 'Venmo disconnected');
+    refetch();
+  };
+
   const disconnectSquare = async () => {
     setDisconnectingSquare(true);
     try {
@@ -1046,9 +1064,11 @@ function SettingsPage() {
   // ── Summary lines ──
   const businessSummary = businessName || 'Set up your business info';
 
-  const paymentSummary = stripeConnected
-        ? 'Stripe connected'
-        : 'Connect a payment processor';
+  const paymentSummary = [
+    stripeConnected && 'Stripe',
+    squareConnected && 'Square',
+    venmoUsername && 'Venmo',
+  ].filter(Boolean).join(' + ') || 'Connect a payment processor';
 
   const billingSummary = isPastDue
     ? 'Payment failed — update payment method'
@@ -1443,7 +1463,7 @@ function SettingsPage() {
       >
         <div className="space-y-5 pt-4">
           <p className="text-sm text-[var(--text-secondary)]">
-            Connect Stripe to accept card payments directly through Sunstone Studio. Customers pay via QR code or text link — professional, fast, and fully tracked.
+            Connect payment processors to accept card payments directly through Sunstone Studio. Customers pay via QR code or text link — professional, fast, and fully tracked.
           </p>
 
           {/* Stripe card */}
@@ -1477,6 +1497,96 @@ function SettingsPage() {
                 </Button>
               </>
             )}
+          </div>
+
+          {/* Square card */}
+          <div className={`relative rounded-xl border-2 p-5 space-y-3 transition-colors ${
+            squareConnected ? 'border-[var(--accent-primary)] bg-[var(--surface-subtle)]' : 'border-[var(--border-default)]'
+          }`}>
+            <div className="flex items-center justify-between">
+              <span className="text-base font-semibold text-[var(--text-primary)]">Square</span>
+              {squareConnected ? (
+                <Badge variant="accent" size="sm">Connected</Badge>
+              ) : (
+                <Badge variant="default" size="sm">Not connected</Badge>
+              )}
+            </div>
+            {squareConnected ? (
+              <>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  Square Connected — Accept payments via QR code and text link in the POS. No platform fees — payments go directly to you.
+                </p>
+                <Button variant="danger" size="sm" onClick={disconnectSquare} loading={disconnectingSquare}>
+                  Disconnect Square
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  Connect Square to accept card payments through your Square account. Same QR code and text link experience — just powered by Square.
+                </p>
+                <Button variant="primary" size="sm" onClick={() => { window.location.href = '/api/square/authorize'; }}>
+                  Connect Square
+                </Button>
+              </>
+            )}
+          </div>
+
+          {/* Default Processor Toggle — only when both are connected */}
+          {stripeConnected && squareConnected && (
+            <div className="rounded-xl border border-[var(--border-default)] p-4 space-y-3">
+              <p className="text-sm font-medium text-[var(--text-primary)]">Default Payment Processor</p>
+              <p className="text-xs text-[var(--text-tertiary)]">
+                Choose which processor to use for &ldquo;Charge Customer&rdquo; in the POS.
+              </p>
+              <div className="flex gap-2">
+                {(['stripe', 'square'] as const).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => saveDefaultProcessor(p)}
+                    disabled={savingProcessor}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
+                      (defaultProcessor || 'stripe') === p
+                        ? 'bg-[var(--text-primary)] text-[var(--surface-base)]'
+                        : 'border border-[var(--border-default)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
+                    }`}
+                  >
+                    {p === 'stripe' ? 'Stripe' : 'Square'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Venmo */}
+          <div className="border-t border-[var(--border-subtle)]" />
+          <div className="rounded-xl border border-[var(--border-default)] p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-base font-semibold text-[var(--text-primary)]">Venmo</span>
+              {venmoUsername ? (
+                <Badge variant="accent" size="sm">Connected as @{venmoUsername}</Badge>
+              ) : (
+                <Badge variant="default" size="sm">Not configured</Badge>
+              )}
+            </div>
+            <p className="text-xs text-[var(--text-tertiary)]">
+              Enter your Venmo username (without the @). Customers will receive a Venmo payment link via text — they tap to pay you directly.
+            </p>
+            <div className="flex gap-2 items-center">
+              <div className="flex items-center rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] overflow-hidden flex-1">
+                <span className="px-3 text-sm text-[var(--text-tertiary)] bg-[var(--surface-subtle)] border-r border-[var(--border-default)] h-10 flex items-center">@</span>
+                <input
+                  type="text"
+                  value={venmoUsername}
+                  onChange={(e) => setVenmoUsername(e.target.value.replace(/^@/, ''))}
+                  placeholder="your-venmo-username"
+                  className="flex-1 h-10 px-3 text-sm text-[var(--text-primary)] bg-transparent focus:outline-none"
+                />
+              </div>
+              <Button variant="primary" size="sm" onClick={saveVenmoUsername} loading={savingVenmo}>
+                Save
+              </Button>
+            </div>
           </div>
 
           {/* Payment Info */}

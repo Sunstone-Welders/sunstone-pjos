@@ -33,10 +33,10 @@ export async function POST(request: NextRequest) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Client ${process.env.SQUARE_APPLICATION_SECRET}`,
+            'Authorization': `Client ${process.env.SQUARE_APP_SECRET}`,
           },
           body: JSON.stringify({
-            client_id: process.env.SQUARE_APPLICATION_ID,
+            client_id: process.env.SQUARE_APP_ID,
             access_token: tenant.square_access_token,
           }),
         });

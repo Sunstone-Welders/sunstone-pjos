@@ -113,9 +113,6 @@ export async function POST(request: NextRequest) {
           amountMoney: { amount: BigInt(totalCents), currency: 'USD' },
           tipMoney: tipCents ? { amount: BigInt(tipCents), currency: 'USD' } : undefined,
           locationId: tenant.square_location_id,
-          appFeeMoney: platformFeeCents
-            ? { amount: BigInt(platformFeeCents), currency: 'USD' }
-            : undefined,
         });
 
         paymentId = response.result.payment?.id;

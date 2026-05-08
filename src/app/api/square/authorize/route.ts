@@ -26,20 +26,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard/settings?error=no_tenant', request.url));
     }
 
-    const applicationId = process.env.SQUARE_APPLICATION_ID;
+    const applicationId = process.env.SQUARE_APP_ID;
     const environment = process.env.SQUARE_ENVIRONMENT || 'sandbox';
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
     // Log configuration for debugging (safe — doesn't log secrets)
     console.log('[Square OAuth] Config check:', {
-      hasApplicationId: !!applicationId,
+      hasAppId: !!applicationId,
       environment,
       appUrl,
       tenantId: member.tenant_id,
     });
 
     if (!applicationId) {
-      console.error('[Square OAuth] SQUARE_APPLICATION_ID is not set');
+      console.error('[Square OAuth] SQUARE_APP_ID is not set');
       return NextResponse.redirect(new URL('/dashboard/settings?error=square_not_configured', request.url));
     }
 
