@@ -71,6 +71,7 @@ interface NavItem {
   group?: string;
   requireCrm?: boolean;
   requirePaid?: boolean;
+  requireAmbassador?: boolean;
 }
 
 /** All sidebar nav items (visible in sidebar + tablet sidebar) */
@@ -88,7 +89,7 @@ const sidebarItems: NavItem[] = [
   { href: '/dashboard/gift-cards', label: 'Gift Cards', icon: GiftCardIcon },
   { href: '/dashboard/warranties', label: 'Warranties', icon: WarrantyIcon },
   { href: '/dashboard/reports',    label: 'Reports',    icon: ReportsIcon },
-  { href: '/dashboard/ambassador', label: 'Ambassador', icon: AmbassadorIcon, requirePaid: true },
+  { href: '/dashboard/ambassador', label: 'Ambassador', icon: AmbassadorIcon, requireAmbassador: true },
   { href: '/dashboard/settings',   label: 'Settings',   icon: SettingsIcon, requirePermission: 'settings:manage' },
 ];
 
@@ -109,7 +110,7 @@ const moreSheetItems: NavItem[] = [
   { href: '/dashboard/gift-cards', label: 'Gift Cards', icon: GiftCardIcon },
   { href: '/dashboard/warranties', label: 'Warranties', icon: WarrantyIcon },
   { href: '/dashboard/reports',    label: 'Reports',    icon: ReportsIcon },
-  { href: '/dashboard/ambassador', label: 'Ambassador', icon: AmbassadorIcon, requirePaid: true },
+  { href: '/dashboard/ambassador', label: 'Ambassador', icon: AmbassadorIcon, requireAmbassador: true },
   { href: '/dashboard/settings',   label: 'Settings',   icon: SettingsIcon, requirePermission: 'settings:manage' },
 ];
 
@@ -266,9 +267,23 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
 // Hooks
 // ============================================================================
 
+function useIsAmbassador() {
+  const [isAmbassador, setIsAmbassador] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/ambassador/dashboard')
+      .then(r => r.ok ? r.json() : { ambassador: null })
+      .then(d => setIsAmbassador(!!d.ambassador))
+      .catch(() => {});
+  }, []);
+
+  return isAmbassador;
+}
+
 function useFilteredItems(items: NavItem[]) {
   const { can, tenant } = useTenant();
   const hasPaidPlan = tenant?.subscription_status === 'active' || !!tenant?.stripe_subscription_id;
+  const isAmbassador = useIsAmbassador();
   // Memoize to prevent creating a new array reference on every render,
   // which would cause unnecessary re-renders in consuming components.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -276,11 +291,12 @@ function useFilteredItems(items: NavItem[]) {
     () => items.filter((item) => {
       if (item.requirePermission && !can(item.requirePermission)) return false;
       if (item.requirePaid && !hasPaidPlan) return false;
+      if (item.requireAmbassador && !isAmbassador) return false;
       return true;
     }),
     // items is a stable constant defined outside the component; can depends on role/isOwner
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [can, hasPaidPlan]
+    [can, hasPaidPlan, isAmbassador]
   );
 }
 
@@ -487,6 +503,7 @@ function MoreSheet({ isOpen, onClose, onSunnyOpen }: { isOpen: boolean; onClose:
   const isPlatformAdmin = useIsPlatformAdmin();
   const handleLogout = useLogout();
   const hasPaidPlan = tenant?.subscription_status === 'active' || !!tenant?.stripe_subscription_id;
+  const isAmbassador = useIsAmbassador();
 
   // Lock body scroll when open
   useEffect(() => {
@@ -499,6 +516,7 @@ function MoreSheet({ isOpen, onClose, onSunnyOpen }: { isOpen: boolean; onClose:
   const filteredMoreItems = moreSheetItems.filter((item) => {
     if (item.requirePermission && !can(item.requirePermission)) return false;
     if (item.requirePaid && !hasPaidPlan) return false;
+    if (item.requireAmbassador && !isAmbassador) return false;
     return true;
   });
 
