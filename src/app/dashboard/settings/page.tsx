@@ -3586,6 +3586,8 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
   const [handChainPrice, setHandChainPrice] = useState('');
   // Custom product type prices in the form: { [productTypeId]: string }
   const [customFormPrices, setCustomFormPrices] = useState<Record<string, string>>({});
+  // Inline new categories being added in the tier form
+  const [newCategories, setNewCategories] = useState<{id: string; name: string; price: string}[]>([]);
 
   const loadTiers = useCallback(async () => {
     if (!tenant) return;
@@ -3659,6 +3661,7 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
         formPrices[pt.id] = tierCustom[pt.id] != null ? String(tierCustom[pt.id]) : '';
       }
       setCustomFormPrices(formPrices);
+      setNewCategories([]);
     } else {
       setEditingTier(null);
       setTierName('');
@@ -3668,6 +3671,7 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
       setNecklacePrice('');
       setHandChainPrice('');
       setCustomFormPrices({});
+      setNewCategories([]);
     }
     setShowTierForm(true);
   };
@@ -3731,6 +3735,51 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
         .insert(customInserts);
       if (cpError) {
         toast.error('Tier saved but custom prices failed: ' + cpError.message);
+      }
+    }
+
+    // Create new inline categories as product_types + prices
+    const baseSortOrder = customProductTypes.length > 0
+      ? Math.max(...customProductTypes.map(pt => pt.sort_order)) + 1
+      : 100;
+    for (let i = 0; i < newCategories.length; i++) {
+      const cat = newCategories[i];
+      if (!cat.name.trim() || !cat.price) continue;
+      // Check if a custom product type with the same name already exists
+      const existing = customProductTypes.find(pt => pt.name.toLowerCase() === cat.name.trim().toLowerCase());
+      let productTypeId: string;
+      if (existing) {
+        productTypeId = existing.id;
+      } else {
+        const { data: newPt, error: ptError } = await supabase
+          .from('product_types')
+          .insert({
+            tenant_id: tenant.id,
+            name: cat.name.trim(),
+            default_inches: 0,
+            is_default: false,
+            is_active: true,
+            sort_order: baseSortOrder + i,
+          })
+          .select('id')
+          .single();
+        if (ptError || !newPt) {
+          toast.error(`Failed to create "${cat.name}": ${ptError?.message}`);
+          continue;
+        }
+        productTypeId = newPt.id;
+      }
+      // Upsert the price for this tier
+      const { error: priceErr } = await supabase
+        .from('pricing_tier_custom_prices')
+        .upsert({
+          tenant_id: tenant.id,
+          pricing_tier_id: tierId,
+          product_type_id: productTypeId,
+          price: Number(cat.price),
+        }, { onConflict: 'pricing_tier_id,product_type_id' });
+      if (priceErr) {
+        toast.error(`Price for "${cat.name}" failed: ${priceErr.message}`);
       }
     }
 
@@ -3965,11 +4014,11 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
                   />
                 </div>
               </div>
-              {/* Custom product types */}
-              {customProductTypes.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.05em] text-[var(--text-tertiary)] mb-2">Custom Products</p>
-                  <div className="grid grid-cols-2 gap-3">
+              {/* Custom product types — always visible */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.05em] text-[var(--text-tertiary)] mb-2">Custom Products</p>
+                {customProductTypes.length > 0 && (
+                  <div className="grid grid-cols-2 gap-3 mb-3">
                     {customProductTypes.map(pt => (
                       <Input
                         key={pt.id}
@@ -3983,8 +4032,58 @@ function PricingTiersSection({ tenant, onSaved }: { tenant: any; onSaved: () => 
                       />
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+                {/* Inline new categories */}
+                {newCategories.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    {newCategories.map((cat) => (
+                      <div key={cat.id} className="flex items-end gap-2">
+                        <div className="flex-1 min-w-0">
+                          <Input
+                            label="Name"
+                            value={cat.name}
+                            onChange={(e) => setNewCategories(prev => prev.map(c => c.id === cat.id ? { ...c, name: e.target.value } : c))}
+                            placeholder="e.g., Body Butter"
+                          />
+                        </div>
+                        <div className="w-28 shrink-0">
+                          <Input
+                            label="Price"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={cat.price}
+                            onChange={(e) => setNewCategories(prev => prev.map(c => c.id === cat.id ? { ...c, price: e.target.value } : c))}
+                            placeholder="$0.00"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setNewCategories(prev => prev.filter(c => c.id !== cat.id))}
+                          className="p-2 rounded-lg text-[var(--text-tertiary)] hover:text-error-500 hover:bg-error-50 transition-colors shrink-0"
+                          style={{ minWidth: 48, minHeight: 48 }}
+                          title="Remove"
+                        >
+                          <svg className="w-4 h-4 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setNewCategories(prev => [...prev, { id: Math.random().toString(36).slice(2), name: '', price: '' }])}
+                  className="text-sm text-[var(--accent-primary)] hover:text-[var(--accent-600)] font-medium transition-colors flex items-center gap-1.5"
+                  style={{ minHeight: 48 }}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  Add Category
+                </button>
+              </div>
             </div>
           </ModalBody>
           <ModalFooter>
