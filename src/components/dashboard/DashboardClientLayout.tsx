@@ -284,6 +284,8 @@ function useFilteredItems(items: NavItem[]) {
   const { can, tenant } = useTenant();
   const hasPaidPlan = tenant?.subscription_status === 'active' || !!tenant?.stripe_subscription_id;
   const isAmbassador = useIsAmbassador();
+  const isPaidSubscriber = tenant?.subscription_status === 'active' && !isTrialActive(tenant as Parameters<typeof isTrialActive>[0]);
+  const hasAdminOverride = !!tenant?.admin_tier_override;
   // Memoize to prevent creating a new array reference on every render,
   // which would cause unnecessary re-renders in consuming components.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -291,12 +293,12 @@ function useFilteredItems(items: NavItem[]) {
     () => items.filter((item) => {
       if (item.requirePermission && !can(item.requirePermission)) return false;
       if (item.requirePaid && !hasPaidPlan) return false;
-      if (item.requireAmbassador && !isAmbassador) return false;
+      if (item.requireAmbassador && !isAmbassador && !isPaidSubscriber && !hasAdminOverride) return false;
       return true;
     }),
     // items is a stable constant defined outside the component; can depends on role/isOwner
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [can, hasPaidPlan, isAmbassador]
+    [can, hasPaidPlan, isAmbassador, isPaidSubscriber, hasAdminOverride]
   );
 }
 
@@ -504,6 +506,8 @@ function MoreSheet({ isOpen, onClose, onSunnyOpen }: { isOpen: boolean; onClose:
   const handleLogout = useLogout();
   const hasPaidPlan = tenant?.subscription_status === 'active' || !!tenant?.stripe_subscription_id;
   const isAmbassador = useIsAmbassador();
+  const isPaidSubscriber = tenant?.subscription_status === 'active' && !isTrialActive(tenant as Parameters<typeof isTrialActive>[0]);
+  const hasAdminOverride = !!tenant?.admin_tier_override;
 
   // Lock body scroll when open
   useEffect(() => {
@@ -516,7 +520,7 @@ function MoreSheet({ isOpen, onClose, onSunnyOpen }: { isOpen: boolean; onClose:
   const filteredMoreItems = moreSheetItems.filter((item) => {
     if (item.requirePermission && !can(item.requirePermission)) return false;
     if (item.requirePaid && !hasPaidPlan) return false;
-    if (item.requireAmbassador && !isAmbassador) return false;
+    if (item.requireAmbassador && !isAmbassador && !isPaidSubscriber && !hasAdminOverride) return false;
     return true;
   });
 
