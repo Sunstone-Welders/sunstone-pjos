@@ -161,6 +161,11 @@ export async function PATCH(
 
     if (body.admin_tier_override !== undefined) {
       update.admin_tier_override = Boolean(body.admin_tier_override);
+      // When enabling override, ensure tenant is active with no trial expiry
+      if (update.admin_tier_override) {
+        update.subscription_status = 'active';
+        update.trial_ends_at = null;
+      }
     }
 
     if (Object.keys(update).length === 0) {
