@@ -445,7 +445,7 @@ function EventModePageInner() {
     }
   };
 
-  // ── Handle Stripe payment completed ──
+  // ── Handle payment completed ──
 
   const handlePaymentCompleted = async (saleId: string) => {
     if (!tenant) return;
@@ -473,13 +473,23 @@ function EventModePageInner() {
       }
     }
 
+    // Determine which processor completed this payment
+    const defaultProc = (tenant as any).default_payment_processor;
+    const hasSquare = !!tenant.square_merchant_id;
+    const hasStripe = !!tenant.stripe_account_id;
+    const processor = (defaultProc === 'square' && hasSquare) ? 'square'
+      : (defaultProc === 'stripe' && hasStripe) ? 'stripe'
+      : hasStripe ? 'stripe'
+      : hasSquare ? 'square' : 'stripe';
+    const payMethod = processor === 'square' ? 'square_link' : 'stripe_link';
+
     const saleData: CompletedSaleData = {
       saleId, saleDate: new Date().toISOString(),
       items: cart.items.length > 0 ? cart.items.map((i: any) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price, lineTotal: i.line_total, warrantyAmount: i.warranty_amount || 0 })) : [{ name: 'Payment', quantity: 1, unitPrice: 0, lineTotal: 0 }],
       subtotal: cart.subtotal, taxAmount: cart.tax_amount,
       taxRate: cart.tax_rate, tipAmount: cart.tip_amount,
       warrantyAmount: cart.warranty_amount || 0,
-      total: cart.total, paymentMethod: 'stripe_link',
+      total: cart.total, paymentMethod: payMethod,
     };
 
     setTodaySales((s) => ({ count: s.count + 1, total: s.total + cart.total }));

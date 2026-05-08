@@ -352,7 +352,7 @@ export default function StoreModePage() {
     }
   };
 
-  // ── Handle Stripe payment completed (from polling/realtime) ──────────
+  // ── Handle payment completed (from polling/realtime) ─────────────────
 
   const handlePaymentCompleted = async (saleId: string) => {
     if (!tenant) return;
@@ -380,6 +380,16 @@ export default function StoreModePage() {
       }
     }
 
+    // Determine which processor completed this payment
+    const defaultProc = (tenant as any).default_payment_processor;
+    const hasSquare = !!tenant.square_merchant_id;
+    const hasStripe = !!tenant.stripe_account_id;
+    const processor = (defaultProc === 'square' && hasSquare) ? 'square'
+      : (defaultProc === 'stripe' && hasStripe) ? 'stripe'
+      : hasStripe ? 'stripe'
+      : hasSquare ? 'square' : 'stripe';
+    const payMethod = processor === 'square' ? 'square_link' : 'stripe_link';
+
     const saleData: CompletedSaleData = {
       saleId,
       saleDate: new Date().toISOString(),
@@ -393,7 +403,7 @@ export default function StoreModePage() {
       tipAmount: cart.tip_amount,
       warrantyAmount: cart.warranty_amount || 0,
       total: cart.total,
-      paymentMethod: 'stripe_link',
+      paymentMethod: payMethod,
     };
 
     setTodaySales((p) => ({ count: p.count + 1, total: p.total + cart.total }));
