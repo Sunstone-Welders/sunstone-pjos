@@ -45,7 +45,7 @@ export async function POST(_req: NextRequest) {
       .eq('id', tenantId)
       .single();
 
-    if (!tenant?.square_access_token || !tenant?.square_location_id) {
+    if (!tenant?.square_access_token || !tenant?.square_location_id || !tenant?.square_merchant_id) {
       return NextResponse.json(
         { error: 'Square not connected. Go to Settings → Payments to connect.' },
         { status: 400 }
