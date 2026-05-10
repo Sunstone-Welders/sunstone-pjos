@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { isNativeApp } from '@/lib/native';
+import { persistNativeSession } from '@/lib/supabase/native-session';
 import { toast } from 'sonner';
 import { Suspense } from 'react';
 
@@ -53,10 +54,23 @@ function LoginPageInner() {
         refresh_token: data.refresh_token,
       });
 
-      // Redirect to specified page or through root page (handles admin check)
+      // Persist tokens to native storage (UserDefaults / SharedPreferences)
+      // so the session survives WKWebView / WebView cookie clearing on relaunch
+      if (isNative) {
+        await persistNativeSession(data.access_token, data.refresh_token);
+      }
+
+      // On native, use full-page navigation so the middleware processes
+      // the freshly-set cookies reliably (avoids WKWebView cookie-sync race)
       const redirectTo = searchParams.get('redirect');
-      router.push(redirectTo && redirectTo.startsWith('/') ? redirectTo : '/');
-      router.refresh();
+      const dest = redirectTo && redirectTo.startsWith('/') ? redirectTo : '/';
+
+      if (isNative) {
+        window.location.href = dest;
+      } else {
+        router.push(dest);
+        router.refresh();
+      }
     } catch (err: any) {
       toast.error('An unexpected error occurred');
     } finally {
