@@ -34,7 +34,7 @@ import { applyTheme } from '@/lib/theme';
 import { THEMES, LIGHT_THEMES, DARK_THEMES, getThemeById, DEFAULT_THEME_ID, type ThemeDefinition } from '@/lib/themes';
 import type { TaxProfile, SubscriptionTier, PricingTier, TenantPricingMode, ProductType, PricingTierCustomPrice } from '@/types';
 import { SUBSCRIPTION_PRICES } from '@/types';
-import { getSubscriptionTier } from '@/lib/subscription';
+import { getSubscriptionTier, canAccessFeature } from '@/lib/subscription';
 import { getCrmStatus } from '@/lib/crm-status';
 import SunnyTutorial from '@/components/SunnyTutorial';
 import ProductTypesSection from '@/components/settings/ProductTypesSection';
@@ -87,7 +87,7 @@ const PLAN_FEATURES: Record<string, string[]> = {
     'Atlas SMS support',
     'White-label receipts',
     'Multi-location support',
-    'Custom Storefront Domain (coming soon)',
+    'Custom Storefront Domain',
   ],
 };
 
@@ -457,6 +457,20 @@ function SettingsPage() {
   const [partyGuestSequences, setPartyGuestSequences] = useState(true);
   const [savingGuestSeq, setSavingGuestSeq] = useState(false);
 
+  // ── Custom Domain state ──
+  const [domainInput, setDomainInput] = useState('');
+  const [domainData, setDomainData] = useState<{
+    custom_domain: string | null;
+    status: string;
+    error: string | null;
+    verified_at: string | null;
+    dns_instructions: string[] | null;
+  } | null>(null);
+  const [domainLoading, setDomainLoading] = useState(false);
+  const [domainActionLoading, setDomainActionLoading] = useState(false);
+  const [showRemoveDomainModal, setShowRemoveDomainModal] = useState(false);
+  const [domainInputError, setDomainInputError] = useState('');
+
   // ── Warranty state ──
   const [warrantyEnabled, setWarrantyEnabled] = useState(false);
   const [warrantyPerItem, setWarrantyPerItem] = useState('0');
@@ -628,6 +642,152 @@ function SettingsPage() {
       .then((data) => { if (Array.isArray(data)) setSuppliers(data); })
       .catch(() => {});
   }, [tenant]);
+
+  // ============================================================================
+  // Custom Domain functions
+  // ============================================================================
+
+  const fetchDomainStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/storefront/domain');
+      if (res.status === 403) {
+        // Not on Business tier — expected
+        setDomainData(null);
+        return;
+      }
+      if (!res.ok) return;
+      const data = await res.json();
+      setDomainData(data);
+    } catch {
+      // Silently fail — non-critical
+    }
+  }, []);
+
+  // Fetch domain status when profile section opens (Business tier only)
+  useEffect(() => {
+    if (openSection === 'profile' && tenant) {
+      const tier = getSubscriptionTier(tenant);
+      if (canAccessFeature(tier, 'custom_storefront_domain')) {
+        setDomainLoading(true);
+        fetchDomainStatus().finally(() => setDomainLoading(false));
+      }
+    }
+  }, [openSection, tenant, fetchDomainStatus]);
+
+  // Auto-poll when domain is provisioning (every 15 seconds)
+  useEffect(() => {
+    if (domainData?.status !== 'provisioning') return;
+    const interval = setInterval(() => {
+      fetch('/api/storefront/domain', { method: 'PUT' })
+        .then(r => r.json())
+        .then(data => {
+          setDomainData(prev => prev ? {
+            ...prev,
+            status: data.status,
+            error: data.error || null,
+          } : prev);
+        })
+        .catch(() => {});
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [domainData?.status]);
+
+  const handleConnectDomain = async () => {
+    // Validate input
+    const cleaned = domainInput.trim().toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .split('/')[0]
+      .replace(/^www\./, '');
+
+    if (!cleaned) {
+      setDomainInputError('Please enter a domain');
+      return;
+    }
+    if (!/^(?!-)[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$/.test(cleaned)) {
+      setDomainInputError('Enter a valid domain like "sparkjewelry.com" or "shop.mybusiness.com"');
+      return;
+    }
+    setDomainInputError('');
+    setDomainActionLoading(true);
+    try {
+      const res = await fetch('/api/storefront/domain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: cleaned }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to connect domain');
+        return;
+      }
+      setDomainData({
+        custom_domain: data.custom_domain,
+        status: data.status,
+        error: null,
+        verified_at: null,
+        dns_instructions: data.dns_instructions,
+      });
+      setDomainInput('');
+      toast.success('Domain connected! Follow the DNS instructions below.');
+    } catch {
+      toast.error('Failed to connect domain');
+    } finally {
+      setDomainActionLoading(false);
+    }
+  };
+
+  const handleVerifyDomain = async () => {
+    setDomainActionLoading(true);
+    try {
+      const res = await fetch('/api/storefront/domain', { method: 'PUT' });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Verification failed');
+        return;
+      }
+      setDomainData(prev => prev ? {
+        ...prev,
+        status: data.status,
+        error: data.error || null,
+      } : prev);
+      if (data.status === 'active') {
+        toast.success('Your custom domain is live!');
+      } else if (data.status === 'provisioning') {
+        toast.success('DNS verified! SSL certificate is being provisioned.');
+      } else {
+        toast.info(data.message || 'DNS records not detected yet. Changes can take up to 48 hours.');
+      }
+    } catch {
+      toast.error('Verification failed');
+    } finally {
+      setDomainActionLoading(false);
+    }
+  };
+
+  const handleRemoveDomain = async () => {
+    setDomainActionLoading(true);
+    try {
+      const res = await fetch('/api/storefront/domain', { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || 'Failed to remove domain');
+        return;
+      }
+      setDomainData({
+        custom_domain: null,
+        status: 'none',
+        error: null,
+        verified_at: null,
+        dns_instructions: null,
+      });
+      setShowRemoveDomainModal(false);
+      toast.success('Custom domain removed');
+    } catch {
+      toast.error('Failed to remove domain');
+    } finally {
+      setDomainActionLoading(false);
+    }
+  };
 
   // ============================================================================
   // Team functions
@@ -2730,6 +2890,403 @@ function SettingsPage() {
               Save Profile
             </Button>
           </div>
+
+          {/* ── Custom Domain Section ── */}
+          <div className="border-t border-[var(--border-subtle)] pt-5 mt-5">
+            <div className="flex items-center gap-2 mb-4">
+              <svg className="w-5 h-5 text-[var(--text-secondary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+              </svg>
+              <h4 className="text-sm font-semibold text-[var(--text-primary)]">Custom Domain</h4>
+            </div>
+
+            {(() => {
+              const currentTier = tenant ? getSubscriptionTier(tenant) : 'starter';
+              const hasAccess = canAccessFeature(currentTier, 'custom_storefront_domain');
+              const domainStatus = domainData?.status || 'none';
+
+              // ── Non-Business tier: upgrade prompt ──
+              if (!hasAccess) {
+                return (
+                  <div className="p-5 rounded-xl border border-[var(--accent-200)] bg-[var(--accent-50)]/30">
+                    <div className="flex flex-col items-center text-center max-w-sm mx-auto">
+                      <div className="w-10 h-10 rounded-full bg-[var(--accent-50,#fdf2f8)] flex items-center justify-center mb-3">
+                        <svg className="w-5 h-5 text-[var(--accent-500)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                        </svg>
+                      </div>
+                      <p className="text-sm text-[var(--text-secondary)] mb-1">
+                        Connect your own domain to your storefront — visitors see <span className="font-medium">yourdomain.com</span> instead of sunstonepj.app/studio/your-name.
+                      </p>
+                      {canShowBillingUI() && (
+                        <>
+                          <p className="text-xs text-[var(--text-tertiary)] mb-3">Available on the Business plan.</p>
+                          <Button variant="primary" size="sm" onClick={() => toggleSection('billing')}>
+                            Upgrade to Business
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              // ── Loading state ──
+              if (domainLoading) {
+                return (
+                  <div className="flex items-center justify-center py-8">
+                    <svg className="w-5 h-5 animate-spin text-[var(--text-tertiary)]" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  </div>
+                );
+              }
+
+              // ── State: error ──
+              if (domainStatus === 'error' || (domainData?.error && domainStatus !== 'pending_dns')) {
+                return (
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-xl border border-error-200 bg-error-50/50">
+                      <div className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-error-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                        </svg>
+                        <div>
+                          <p className="text-sm font-medium text-error-600">Domain configuration error</p>
+                          <p className="text-sm text-error-500 mt-1">{domainData?.error || 'An unknown error occurred.'}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        loading={domainActionLoading}
+                        onClick={() => {
+                          setDomainInput(domainData?.custom_domain || '');
+                          setDomainData(prev => prev ? { ...prev, status: 'none', error: null, custom_domain: null } : prev);
+                        }}
+                      >
+                        Try Again
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        loading={domainActionLoading}
+                        onClick={() => setShowRemoveDomainModal(true)}
+                        className="text-error-500 hover:text-error-600"
+                      >
+                        Remove Domain
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+
+              // ── State: active (fully live) ──
+              if (domainStatus === 'active') {
+                return (
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                          <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-emerald-700">Your custom domain is live!</p>
+                          <p className="text-sm text-[var(--text-secondary)] mt-1">
+                            <span className="font-medium text-[var(--text-primary)]">{domainData?.custom_domain}</span>
+                            {' '}&rarr; your storefront
+                          </p>
+                          <a
+                            href={`https://${domainData?.custom_domain}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-sm text-[var(--accent-primary)] hover:underline mt-2"
+                          >
+                            Visit
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                            </svg>
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowRemoveDomainModal(true)}
+                      className="text-error-500 hover:text-error-600"
+                    >
+                      Remove Domain
+                    </Button>
+                  </div>
+                );
+              }
+
+              // ── State: provisioning (DNS verified, SSL being provisioned) ──
+              if (domainStatus === 'provisioning' || domainStatus === 'dns_verified') {
+                return (
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50">
+                      <div className="flex items-center gap-2 mb-2">
+                        <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p className="text-sm font-medium text-emerald-700">DNS verified</p>
+                      </div>
+                    </div>
+                    <div className="p-4 rounded-xl border border-[var(--border-default)] bg-[var(--surface-subtle)]">
+                      <div className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-[var(--text-tertiary)] animate-spin shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        <div>
+                          <p className="text-sm font-medium text-[var(--text-primary)]">SSL certificate is being provisioned</p>
+                          <p className="text-xs text-[var(--text-tertiary)] mt-1">
+                            This usually takes a few minutes. This page will update automatically.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      Domain: <span className="font-medium text-[var(--text-primary)]">{domainData?.custom_domain}</span>
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowRemoveDomainModal(true)}
+                      className="text-error-500 hover:text-error-600"
+                    >
+                      Remove Domain
+                    </Button>
+                  </div>
+                );
+              }
+
+              // ── State: pending_dns (domain set, waiting for DNS) ──
+              if (domainStatus === 'pending_dns' && domainData?.custom_domain) {
+                const isDomainSubdomain = domainData.custom_domain.split('.').length > 2;
+                return (
+                  <div className="space-y-4">
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      Domain: <span className="font-medium text-[var(--text-primary)]">{domainData.custom_domain}</span>
+                    </p>
+
+                    {/* DNS Instructions Card */}
+                    <div className="p-4 rounded-xl border border-[var(--border-default)] bg-[var(--surface-subtle)] space-y-4">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-5 h-5 text-[var(--text-secondary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                        </svg>
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">DNS Configuration</p>
+                      </div>
+
+                      <p className="text-sm text-[var(--text-secondary)]">
+                        Add the following record with your DNS provider:
+                      </p>
+
+                      {isDomainSubdomain ? (
+                        /* CNAME record for subdomains */
+                        <div className="border border-[var(--border-default)] rounded-lg overflow-hidden">
+                          <div className="grid grid-cols-3 text-xs font-medium text-[var(--text-tertiary)] bg-[var(--surface-base)] border-b border-[var(--border-default)]">
+                            <div className="px-3 py-2">Type</div>
+                            <div className="px-3 py-2">Name</div>
+                            <div className="px-3 py-2">Value</div>
+                          </div>
+                          <div className="grid grid-cols-3 text-sm">
+                            <div className="px-3 py-2.5 font-medium text-[var(--text-primary)]">CNAME</div>
+                            <div className="px-3 py-2.5">
+                              <div className="flex items-center gap-1.5">
+                                <code className="text-xs bg-[var(--surface-base)] px-1.5 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-primary)]">
+                                  {domainData.custom_domain.split('.')[0]}
+                                </code>
+                                <button
+                                  onClick={() => { navigator.clipboard.writeText(domainData.custom_domain!.split('.')[0]); toast.success('Copied!'); }}
+                                  className="p-1 rounded hover:bg-[var(--surface-base)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+                                  title="Copy"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                            <div className="px-3 py-2.5">
+                              <div className="flex items-center gap-1.5">
+                                <code className="text-xs bg-[var(--surface-base)] px-1.5 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-primary)]">
+                                  cname.vercel-dns.com
+                                </code>
+                                <button
+                                  onClick={() => { navigator.clipboard.writeText('cname.vercel-dns.com'); toast.success('Copied!'); }}
+                                  className="p-1 rounded hover:bg-[var(--surface-base)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+                                  title="Copy"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        /* A record for root domains */
+                        <div className="border border-[var(--border-default)] rounded-lg overflow-hidden">
+                          <div className="grid grid-cols-3 text-xs font-medium text-[var(--text-tertiary)] bg-[var(--surface-base)] border-b border-[var(--border-default)]">
+                            <div className="px-3 py-2">Type</div>
+                            <div className="px-3 py-2">Name</div>
+                            <div className="px-3 py-2">Value</div>
+                          </div>
+                          <div className="grid grid-cols-3 text-sm">
+                            <div className="px-3 py-2.5 font-medium text-[var(--text-primary)]">A</div>
+                            <div className="px-3 py-2.5">
+                              <div className="flex items-center gap-1.5">
+                                <code className="text-xs bg-[var(--surface-base)] px-1.5 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-primary)]">@</code>
+                                <button
+                                  onClick={() => { navigator.clipboard.writeText('@'); toast.success('Copied!'); }}
+                                  className="p-1 rounded hover:bg-[var(--surface-base)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+                                  title="Copy"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                            <div className="px-3 py-2.5">
+                              <div className="flex items-center gap-1.5">
+                                <code className="text-xs bg-[var(--surface-base)] px-1.5 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-primary)]">
+                                  76.76.21.21
+                                </code>
+                                <button
+                                  onClick={() => { navigator.clipboard.writeText('76.76.21.21'); toast.success('Copied!'); }}
+                                  className="p-1 rounded hover:bg-[var(--surface-base)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+                                  title="Copy"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Help text */}
+                      <div className="pt-2">
+                        <p className="text-xs text-[var(--text-tertiary)]">
+                          <span className="font-medium">Where do I find DNS settings?</span> Log in to wherever you bought your domain (GoDaddy, Namecheap, Google Domains, Cloudflare, etc.) and look for DNS settings or DNS records.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-3">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        loading={domainActionLoading}
+                        onClick={handleVerifyDomain}
+                      >
+                        Verify DNS
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowRemoveDomainModal(true)}
+                        className="text-error-500 hover:text-error-600"
+                      >
+                        Remove Domain
+                      </Button>
+                    </div>
+                    <p className="text-xs text-[var(--text-tertiary)]">
+                      DNS changes can take up to 48 hours to propagate.
+                    </p>
+                  </div>
+                );
+              }
+
+              // ── State: none (no domain configured) ──
+              return (
+                <div className="space-y-3">
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    Connect your own domain so visitors see <span className="font-medium">yourdomain.com</span> instead of sunstonepj.app/studio/{tenant?.slug}.
+                  </p>
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">Domain</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="sparkjewelry.com"
+                        value={domainInput}
+                        onChange={(e) => {
+                          setDomainInput(e.target.value);
+                          if (domainInputError) setDomainInputError('');
+                        }}
+                        onBlur={() => {
+                          // Clean on blur
+                          const cleaned = domainInput.trim().toLowerCase()
+                            .replace(/^https?:\/\//, '')
+                            .split('/')[0]
+                            .replace(/^www\./, '');
+                          setDomainInput(cleaned);
+                        }}
+                        className={`flex-1 px-3 py-2 text-sm border rounded-lg bg-[var(--surface-base)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] ${
+                          domainInputError
+                            ? 'border-error-300 focus:ring-error-500'
+                            : 'border-[var(--border-default)] focus:ring-[var(--accent-primary)]'
+                        } focus:outline-none focus:ring-2`}
+                      />
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        loading={domainActionLoading}
+                        onClick={handleConnectDomain}
+                      >
+                        Connect Domain
+                      </Button>
+                    </div>
+                    {domainInputError && (
+                      <p className="text-xs text-error-500 mt-1">{domainInputError}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Remove Domain Confirmation Modal */}
+          <Modal isOpen={showRemoveDomainModal} onClose={() => setShowRemoveDomainModal(false)} size="sm">
+            <ModalHeader>
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">Remove Custom Domain?</h2>
+            </ModalHeader>
+            <ModalBody>
+              <p className="text-sm text-[var(--text-secondary)]">
+                This will disconnect <span className="font-medium text-[var(--text-primary)]">{domainData?.custom_domain}</span> from your storefront. Visitors to that domain will see an error until you reconnect it.
+              </p>
+            </ModalBody>
+            <ModalFooter>
+              <div className="flex gap-2 justify-end">
+                <Button variant="ghost" size="sm" onClick={() => setShowRemoveDomainModal(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  loading={domainActionLoading}
+                  onClick={handleRemoveDomain}
+                >
+                  Remove Domain
+                </Button>
+              </div>
+            </ModalFooter>
+          </Modal>
         </div>
       </AccordionSection>
 
