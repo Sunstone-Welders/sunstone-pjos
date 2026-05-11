@@ -296,73 +296,63 @@ export function FullScreenQR({ url, tenantName, eventName, eventId, tenantId, mo
     );
   }
 
-  // ── Branded split-screen layout — edge-to-edge 50/50 ──
+  // ── Branded split-screen layout — dark kiosk display ──
   const upNext = waiting.slice(0, 4);
 
   return (
-    <div className="fixed inset-0 z-[100]" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] bg-gray-950 overflow-hidden" onClick={onClose}>
       <div
         className="h-full flex flex-col lg:flex-row"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── Left Panel: QR Code — accent-branded ── */}
-        <div
-          className="flex-1 flex flex-col items-center justify-center relative"
-          style={{ backgroundColor: 'var(--accent-50)' }}
-        >
+        {/* ── Left Panel: QR Code — dark branded ── */}
+        <div className="flex-1 flex flex-col items-center justify-center relative bg-gray-950">
           <div className="flex flex-col items-center gap-5 max-w-sm px-6">
             {tenantName && (
               <div className="text-center">
-                <h1
-                  className="text-2xl lg:text-3xl font-display font-semibold"
-                  style={{ color: 'var(--accent-900)' }}
-                >
+                <h1 className="text-2xl lg:text-3xl font-display font-semibold text-white">
                   {tenantName}
                 </h1>
                 {eventName && (
-                  <p
-                    className="text-base lg:text-lg mt-1"
-                    style={{ color: 'var(--accent-600)' }}
-                  >
+                  <p className="text-base lg:text-lg mt-1 text-gray-400">
                     {eventName}
                   </p>
                 )}
               </div>
             )}
 
-            <div
-              className="rounded-2xl bg-white p-5 shadow-lg"
-              style={{ border: '2px solid var(--accent-200)' }}
-            >
+            <div className="rounded-2xl bg-white p-5 shadow-2xl">
               <canvas ref={canvasRef} />
             </div>
 
             <div className="text-center">
-              <p
-                className="text-base lg:text-lg font-medium"
-                style={{ color: 'var(--accent-700)' }}
-              >
+              <p className="text-base lg:text-lg font-medium text-gray-200">
                 Scan to sign your waiver
               </p>
-              <p className="text-sm mt-1" style={{ color: 'var(--accent-400)' }}>
+              <p className="text-sm mt-1 text-gray-500">
                 &amp; join the queue
               </p>
             </div>
           </div>
         </div>
 
-        {/* ── Right Panel: Live Queue — clean surface ── */}
-        <div
-          className="flex-1 flex flex-col overflow-hidden min-h-0 relative"
-          style={{ backgroundColor: 'var(--surface-base, #ffffff)' }}
-        >
+        {/* ── Right Panel: Live Queue — dark surface ── */}
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0 relative bg-gray-900">
+          {/* Close / Exit Full Screen button — top-left */}
+          <button
+            onClick={onClose}
+            className="absolute top-4 left-4 lg:top-6 lg:left-6 w-10 h-10 rounded-full flex items-center justify-center transition-colors z-10 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white"
+            title="Exit full screen"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
           <div className="flex-1 flex flex-col px-6 py-6 lg:px-10 lg:py-8 overflow-hidden min-h-0">
             {/* Queue header */}
             <div className="flex items-center justify-between mb-6 lg:mb-8">
-              <h2
-                className="text-2xl lg:text-3xl font-display font-semibold"
-                style={{ color: 'var(--text-primary)' }}
-              >
+              <h2 className="text-2xl lg:text-3xl font-display font-semibold text-white">
                 Queue
               </h2>
               <div className="flex items-center gap-2">
@@ -387,18 +377,14 @@ export function FullScreenQR({ url, tenantName, eventName, eventId, tenantId, mo
 
             {/* Now Serving */}
             <div className="mb-6 lg:mb-8">
-              <p
-                className="text-xs font-semibold uppercase tracking-[0.1em] mb-3"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
+              <p className="text-xs font-semibold uppercase tracking-[0.1em] mb-3 text-gray-500">
                 Now Serving
               </p>
               {nowServing ? (
                 <div
-                  className="rounded-2xl p-5 lg:p-6"
+                  className="rounded-2xl p-5 lg:p-6 bg-gray-800"
                   style={{
-                    backgroundColor: 'color-mix(in srgb, var(--accent-primary) 8%, var(--surface-base, #ffffff))',
-                    border: '1px solid color-mix(in srgb, var(--accent-primary) 20%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent)',
                   }}
                 >
                   <div className="flex items-center gap-4">
@@ -409,10 +395,7 @@ export function FullScreenQR({ url, tenantName, eventName, eventId, tenantId, mo
                       {formatNamePrivacy(nowServing.name).charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <p
-                        className="text-2xl lg:text-3xl font-semibold"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
+                      <p className="text-2xl lg:text-3xl font-semibold text-white">
                         {formatNamePrivacy(nowServing.name)}
                       </p>
                       <p className="text-sm mt-0.5" style={{ color: 'var(--accent-primary)' }}>
@@ -422,14 +405,8 @@ export function FullScreenQR({ url, tenantName, eventName, eventId, tenantId, mo
                   </div>
                 </div>
               ) : (
-                <div
-                  className="rounded-2xl p-5 lg:p-6"
-                  style={{
-                    backgroundColor: 'var(--surface-raised)',
-                    border: '1px solid var(--border-default)',
-                  }}
-                >
-                  <p className="text-lg text-center" style={{ color: 'var(--text-tertiary)' }}>
+                <div className="rounded-2xl p-5 lg:p-6 bg-gray-800 border border-gray-700">
+                  <p className="text-lg text-center text-gray-500">
                     No one being served
                   </p>
                 </div>
@@ -438,10 +415,7 @@ export function FullScreenQR({ url, tenantName, eventName, eventId, tenantId, mo
 
             {/* Up Next */}
             <div className="flex-1 min-h-0">
-              <p
-                className="text-xs font-semibold uppercase tracking-[0.1em] mb-3"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
+              <p className="text-xs font-semibold uppercase tracking-[0.1em] mb-3 text-gray-500">
                 Up Next
               </p>
               {upNext.length > 0 ? (
@@ -452,34 +426,24 @@ export function FullScreenQR({ url, tenantName, eventName, eventId, tenantId, mo
                     return (
                       <div
                         key={entry.id}
-                        className="flex items-center gap-4 rounded-xl p-4 transition-all duration-500"
-                        style={{
-                          backgroundColor: 'var(--surface-raised)',
-                          border: '1px solid var(--border-default)',
-                        }}
+                        className="flex items-center gap-4 rounded-xl p-4 transition-all duration-500 bg-gray-800 border border-gray-700"
                       >
                         <div
                           className="w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center text-sm lg:text-base font-bold flex-shrink-0"
                           style={{
-                            backgroundColor: 'var(--accent-100)',
-                            color: 'var(--accent-700)',
+                            backgroundColor: 'color-mix(in srgb, var(--accent-primary) 15%, #1f2937)',
+                            color: 'var(--accent-primary)',
                           }}
                         >
                           {positionInLine}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p
-                            className="text-lg lg:text-xl font-medium truncate"
-                            style={{ color: 'var(--text-primary)' }}
-                          >
+                          <p className="text-lg lg:text-xl font-medium truncate text-white">
                             {formatNamePrivacy(entry.name)}
                           </p>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p
-                            className="text-base lg:text-lg font-medium"
-                            style={{ color: 'var(--text-secondary)' }}
-                          >
+                          <p className="text-base lg:text-lg font-medium text-gray-400">
                             {formatEstWait(estMinutes)}
                           </p>
                         </div>
@@ -487,20 +451,14 @@ export function FullScreenQR({ url, tenantName, eventName, eventId, tenantId, mo
                     );
                   })}
                   {waiting.length > 4 && (
-                    <p className="text-center text-sm pt-2" style={{ color: 'var(--text-tertiary)' }}>
+                    <p className="text-center text-sm pt-2 text-gray-500">
                       +{waiting.length - 4} more waiting
                     </p>
                   )}
                 </div>
               ) : (
-                <div
-                  className="rounded-xl p-5"
-                  style={{
-                    backgroundColor: 'var(--surface-raised)',
-                    border: '1px solid var(--border-default)',
-                  }}
-                >
-                  <p className="text-lg text-center" style={{ color: 'var(--text-tertiary)' }}>
+                <div className="rounded-xl p-5 bg-gray-800 border border-gray-700">
+                  <p className="text-lg text-center text-gray-500">
                     Queue is empty
                   </p>
                 </div>
@@ -509,31 +467,13 @@ export function FullScreenQR({ url, tenantName, eventName, eventId, tenantId, mo
 
             {/* Avg service time indicator */}
             {totalInQueue > 0 && (
-              <div
-                className="mt-4 lg:mt-6 pt-4"
-                style={{ borderTop: '1px solid var(--border-default)' }}
-              >
-                <p className="text-xs text-center" style={{ color: 'var(--text-tertiary)' }}>
+              <div className="mt-4 lg:mt-6 pt-4 border-t border-gray-700">
+                <p className="text-xs text-center text-gray-500">
                   Avg. service time: ~{Math.round(dynamicAvgMinutes)} min
                 </p>
               </div>
             )}
           </div>
-
-          {/* Close / Exit Full Screen button */}
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 lg:top-6 lg:right-6 w-10 h-10 rounded-full flex items-center justify-center transition-colors z-10"
-            style={{
-              backgroundColor: 'color-mix(in srgb, var(--text-primary) 10%, transparent)',
-              color: 'var(--text-secondary)',
-            }}
-            title="Exit full screen"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
         </div>
       </div>
     </div>

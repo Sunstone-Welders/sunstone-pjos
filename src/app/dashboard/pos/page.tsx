@@ -26,6 +26,7 @@ import type { CompletedSaleData, CheckoutStep, GiftCardData } from '@/components
 import { calculateJumpRingNeeds, getLowStockWarnings } from '@/lib/jump-rings';
 import SunnyTutorial from '@/components/SunnyTutorial';
 import CashDrawerPanel from '@/components/CashDrawerPanel';
+import MiniQueueStrip from '@/components/MiniQueueStrip';
 import { createWarrantyRecords } from '@/lib/warranty';
 import type {
   InventoryItem,
@@ -689,14 +690,16 @@ export default function StoreModePage() {
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* Queue Badge */}
-          <QueueBadge
-            tenantId={tenant.id}
-            mode="store"
-            onStartSale={handleQueueStartSale}
-            isServingActive={!!activeQueueEntry}
-            refreshTrigger={queueRefresh}
-          />
+          {/* Queue Badge — only when queue mode is ON */}
+          {queueModeOn && (
+            <QueueBadge
+              tenantId={tenant.id}
+              mode="store"
+              onStartSale={handleQueueStartSale}
+              isServingActive={!!activeQueueEntry}
+              refreshTrigger={queueRefresh}
+            />
+          )}
 
           {/* Cash Drawer */}
           <CashDrawerPanel
@@ -791,6 +794,17 @@ export default function StoreModePage() {
             </svg>
           </button>
         </div>
+      )}
+
+      {/* ── MiniQueueStrip — only when queue mode is ON ── */}
+      {queueModeOn && step === 'items' && (
+        <MiniQueueStrip
+          tenantId={tenant.id}
+          mode="store"
+          onStartSale={handleQueueStartSale}
+          isServingActive={!!activeQueueEntry}
+          refreshTrigger={queueRefresh}
+        />
       )}
 
       {/* ── Main ── */}
