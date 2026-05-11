@@ -47,7 +47,7 @@ export async function GET(
       serviceClient.from('events').select('id', { count: 'exact', head: true }).eq('tenant_id', id),
       serviceClient.from('inventory_items').select('id', { count: 'exact', head: true }).eq('tenant_id', id),
       serviceClient.from('clients').select('id', { count: 'exact', head: true }).eq('tenant_id', id),
-      serviceClient.from('sales').select('id, total, platform_fee_amount, created_at').eq('tenant_id', id).eq('status', 'completed').order('created_at', { ascending: false }).limit(10),
+      serviceClient.from('sales').select('id, total, created_at').eq('tenant_id', id).eq('status', 'completed').order('created_at', { ascending: false }).limit(10),
       serviceClient.from('tenant_members').select('user_id, role, display_name, invited_email, accepted_at').eq('tenant_id', id),
     ]);
 

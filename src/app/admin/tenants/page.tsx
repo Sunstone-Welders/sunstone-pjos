@@ -52,7 +52,7 @@ interface TenantDetail {
     salesCount: number;
   };
   members: TenantMember[];
-  recent_sales: Array<{ id: string; total: number; platform_fee_amount: number; created_at: string }>;
+  recent_sales: Array<{ id: string; total: number; created_at: string }>;
   referredBy: { ambassadorName: string; referralCode: string; referralDate: string | null } | null;
 }
 
@@ -734,12 +734,7 @@ function TenantProfilePanel({
                   {detail.recent_sales.slice(0, 5).map(s => (
                     <div key={s.id} className="px-4 py-2.5 flex items-center justify-between text-sm">
                       <span className="text-[var(--text-tertiary)]">{new Date(s.created_at).toLocaleDateString()}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[var(--text-primary)] font-medium">{formatCurrency(Number(s.total))}</span>
-                        <span className="text-xs" style={{ color: '#FF7A00' }}>
-                          +{formatCurrency(Number(s.platform_fee_amount))}
-                        </span>
-                      </div>
+                      <span className="text-[var(--text-primary)] font-medium">{formatCurrency(Number(s.total))}</span>
                     </div>
                   ))}
                 </div>

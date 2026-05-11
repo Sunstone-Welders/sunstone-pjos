@@ -66,15 +66,13 @@ async function getPlatformData(serviceClient: any) {
     // ====================================================================
     const { data: allSales } = await serviceClient
       .from('sales')
-      .select('id, tenant_id, subtotal, tax_amount, tip_amount, platform_fee_amount, total, payment_method, fee_handling, status, created_at')
+      .select('id, tenant_id, subtotal, tax_amount, tip_amount, total, payment_method, status, created_at')
       .eq('status', 'completed')
       .order('created_at', { ascending: false });
 
     const completedSales = allSales || [];
     const totalRevenue = completedSales.reduce((s: number, sale: any) =>
       s + Number(sale.subtotal) + Number(sale.tax_amount) + Number(sale.tip_amount), 0);
-    const totalPlatformFees = completedSales.reduce((s: number, sale: any) =>
-      s + Number(sale.platform_fee_amount), 0);
 
     // Monthly revenue
     const thisMonthSales = completedSales.filter((s: any) => new Date(s.created_at) >= startOfMonth);
@@ -87,8 +85,6 @@ async function getPlatformData(serviceClient: any) {
 
     const calcRevenue = (sales: any[]) => sales.reduce((s: number, sale: any) =>
       s + Number(sale.subtotal) + Number(sale.tax_amount) + Number(sale.tip_amount), 0);
-    const calcFees = (sales: any[]) => sales.reduce((s: number, sale: any) =>
-      s + Number(sale.platform_fee_amount), 0);
 
     // Revenue by tenant
     const revenueByTenant: Record<string, { name: string; revenue: number; sales: number }> = {};
@@ -272,17 +268,14 @@ async function getPlatformData(serviceClient: any) {
       revenue: {
         allTime: {
           total: totalRevenue,
-          platformFees: totalPlatformFees,
           salesCount: completedSales.length,
         },
         thisMonth: {
           total: calcRevenue(thisMonthSales),
-          platformFees: calcFees(thisMonthSales),
           salesCount: thisMonthSales.length,
         },
         lastMonth: {
           total: calcRevenue(lastMonthSales),
-          platformFees: calcFees(lastMonthSales),
           salesCount: lastMonthSales.length,
         },
         thisWeek: {
@@ -496,9 +489,9 @@ ADMIN DASHBOARD UI:
 The admin panel lives at /admin and uses an obsidian dark theme (#0F0F14 bg, #FF7A00 accent). It has a sidebar on desktop and bottom nav on mobile with a hamburger dropdown menu.
 
 Pages:
-- Overview (/admin): KPI cards (total tenants, this month revenue, platform fees, active events), quick stats, and platform health summary
+- Overview (/admin): KPI cards (total tenants, MRR, total users, active today), plan breakdown, recent signups, and AI-powered platform intelligence insights
 - Tenants (/admin/tenants): Searchable tenant list with sort by name/created/tier. Click a tenant to see their full profile (subscription, sales, events, inventory, team, Sunny usage). "Needs Attention" section at top shows flagged tenants (trial expiring, no events in 30+ days, no payment processor, zero sales but old account). Each suggestion has a "View" button to jump to that tenant's profile.
-- Revenue (/admin/revenue): Revenue analytics with charts, platform fee breakdown by tier, month-over-month comparisons, top tenants by revenue. Visible to super_admin and admin roles only.
+- Revenue (/admin/revenue): Revenue analytics with MRR, revenue per tenant, daily sales volume chart, activity by tier (subscribers + sales), top tenants by sales volume. Visible to super_admin and admin roles only.
 - Spotlight (/admin/spotlight): Manage the featured Sunstone product that appears on every tenant's dashboard. Browse/search the synced Shopify catalog (281+ products), pin a product for a set duration (3/7/14/30 days), exclude products from rotation, or reset to weekly auto-rotation. Visible to super_admin and admin roles only.
 - Learning (/admin/mentor): View Sunny's knowledge gaps — questions she couldn't answer. Review pending gaps, approve/reject suggested answers, add new knowledge entries that get injected into Sunny's responses. Gap list shows question, topic, category, tenant, and date.
 - Team (/admin/team): Manage platform admin access. Invite new admins by email (must have existing account), change roles, and remove members. Visible to super_admin only.

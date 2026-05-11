@@ -76,13 +76,10 @@ interface PlatformData {
     avgDaysToFirstSale: number | null;
   };
   revenue: {
-    platformFeesThisMonth: number;
-    platformFeesLastMonth: number;
-    gmvThisMonth: number;
-    gmvLastMonth: number;
-    avgFeePerTransaction: number;
-    revenueByTier: Record<string, number>;
-    topTenantsByGMV: Array<{ name: string; gmv: number }>;
+    salesVolumeThisMonth: number;
+    salesVolumeLastMonth: number;
+    avgSaleValue: number;
+    topTenantsBySales: Array<{ name: string; sales_volume: number }>;
   };
   adoption: {
     eventModeUsers: number;
@@ -144,7 +141,7 @@ async function collectPlatformData(serviceClient: any): Promise<PlatformData> {
   // ── All completed sales ──────────────────────────────────────────────
   const { data: allSales } = await serviceClient
     .from('sales')
-    .select('id, tenant_id, total, subtotal, tax_amount, tip_amount, platform_fee_amount, payment_method, created_at')
+    .select('id, tenant_id, total, subtotal, tax_amount, tip_amount, payment_method, created_at')
     .eq('status', 'completed');
 
   const sales = allSales || [];
@@ -213,34 +210,21 @@ async function collectPlatformData(serviceClient: any): Promise<PlatformData> {
     (s: any) => new Date(s.created_at) >= startOfLastMonth && new Date(s.created_at) < startOfThisMonth
   );
 
-  const platformFeesThisMonth = salesThisMonth.reduce((sum: number, s: any) => sum + (Number(s.platform_fee_amount) || 0), 0);
-  const platformFeesLastMonth = salesLastMonth.reduce((sum: number, s: any) => sum + (Number(s.platform_fee_amount) || 0), 0);
-  const gmvThisMonth = salesThisMonth.reduce((sum: number, s: any) => sum + (Number(s.total) || 0), 0);
-  const gmvLastMonth = salesLastMonth.reduce((sum: number, s: any) => sum + (Number(s.total) || 0), 0);
-  const avgFeePerTransaction = salesThisMonth.length > 0 ? platformFeesThisMonth / salesThisMonth.length : 0;
+  const salesVolumeThisMonth = salesThisMonth.reduce((sum: number, s: any) => sum + (Number(s.total) || 0), 0);
+  const salesVolumeLastMonth = salesLastMonth.reduce((sum: number, s: any) => sum + (Number(s.total) || 0), 0);
+  const avgSaleValueThisMonth = salesThisMonth.length > 0 ? salesVolumeThisMonth / salesThisMonth.length : 0;
 
-  // Revenue by tier
-  const revenueByTier: Record<string, number> = { starter: 0, pro: 0, business: 0 };
-  const tenantTierMap: Record<string, string> = {};
-  for (const t of allTenants) {
-    tenantTierMap[t.id] = t.subscription_tier || 'starter';
-  }
+  // Top 5 tenants by sales volume this month
+  const volumeByTenantThisMonth: Record<string, { name: string; sales_volume: number }> = {};
   for (const s of salesThisMonth) {
-    const tier = tenantTierMap[s.tenant_id] || 'starter';
-    revenueByTier[tier] = (revenueByTier[tier] || 0) + (Number(s.platform_fee_amount) || 0);
-  }
-
-  // Top 5 tenants by GMV this month
-  const gmvByTenantThisMonth: Record<string, { name: string; gmv: number }> = {};
-  for (const s of salesThisMonth) {
-    if (!gmvByTenantThisMonth[s.tenant_id]) {
+    if (!volumeByTenantThisMonth[s.tenant_id]) {
       const t = allTenants.find((t: any) => t.id === s.tenant_id);
-      gmvByTenantThisMonth[s.tenant_id] = { name: t?.name || 'Unknown', gmv: 0 };
+      volumeByTenantThisMonth[s.tenant_id] = { name: t?.name || 'Unknown', sales_volume: 0 };
     }
-    gmvByTenantThisMonth[s.tenant_id].gmv += Number(s.total) || 0;
+    volumeByTenantThisMonth[s.tenant_id].sales_volume += Number(s.total) || 0;
   }
-  const topTenantsByGMV = Object.values(gmvByTenantThisMonth)
-    .sort((a, b) => b.gmv - a.gmv)
+  const topTenantsBySales = Object.values(volumeByTenantThisMonth)
+    .sort((a, b) => b.sales_volume - a.sales_volume)
     .slice(0, 5);
 
   // ── Feature adoption ─────────────────────────────────────────────────
@@ -328,13 +312,10 @@ async function collectPlatformData(serviceClient: any): Promise<PlatformData> {
       avgDaysToFirstSale,
     },
     revenue: {
-      platformFeesThisMonth: Math.round(platformFeesThisMonth * 100) / 100,
-      platformFeesLastMonth: Math.round(platformFeesLastMonth * 100) / 100,
-      gmvThisMonth: Math.round(gmvThisMonth * 100) / 100,
-      gmvLastMonth: Math.round(gmvLastMonth * 100) / 100,
-      avgFeePerTransaction: Math.round(avgFeePerTransaction * 100) / 100,
-      revenueByTier,
-      topTenantsByGMV,
+      salesVolumeThisMonth: Math.round(salesVolumeThisMonth * 100) / 100,
+      salesVolumeLastMonth: Math.round(salesVolumeLastMonth * 100) / 100,
+      avgSaleValue: Math.round(avgSaleValueThisMonth * 100) / 100,
+      topTenantsBySales,
     },
     adoption: {
       eventModeUsers,
@@ -377,6 +358,7 @@ PLATFORM CONTEXT:
 - Sunstone PJOS is a pre-launch SaaS for permanent jewelry artists
 - The platform is in invite-only beta with a small number of real artists
 - Payment processing is exclusively through Stripe (no Square)
+- Revenue comes entirely from monthly subscriptions (Starter $99, Pro $169, Business $279) and CRM add-ons ($69/mo). No platform fees on sales.
 - Demo/test tenant accounts have been excluded from these metrics — all data shown is from real users
 - Low numbers are EXPECTED at this stage — calibrate analysis accordingly
 - Do NOT generate crisis-level alerts for normal pre-launch metrics (e.g. low engagement with only a few tenants is expected)
@@ -420,12 +402,10 @@ TENANT HEALTH:
 - Churn risk tenants (active 30d ago, inactive last 14d): ${data.tenantHealth.churnRiskTenants.map(t => `${t.name} (last active: ${new Date(t.lastActive).toLocaleDateString()})`).join(', ') || 'None'}
 - Average days to first sale: ${data.tenantHealth.avgDaysToFirstSale ?? 'N/A'}
 
-REVENUE:
-- Platform fees this month: $${data.revenue.platformFeesThisMonth.toFixed(2)} (last month: $${data.revenue.platformFeesLastMonth.toFixed(2)})
-- GMV this month: $${data.revenue.gmvThisMonth.toFixed(2)} (last month: $${data.revenue.gmvLastMonth.toFixed(2)})
-- Avg platform fee per transaction: $${data.revenue.avgFeePerTransaction.toFixed(2)}
-- Revenue by tier: Starter: $${(data.revenue.revenueByTier.starter || 0).toFixed(2)}, Pro: $${(data.revenue.revenueByTier.pro || 0).toFixed(2)}, Business: $${(data.revenue.revenueByTier.business || 0).toFixed(2)}
-- Top tenants by GMV this month: ${data.revenue.topTenantsByGMV.map(t => `${t.name}: $${t.gmv.toFixed(2)}`).join(', ') || 'None'}
+SALES VOLUME (artist sales processed through the platform — Sunstone revenue comes from subscriptions, not fees):
+- Sales volume this month: $${data.revenue.salesVolumeThisMonth.toFixed(2)} (last month: $${data.revenue.salesVolumeLastMonth.toFixed(2)})
+- Average sale value: $${data.revenue.avgSaleValue.toFixed(2)}
+- Top tenants by sales volume this month: ${data.revenue.topTenantsBySales.map(t => `${t.name}: $${t.sales_volume.toFixed(2)}`).join(', ') || 'None'}
 
 FEATURE ADOPTION:
 - Event Mode users: ${data.adoption.eventModeUsers}
@@ -523,20 +503,20 @@ function generateRuleBasedInsights(data: PlatformData): Insight[] {
     }
   }
 
-  // Revenue trend
-  if (data.revenue.platformFeesLastMonth > 0) {
-    const changePercent = ((data.revenue.platformFeesThisMonth - data.revenue.platformFeesLastMonth) / data.revenue.platformFeesLastMonth * 100);
+  // Sales volume trend
+  if (data.revenue.salesVolumeLastMonth > 0) {
+    const changePercent = ((data.revenue.salesVolumeThisMonth - data.revenue.salesVolumeLastMonth) / data.revenue.salesVolumeLastMonth * 100);
     if (changePercent > 0) {
       insights.push({
         type: 'growth',
-        title: `Platform revenue up ${changePercent.toFixed(0)}% month-over-month`,
-        body: `Platform fees are $${data.revenue.platformFeesThisMonth.toFixed(2)} this month vs $${data.revenue.platformFeesLastMonth.toFixed(2)} last month. GMV is $${data.revenue.gmvThisMonth.toFixed(2)}.`,
+        title: `Sales volume up ${changePercent.toFixed(0)}% month-over-month`,
+        body: `Artists processed $${data.revenue.salesVolumeThisMonth.toFixed(2)} in sales this month vs $${data.revenue.salesVolumeLastMonth.toFixed(2)} last month.`,
       });
     } else {
       insights.push({
         type: 'attention',
-        title: `Platform revenue down ${Math.abs(changePercent).toFixed(0)}% month-over-month`,
-        body: `Platform fees dropped from $${data.revenue.platformFeesLastMonth.toFixed(2)} last month to $${data.revenue.platformFeesThisMonth.toFixed(2)}. Review if this is seasonal or if specific tenants have slowed down.`,
+        title: `Sales volume down ${Math.abs(changePercent).toFixed(0)}% month-over-month`,
+        body: `Sales volume dropped from $${data.revenue.salesVolumeLastMonth.toFixed(2)} last month to $${data.revenue.salesVolumeThisMonth.toFixed(2)}. Review if this is seasonal or if specific tenants have slowed down.`,
       });
     }
   }
@@ -570,15 +550,15 @@ function generateRuleBasedInsights(data: PlatformData): Insight[] {
   }
 
   // Top earner spotlight
-  if (data.revenue.topTenantsByGMV.length > 0) {
-    const top = data.revenue.topTenantsByGMV[0];
-    const topShare = data.revenue.gmvThisMonth > 0
-      ? Math.round((top.gmv / data.revenue.gmvThisMonth) * 100)
+  if (data.revenue.topTenantsBySales.length > 0) {
+    const top = data.revenue.topTenantsBySales[0];
+    const topShare = data.revenue.salesVolumeThisMonth > 0
+      ? Math.round((top.sales_volume / data.revenue.salesVolumeThisMonth) * 100)
       : 0;
     insights.push({
       type: 'growth',
-      title: `${top.name} leading GMV this month`,
-      body: `Your top earner ${top.name} drove $${top.gmv.toFixed(2)} in GMV (${topShare}% of platform total). Consider featuring them as a success story.`,
+      title: `${top.name} leading sales this month`,
+      body: `Your top earner ${top.name} processed $${top.sales_volume.toFixed(2)} in sales (${topShare}% of platform total). Consider featuring them as a success story.`,
     });
   }
 

@@ -113,7 +113,7 @@ export default function AdminOverviewPage() {
         totalTenants: tenants.length,
         totalUsers: users.length,
         planBreakdown,
-        platformRevenue: revenueData.totals?.platform_fees || 0,
+        platformRevenue: revenueData.totals?.mrr || 0,
         recentSignups,
         activeToday,
       });
@@ -173,7 +173,7 @@ export default function AdminOverviewPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard label="Total Tenants" value={stats.totalTenants} />
             <StatCard label="Total Users" value={stats.totalUsers} />
-            <StatCard label="Platform Revenue" value={money(stats.platformRevenue)} />
+            <StatCard label="MRR" value={money(stats.platformRevenue)} />
             <StatCard label="Active Today" value={stats.activeToday} />
           </div>
 
