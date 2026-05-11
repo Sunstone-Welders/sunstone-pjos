@@ -291,6 +291,44 @@ function WaiverPageInner() {
         }
       }
 
+      // Store mode queue: if no event but tenant has store queue mode enabled
+      if (!resolvedEventId && tenant!.store_queue_mode) {
+        const { count } = await supabase
+          .from('queue_entries')
+          .select('*', { count: 'exact', head: true })
+          .eq('tenant_id', tenant!.id)
+          .is('event_id', null)
+          .in('status', ['waiting', 'notified', 'serving']);
+
+        const nextPos = (count || 0) + 1;
+
+        const { data: queueEntry } = await supabase.from('queue_entries').insert({
+          tenant_id: tenant!.id,
+          event_id: null,
+          client_id: clientId,
+          name: form.name,
+          phone: form.phone || null,
+          email: form.email || null,
+          position: nextPos,
+          waiver_id: waiver?.id,
+          sms_consent: smsConsent,
+        }).select('id').single();
+
+        didCreateQueue = true;
+
+        // Send queue position SMS (fire-and-forget)
+        if (queueEntry?.id && smsConsent && form.phone) {
+          fetch('/api/queue/position-notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              queueEntryId: queueEntry.id,
+              tenantId: tenant!.id,
+            }),
+          }).catch(() => {});
+        }
+      }
+
       setQueueCreated(didCreateQueue);
 
       // Fire-and-forget auto-tagging

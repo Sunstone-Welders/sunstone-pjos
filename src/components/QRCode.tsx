@@ -122,7 +122,7 @@ export function QRCode({
 }
 
 // ============================================================================
-// FullScreenQR Component — Split-screen QR + Live Queue Display
+// FullScreenQR Component — Branded Split-screen QR + Live Queue Display
 // ============================================================================
 
 interface QueueEntryData {
@@ -141,6 +141,7 @@ interface FullScreenQRProps {
   eventName?: string;
   eventId?: string;
   tenantId?: string;
+  mode?: 'event' | 'store';
   onClose: () => void;
 }
 
@@ -150,39 +151,52 @@ function formatNamePrivacy(name: string): string {
   return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 }
 
-function useQueueData(tenantId?: string, eventId?: string) {
+function useQueueData(tenantId?: string, eventId?: string, mode: 'event' | 'store' = 'event') {
   const [queue, setQueue] = useState<QueueEntryData[]>([]);
   const [served, setServed] = useState<QueueEntryData[]>([]);
   const [avgServiceMinutes, setAvgServiceMinutes] = useState(10);
   const supabase = createClient();
 
   const fetchQueue = useCallback(async () => {
-    if (!tenantId || !eventId) return;
+    if (!tenantId) return;
+    if (mode === 'event' && !eventId) return;
 
-    // Fetch active queue entries (waiting + notified)
-    const { data: active } = await supabase
+    // Fetch active queue entries (waiting + notified + serving)
+    let activeQuery = supabase
       .from('queue_entries')
       .select('id, name, status, position, created_at, notified_at, served_at')
       .eq('tenant_id', tenantId)
-      .eq('event_id', eventId)
       .in('status', ['waiting', 'notified', 'serving'])
       .order('position', { ascending: true });
 
+    if (mode === 'store') {
+      activeQuery = activeQuery.is('event_id', null);
+    } else {
+      activeQuery = activeQuery.eq('event_id', eventId!);
+    }
+
+    const { data: active } = await activeQuery;
     setQueue((active || []) as QueueEntryData[]);
 
     // Fetch last 10 served entries for avg service time calculation
-    const { data: recentServed } = await supabase
+    let servedQuery = supabase
       .from('queue_entries')
       .select('id, name, status, position, created_at, notified_at, served_at')
       .eq('tenant_id', tenantId)
-      .eq('event_id', eventId)
       .in('status', ['served'])
       .not('served_at', 'is', null)
       .order('served_at', { ascending: false })
       .limit(10);
 
+    if (mode === 'store') {
+      servedQuery = servedQuery.is('event_id', null);
+    } else {
+      servedQuery = servedQuery.eq('event_id', eventId!);
+    }
+
+    const { data: recentServed } = await servedQuery;
     setServed((recentServed || []) as QueueEntryData[]);
-  }, [tenantId, eventId]);
+  }, [tenantId, eventId, mode]);
 
   // Fetch tenant's avg_service_minutes as fallback
   useEffect(() => {
@@ -229,12 +243,13 @@ function formatEstWait(minutes: number): string {
   return m > 0 ? `~${h}h ${m}m` : `~${h}h`;
 }
 
-export function FullScreenQR({ url, tenantName, eventName, eventId, tenantId, onClose }: FullScreenQRProps) {
+export function FullScreenQR({ url, tenantName, eventName, eventId, tenantId, mode = 'event', onClose }: FullScreenQRProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const hasQueue = !!(eventId && tenantId);
+  const hasQueue = mode === 'store' ? !!tenantId : !!(eventId && tenantId);
   const { nowServing, waiting, dynamicAvgMinutes, totalInQueue } = useQueueData(
     hasQueue ? tenantId : undefined,
-    hasQueue ? eventId : undefined
+    hasQueue ? eventId : undefined,
+    mode
   );
 
   useEffect(() => {
@@ -255,7 +270,7 @@ export function FullScreenQR({ url, tenantName, eventName, eventId, tenantId, on
     return () => window.removeEventListener('keydown', handleKey);
   }, [onClose]);
 
-  // If no eventId/tenantId, render original centered layout
+  // If no queue context, render centered layout
   if (!hasQueue) {
     return (
       <div
@@ -281,148 +296,244 @@ export function FullScreenQR({ url, tenantName, eventName, eventId, tenantId, on
     );
   }
 
-  // Split-screen layout
+  // ── Branded split-screen layout — edge-to-edge 50/50 ──
   const upNext = waiting.slice(0, 4);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-900" onClick={onClose}>
+    <div className="fixed inset-0 z-[100]" onClick={onClose}>
       <div
         className="h-full flex flex-col lg:flex-row"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── Left Panel: QR Code ── */}
-        <div className="flex-1 flex flex-col items-center justify-center p-6 lg:p-10 bg-white lg:rounded-r-3xl">
-          <div className="flex flex-col items-center gap-5 max-w-sm">
+        {/* ── Left Panel: QR Code — accent-branded ── */}
+        <div
+          className="flex-1 flex flex-col items-center justify-center relative"
+          style={{ backgroundColor: 'var(--accent-50)' }}
+        >
+          <div className="flex flex-col items-center gap-5 max-w-sm px-6">
             {tenantName && (
               <div className="text-center">
-                <h1 className="text-2xl lg:text-3xl font-display font-semibold text-slate-900">
+                <h1
+                  className="text-2xl lg:text-3xl font-display font-semibold"
+                  style={{ color: 'var(--accent-900)' }}
+                >
                   {tenantName}
                 </h1>
                 {eventName && (
-                  <p className="text-base lg:text-lg text-slate-500 mt-1">{eventName}</p>
+                  <p
+                    className="text-base lg:text-lg mt-1"
+                    style={{ color: 'var(--accent-600)' }}
+                  >
+                    {eventName}
+                  </p>
                 )}
               </div>
             )}
 
-            <div className="rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-lg">
+            <div
+              className="rounded-2xl bg-white p-5 shadow-lg"
+              style={{ border: '2px solid var(--accent-200)' }}
+            >
               <canvas ref={canvasRef} />
             </div>
 
             <div className="text-center">
-              <p className="text-base lg:text-lg font-medium text-slate-700">
+              <p
+                className="text-base lg:text-lg font-medium"
+                style={{ color: 'var(--accent-700)' }}
+              >
                 Scan to sign your waiver
               </p>
-              <p className="text-sm text-slate-400 mt-1">&amp; join the queue</p>
+              <p className="text-sm mt-1" style={{ color: 'var(--accent-400)' }}>
+                &amp; join the queue
+              </p>
             </div>
           </div>
+        </div>
 
-          {/* Close hint */}
+        {/* ── Right Panel: Live Queue — clean surface ── */}
+        <div
+          className="flex-1 flex flex-col overflow-hidden min-h-0 relative"
+          style={{ backgroundColor: 'var(--surface-base, #ffffff)' }}
+        >
+          <div className="flex-1 flex flex-col px-6 py-6 lg:px-10 lg:py-8 overflow-hidden min-h-0">
+            {/* Queue header */}
+            <div className="flex items-center justify-between mb-6 lg:mb-8">
+              <h2
+                className="text-2xl lg:text-3xl font-display font-semibold"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                Queue
+              </h2>
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-3 w-3">
+                  <span
+                    className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+                    style={{ backgroundColor: 'var(--accent-primary)' }}
+                  />
+                  <span
+                    className="relative inline-flex h-3 w-3 rounded-full"
+                    style={{ backgroundColor: 'var(--accent-primary)' }}
+                  />
+                </span>
+                <span
+                  className="text-lg font-semibold"
+                  style={{ color: 'var(--accent-primary)' }}
+                >
+                  {totalInQueue} in line
+                </span>
+              </div>
+            </div>
+
+            {/* Now Serving */}
+            <div className="mb-6 lg:mb-8">
+              <p
+                className="text-xs font-semibold uppercase tracking-[0.1em] mb-3"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                Now Serving
+              </p>
+              {nowServing ? (
+                <div
+                  className="rounded-2xl p-5 lg:p-6"
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--accent-primary) 8%, var(--surface-base, #ffffff))',
+                    border: '1px solid color-mix(in srgb, var(--accent-primary) 20%, transparent)',
+                  }}
+                >
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="w-14 h-14 lg:w-16 lg:h-16 rounded-full flex items-center justify-center text-white text-xl lg:text-2xl font-bold flex-shrink-0"
+                      style={{ backgroundColor: 'var(--accent-primary)' }}
+                    >
+                      {formatNamePrivacy(nowServing.name).charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p
+                        className="text-2xl lg:text-3xl font-semibold"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        {formatNamePrivacy(nowServing.name)}
+                      </p>
+                      <p className="text-sm mt-0.5" style={{ color: 'var(--accent-primary)' }}>
+                        Being served now
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="rounded-2xl p-5 lg:p-6"
+                  style={{
+                    backgroundColor: 'var(--surface-raised)',
+                    border: '1px solid var(--border-default)',
+                  }}
+                >
+                  <p className="text-lg text-center" style={{ color: 'var(--text-tertiary)' }}>
+                    No one being served
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Up Next */}
+            <div className="flex-1 min-h-0">
+              <p
+                className="text-xs font-semibold uppercase tracking-[0.1em] mb-3"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                Up Next
+              </p>
+              {upNext.length > 0 ? (
+                <div className="space-y-3">
+                  {upNext.map((entry, i) => {
+                    const positionInLine = i + 1;
+                    const estMinutes = positionInLine * dynamicAvgMinutes;
+                    return (
+                      <div
+                        key={entry.id}
+                        className="flex items-center gap-4 rounded-xl p-4 transition-all duration-500"
+                        style={{
+                          backgroundColor: 'var(--surface-raised)',
+                          border: '1px solid var(--border-default)',
+                        }}
+                      >
+                        <div
+                          className="w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center text-sm lg:text-base font-bold flex-shrink-0"
+                          style={{
+                            backgroundColor: 'var(--accent-100)',
+                            color: 'var(--accent-700)',
+                          }}
+                        >
+                          {positionInLine}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className="text-lg lg:text-xl font-medium truncate"
+                            style={{ color: 'var(--text-primary)' }}
+                          >
+                            {formatNamePrivacy(entry.name)}
+                          </p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p
+                            className="text-base lg:text-lg font-medium"
+                            style={{ color: 'var(--text-secondary)' }}
+                          >
+                            {formatEstWait(estMinutes)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {waiting.length > 4 && (
+                    <p className="text-center text-sm pt-2" style={{ color: 'var(--text-tertiary)' }}>
+                      +{waiting.length - 4} more waiting
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div
+                  className="rounded-xl p-5"
+                  style={{
+                    backgroundColor: 'var(--surface-raised)',
+                    border: '1px solid var(--border-default)',
+                  }}
+                >
+                  <p className="text-lg text-center" style={{ color: 'var(--text-tertiary)' }}>
+                    Queue is empty
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Avg service time indicator */}
+            {totalInQueue > 0 && (
+              <div
+                className="mt-4 lg:mt-6 pt-4"
+                style={{ borderTop: '1px solid var(--border-default)' }}
+              >
+                <p className="text-xs text-center" style={{ color: 'var(--text-tertiary)' }}>
+                  Avg. service time: ~{Math.round(dynamicAvgMinutes)} min
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Close / Exit Full Screen button */}
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 lg:top-6 lg:right-6 w-10 h-10 rounded-full bg-slate-800/80 text-white/70 hover:text-white flex items-center justify-center transition-colors"
+            className="absolute top-4 right-4 lg:top-6 lg:right-6 w-10 h-10 rounded-full flex items-center justify-center transition-colors z-10"
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--text-primary) 10%, transparent)',
+              color: 'var(--text-secondary)',
+            }}
+            title="Exit full screen"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-        </div>
-
-        {/* ── Right Panel: Live Queue ── */}
-        <div className="flex-1 flex flex-col p-6 lg:p-10 overflow-hidden min-h-0">
-          {/* Queue header */}
-          <div className="flex items-center justify-between mb-6 lg:mb-8">
-            <h2 className="text-2xl lg:text-3xl font-display font-semibold text-white">
-              Queue
-            </h2>
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-400" />
-              </span>
-              <span className="text-lg font-semibold text-emerald-400">
-                {totalInQueue} in line
-              </span>
-            </div>
-          </div>
-
-          {/* Now Serving */}
-          <div className="mb-6 lg:mb-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-400 mb-3">
-              Now Serving
-            </p>
-            {nowServing ? (
-              <div className="bg-emerald-500/15 border border-emerald-500/30 rounded-2xl p-5 lg:p-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xl lg:text-2xl font-bold flex-shrink-0">
-                    {formatNamePrivacy(nowServing.name).charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-2xl lg:text-3xl font-semibold text-white">
-                      {formatNamePrivacy(nowServing.name)}
-                    </p>
-                    <p className="text-sm text-emerald-400 mt-0.5">Being served now</p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-5 lg:p-6">
-                <p className="text-lg text-slate-500 text-center">No one being served</p>
-              </div>
-            )}
-          </div>
-
-          {/* Up Next */}
-          <div className="flex-1 min-h-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-400 mb-3">
-              Up Next
-            </p>
-            {upNext.length > 0 ? (
-              <div className="space-y-3">
-                {upNext.map((entry, i) => {
-                  const positionInLine = i + 1;
-                  const estMinutes = positionInLine * dynamicAvgMinutes;
-                  return (
-                    <div
-                      key={entry.id}
-                      className="flex items-center gap-4 bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 transition-all duration-500"
-                    >
-                      <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 text-sm lg:text-base font-bold flex-shrink-0">
-                        {positionInLine}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-lg lg:text-xl font-medium text-white truncate">
-                          {formatNamePrivacy(entry.name)}
-                        </p>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-base lg:text-lg font-medium text-slate-300">
-                          {formatEstWait(estMinutes)}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-                {waiting.length > 4 && (
-                  <p className="text-center text-sm text-slate-500 pt-2">
-                    +{waiting.length - 4} more waiting
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
-                <p className="text-lg text-slate-500 text-center">Queue is empty</p>
-              </div>
-            )}
-          </div>
-
-          {/* Avg service time indicator */}
-          {totalInQueue > 0 && (
-            <div className="mt-4 lg:mt-6 pt-4 border-t border-slate-700/50">
-              <p className="text-xs text-slate-500 text-center">
-                Avg. service time: ~{Math.round(dynamicAvgMinutes)} min
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>

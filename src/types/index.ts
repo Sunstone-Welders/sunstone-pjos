@@ -68,6 +68,7 @@ export interface Tenant {
   logo_url: string | null;
   brand_color: string;
   theme_id: string;
+  store_queue_mode: boolean;
   // Waiver
   waiver_text: string;
   waiver_required: boolean;
