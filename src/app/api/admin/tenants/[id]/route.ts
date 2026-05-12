@@ -3,8 +3,13 @@
 // PATCH: Update tenant (plan tier, suspension)
 
 import { NextRequest, NextResponse } from 'next/server';
+import Stripe from 'stripe';
 import { verifyPlatformAdmin, AdminAuthError } from '@/lib/admin/verify-platform-admin';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2025-02-24.acacia' as any,
+});
 
 export async function GET(
   request: NextRequest,
@@ -165,6 +170,33 @@ export async function PATCH(
       if (update.admin_tier_override) {
         update.subscription_status = 'active';
         update.trial_ends_at = null;
+
+        // Cancel active Stripe subscriptions so the tenant stops being billed
+        const { data: existing } = await serviceClient
+          .from('tenants')
+          .select('stripe_subscription_id, crm_subscription_id')
+          .eq('id', id)
+          .single();
+
+        if (existing?.stripe_subscription_id) {
+          try {
+            await stripe.subscriptions.cancel(existing.stripe_subscription_id);
+            console.log(`Admin override: cancelled Stripe subscription ${existing.stripe_subscription_id} for tenant ${id}`);
+          } catch (stripeErr: any) {
+            console.error(`Admin override: failed to cancel Stripe subscription ${existing.stripe_subscription_id} for tenant ${id}:`, stripeErr.message);
+          }
+          update.stripe_subscription_id = null;
+        }
+
+        if (existing?.crm_subscription_id) {
+          try {
+            await stripe.subscriptions.cancel(existing.crm_subscription_id);
+            console.log(`Admin override: cancelled CRM subscription ${existing.crm_subscription_id} for tenant ${id}`);
+          } catch (stripeErr: any) {
+            console.error(`Admin override: failed to cancel CRM subscription ${existing.crm_subscription_id} for tenant ${id}:`, stripeErr.message);
+          }
+          update.crm_subscription_id = null;
+        }
       }
     }
 

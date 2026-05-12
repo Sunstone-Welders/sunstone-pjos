@@ -525,9 +525,14 @@ export async function POST(request: NextRequest) {
 
         const { data: tenant } = await serviceRole
           .from('tenants')
-          .select('id, subscription_status, referred_by_ambassador_id')
+          .select('id, subscription_status, referred_by_ambassador_id, admin_tier_override')
           .eq('stripe_customer_id', customerId)
           .single();
+
+        // Safety net: warn if an admin-overridden tenant is still being billed
+        if (tenant?.admin_tier_override) {
+          console.warn(`WARNING: invoice.payment_succeeded for admin-overridden tenant ${tenant.id}. This should not happen — subscription should have been cancelled.`);
+        }
 
         if (tenant && tenant.subscription_status === 'past_due') {
           await serviceRole
