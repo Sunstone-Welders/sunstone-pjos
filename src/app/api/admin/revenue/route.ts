@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdmin, AdminAuthError } from '@/lib/admin/verify-platform-admin';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { isDemoTenant } from '@/lib/demo/personas';
 
 // Subscription pricing for MRR calculation
 const TIER_PRICES: Record<string, number> = {
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
     // Get tenants for name, plan tier, and subscription status
     const { data: tenants } = await serviceClient
       .from('tenants')
-      .select('id, name, subscription_tier, subscription_status, crm_enabled');
+      .select('id, name, subscription_tier, subscription_status, crm_enabled, admin_tier_override, stripe_subscription_id');
 
     const tenantMap: Record<string, { name: string; tier: string; status: string; crm_enabled: boolean }> = {};
     let mrr = 0;
@@ -43,8 +44,18 @@ export async function GET(request: NextRequest) {
       const tier = t.subscription_tier || 'starter';
       tenantMap[t.id] = { name: t.name, tier, status: t.subscription_status, crm_enabled: t.crm_enabled };
 
-      // Count active subscribers and calculate MRR
-      if (t.subscription_status === 'active' || t.subscription_status === 'trialing') {
+      // Count ONLY actually-paying Stripe subscribers for MRR:
+      // - Must be active (not trialing — trials don't generate revenue)
+      // - Must have a real Stripe subscription
+      // - Must NOT be admin-overridden (those are free promotional)
+      // - Must NOT be a demo account
+      const isPaying =
+        t.subscription_status === 'active' &&
+        t.stripe_subscription_id &&
+        !t.admin_tier_override &&
+        !isDemoTenant(t.id);
+
+      if (isPaying) {
         subscribersByTier[tier] = (subscribersByTier[tier] || 0) + 1;
         mrr += TIER_PRICES[tier] || 0;
         // Add CRM add-on revenue for non-Business tenants

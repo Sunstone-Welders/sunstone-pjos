@@ -246,8 +246,33 @@ function GapsTab({
 
   if (gaps.length === 0) {
     return (
-      <div className="bg-[var(--surface-raised)] rounded-lg border border-[var(--border-default)] p-8 text-center">
-        <p className="text-[var(--text-secondary)] text-sm">No pending knowledge gaps — Sunny's doing great!</p>
+      <div className="bg-[var(--surface-raised)] rounded-lg border border-[var(--border-default)] p-8 text-center space-y-4">
+        <div>
+          <p className="text-[var(--text-primary)] text-sm font-medium">No pending knowledge gaps</p>
+          <p className="text-[var(--text-secondary)] text-xs mt-1">
+            Gaps appear here when Sunny can't answer an artist's question. There are 3 detection methods:
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left max-w-2xl mx-auto">
+          <div className="bg-[var(--surface-subtle)] rounded-lg p-3">
+            <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">Auto-detected</p>
+            <p className="text-[11px] text-[var(--text-tertiary)]">
+              Sunny flags topics she lacks knowledge on during chat responses
+            </p>
+          </div>
+          <div className="bg-[var(--surface-subtle)] rounded-lg p-3">
+            <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">Artist correction</p>
+            <p className="text-[11px] text-[var(--text-tertiary)]">
+              Detected when an artist types "that's wrong" or corrects Sunny in chat
+            </p>
+          </div>
+          <div className="bg-[var(--surface-subtle)] rounded-lg p-3">
+            <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">Thumbs-down flag</p>
+            <p className="text-[11px] text-[var(--text-tertiary)]">
+              Artists can click the thumbs-down button on any Sunny response to flag it
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
