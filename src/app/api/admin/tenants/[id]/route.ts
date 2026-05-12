@@ -25,7 +25,8 @@ export async function GET(
       .from('tenants')
       .select(`
         id, name, slug, owner_id, subscription_tier, subscription_status, trial_ends_at,
-        stripe_account_id, stripe_customer_id, is_suspended, suspended_at, suspended_reason,
+        stripe_account_id, stripe_customer_id, stripe_subscription_id,
+        is_suspended, suspended_at, suspended_reason,
         crm_enabled, created_at, updated_at, phone, email, website,
         dedicated_phone_number, dedicated_phone_sid, platform_fee_percent,
         admin_tier_override, last_owner_login_at,

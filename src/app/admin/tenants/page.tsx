@@ -28,6 +28,58 @@ interface Tenant {
   brand_color: string;
   admin_tier_override?: boolean;
   trial_ends_at?: string | null;
+  stripe_subscription_id?: string | null;
+}
+
+type StatusFilter = 'all' | 'trialing' | 'active' | 'canceled' | 'override' | 'expired' | 'past_due';
+
+function getSubscriptionDisplayStatus(t: Tenant): {
+  label: string;
+  color: 'green' | 'amber' | 'blue' | 'red' | 'gray';
+  subLabel?: string;
+} {
+  if (t.is_suspended) {
+    return { label: 'Suspended', color: 'red' };
+  }
+  if (t.subscription_status === 'active' && t.admin_tier_override) {
+    return { label: 'Override', color: 'amber' };
+  }
+  if (t.subscription_status === 'active' && t.stripe_subscription_id) {
+    return { label: 'Paying', color: 'green' };
+  }
+  if (t.subscription_status === 'active') {
+    return { label: 'Active (Free)', color: 'blue' };
+  }
+  if (t.subscription_status === 'trialing') {
+    const trialEnd = t.trial_ends_at ? new Date(t.trial_ends_at) : null;
+    const now = new Date();
+    if (trialEnd && trialEnd > now) {
+      const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return { label: 'Trial', color: 'blue', subLabel: `${daysLeft}d left` };
+    }
+    return { label: 'Trial Expired', color: 'red' };
+  }
+  if (t.subscription_status === 'canceled') {
+    return { label: 'Canceled', color: 'gray' };
+  }
+  if (t.subscription_status === 'past_due') {
+    return { label: 'Past Due', color: 'red' };
+  }
+  // Fallback
+  return { label: t.subscription_status || 'Unknown', color: 'gray' };
+}
+
+function getStatusFilterKey(t: Tenant): StatusFilter {
+  if (t.subscription_status === 'active' && t.admin_tier_override) return 'override';
+  if (t.subscription_status === 'trialing') {
+    const trialEnd = t.trial_ends_at ? new Date(t.trial_ends_at) : null;
+    if (trialEnd && trialEnd > new Date()) return 'trialing';
+    return 'expired';
+  }
+  if (t.subscription_status === 'active') return 'active';
+  if (t.subscription_status === 'canceled') return 'canceled';
+  if (t.subscription_status === 'past_due') return 'past_due';
+  return 'all';
 }
 
 interface TenantMember {
@@ -77,7 +129,7 @@ interface Suggestion {
   urgency: number;
 }
 
-type SortKey = 'name' | 'created_at' | 'sales_count' | 'subscription_tier' | 'last_owner_login_at';
+type SortKey = 'name' | 'created_at' | 'sales_count' | 'subscription_tier' | 'last_owner_login_at' | 'subscription_status';
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
@@ -87,6 +139,7 @@ export default function AdminTenantsPage() {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortKey>('created_at');
   const [sortAsc, setSortAsc] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   // Needs Attention
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -193,6 +246,9 @@ export default function AdminTenantsPage() {
         t.slug.toLowerCase().includes(q)
       );
     }
+    if (statusFilter !== 'all') {
+      list = list.filter(t => getStatusFilterKey(t) === statusFilter);
+    }
     list.sort((a, b) => {
       let cmp = 0;
       switch (sortBy) {
@@ -201,11 +257,22 @@ export default function AdminTenantsPage() {
         case 'sales_count': cmp = a.sales_count - b.sales_count; break;
         case 'subscription_tier': cmp = a.subscription_tier.localeCompare(b.subscription_tier); break;
         case 'last_owner_login_at': cmp = (a.last_owner_login_at || '').localeCompare(b.last_owner_login_at || ''); break;
+        case 'subscription_status': cmp = getSubscriptionDisplayStatus(a).label.localeCompare(getSubscriptionDisplayStatus(b).label); break;
       }
       return sortAsc ? cmp : -cmp;
     });
     return list;
-  }, [tenants, search, sortBy, sortAsc]);
+  }, [tenants, search, sortBy, sortAsc, statusFilter]);
+
+  // Status filter counts for chips
+  const statusCounts = useMemo(() => {
+    const counts: Record<StatusFilter, number> = { all: tenants.length, trialing: 0, active: 0, canceled: 0, override: 0, expired: 0, past_due: 0 };
+    for (const t of tenants) {
+      const key = getStatusFilterKey(t);
+      if (key !== 'all') counts[key]++;
+    }
+    return counts;
+  }, [tenants]);
 
   const selectedTenant = tenants.find(t => t.id === selectedId) || null;
 
@@ -283,7 +350,7 @@ export default function AdminTenantsPage() {
 
       {/* ── Search + Table ── */}
       <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)]">
-        <div className="p-4 border-b border-[var(--border-subtle)]">
+        <div className="p-4 border-b border-[var(--border-subtle)] space-y-3">
           <div className="relative max-w-md">
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-tertiary)]" />
             <input
@@ -293,6 +360,32 @@ export default function AdminTenantsPage() {
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--surface-subtle)] focus:bg-[var(--surface-raised)] focus:outline-none focus:ring-2 focus:ring-[#FF7A00] focus:border-[#FF7A00] transition"
             />
+          </div>
+          {/* Status filter chips */}
+          <div className="flex flex-wrap gap-1.5">
+            {([
+              { key: 'all' as StatusFilter, label: 'All' },
+              { key: 'trialing' as StatusFilter, label: 'Trialing' },
+              { key: 'active' as StatusFilter, label: 'Active' },
+              { key: 'override' as StatusFilter, label: 'Override' },
+              { key: 'past_due' as StatusFilter, label: 'Past Due' },
+              { key: 'expired' as StatusFilter, label: 'Expired' },
+              { key: 'canceled' as StatusFilter, label: 'Canceled' },
+            ]).filter(f => f.key === 'all' || statusCounts[f.key] > 0).map(f => (
+              <button
+                key={f.key}
+                onClick={() => setStatusFilter(f.key)}
+                className={cn(
+                  'px-3 py-1 rounded-full text-xs font-medium transition-colors border',
+                  statusFilter === f.key
+                    ? 'border-[#FF7A00] text-[#FF7A00] bg-[rgba(255,122,0,0.08)]'
+                    : 'border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                )}
+              >
+                {f.label}
+                <span className="ml-1 opacity-60">{statusCounts[f.key]}</span>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -306,7 +399,7 @@ export default function AdminTenantsPage() {
                 <SortHeader label="Last Active" sortKey="last_owner_login_at" current={sortBy} asc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
                 <SortHeader label="Sales" sortKey="sales_count" current={sortBy} asc={sortAsc} onSort={handleSort} className="hidden md:table-cell" />
                 <SortHeader label="Created" sortKey="created_at" current={sortBy} asc={sortAsc} onSort={handleSort} className="hidden md:table-cell" />
-                <th className="hidden md:table-cell text-left text-xs font-medium text-[var(--text-secondary)] px-4 py-3">Status</th>
+                <SortHeader label="Status" sortKey="subscription_status" current={sortBy} asc={sortAsc} onSort={handleSort} className="hidden md:table-cell" />
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-subtle)]">
@@ -345,15 +438,7 @@ export default function AdminTenantsPage() {
                   <td className="hidden md:table-cell px-4 py-3 text-[var(--text-secondary)]">{t.sales_count}</td>
                   <td className="hidden md:table-cell px-4 py-3 text-[var(--text-secondary)]">{new Date(t.created_at).toLocaleDateString()}</td>
                   <td className="hidden md:table-cell px-4 py-3">
-                    {t.is_suspended ? (
-                      <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-500/10 text-red-400">
-                        Suspended
-                      </span>
-                    ) : (
-                      <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-500/10 text-green-400">
-                        Active
-                      </span>
-                    )}
+                    <SubscriptionStatusBadge tenant={t} />
                   </td>
                 </tr>
               ))}
@@ -509,8 +594,9 @@ function TenantProfilePanel({
                 {tenant.name.substring(0, 2).toUpperCase()}
               </div>
               <h2 className="text-lg font-bold text-[var(--text-primary)]">{tenant.name}</h2>
-              <div className="mt-1.5">
+              <div className="mt-1.5 flex items-center justify-center gap-2">
                 <TierBadge tier={tenant.subscription_tier} />
+                <SubscriptionStatusBadge tenant={tenant} />
               </div>
               {detail?.owner && (
                 <div className="mt-2 space-y-0.5">
@@ -624,6 +710,43 @@ function TenantProfilePanel({
             <div ref={accountRef} className="px-6 pb-6">
               <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-3">Subscription Management</h3>
               <div className="bg-[var(--surface-subtle)] rounded-lg border border-[var(--border-default)] divide-y divide-[var(--border-subtle)]">
+                {/* Subscription status */}
+                <div className="px-4 py-3 flex items-center justify-between">
+                  <span className="text-sm text-[var(--text-secondary)]">Status</span>
+                  <SubscriptionStatusBadge tenant={tenant} />
+                </div>
+
+                {/* Trial info */}
+                {(tenant.subscription_status === 'trialing' || tenant.trial_ends_at) && (() => {
+                  const trialEnd = tenant.trial_ends_at ? new Date(tenant.trial_ends_at) : null;
+                  const now = new Date();
+                  const isExpired = trialEnd ? trialEnd <= now : true;
+                  const daysDiff = trialEnd ? Math.ceil(Math.abs(trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                  return (
+                    <div className="px-4 py-3 flex items-center justify-between">
+                      <span className="text-sm text-[var(--text-secondary)]">Trial End</span>
+                      <div className="text-right">
+                        <span className="text-sm text-[var(--text-primary)] font-medium">
+                          {trialEnd ? format(trialEnd, 'MMM d, yyyy') : 'Not set'}
+                        </span>
+                        {trialEnd && (
+                          <p className={cn('text-[11px]', isExpired ? 'text-red-400' : 'text-blue-400')}>
+                            {isExpired ? `expired ${daysDiff}d ago` : `${daysDiff}d remaining`}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Stripe subscription */}
+                <div className="px-4 py-3 flex items-center justify-between">
+                  <span className="text-sm text-[var(--text-secondary)]">Stripe Subscription</span>
+                  <span className={cn('text-sm font-medium', detail?.tenant?.stripe_subscription_id ? 'text-green-400' : 'text-[var(--text-tertiary)]')}>
+                    {detail?.tenant?.stripe_subscription_id ? 'Active' : 'None'}
+                  </span>
+                </div>
+
                 {/* Plan selector */}
                 <div className="px-4 py-3 flex items-center justify-between">
                   <span className="text-sm text-[var(--text-secondary)]">Plan</span>
@@ -694,7 +817,7 @@ function TenantProfilePanel({
 
                 {/* Suspend toggle */}
                 <div className="px-4 py-3 flex items-center justify-between">
-                  <span className="text-sm text-[var(--text-secondary)]">Status</span>
+                  <span className="text-sm text-[var(--text-secondary)]">Account</span>
                   <button
                     onClick={onToggleSuspend}
                     disabled={actionLoading}
@@ -1325,6 +1448,32 @@ function TierBadge({ tier }: { tier: string }) {
     <span className={cn('inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium', styles[tier] || styles.starter)}>
       {label}
     </span>
+  );
+}
+
+function SubscriptionStatusBadge({ tenant, showTier }: { tenant: Tenant; showTier?: boolean }) {
+  const status = getSubscriptionDisplayStatus(tenant);
+  const colorMap: Record<string, string> = {
+    green: 'bg-green-500/10 text-green-400',
+    amber: 'bg-amber-500/10 text-amber-400',
+    blue: 'bg-blue-500/10 text-blue-400',
+    red: 'bg-red-500/10 text-red-400',
+    gray: 'bg-[var(--surface-subtle)] text-[var(--text-tertiary)]',
+  };
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center gap-1.5">
+        <span className={cn('inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium', colorMap[status.color])}>
+          {status.label}
+        </span>
+        {status.subLabel && (
+          <span className="text-[10px] text-[var(--text-tertiary)]">{status.subLabel}</span>
+        )}
+      </div>
+      {showTier && (
+        <span className="text-[10px] text-[var(--text-tertiary)] capitalize">{tenant.subscription_tier}</span>
+      )}
+    </div>
   );
 }
 
