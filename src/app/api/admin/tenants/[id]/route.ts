@@ -160,6 +160,21 @@ export async function PATCH(
           return NextResponse.json({ error: 'Invalid trial_ends_at date' }, { status: 400 });
         }
         update.trial_ends_at = parsed.toISOString();
+
+        // Reactivation: if setting a future trial date on a canceled/expired tenant,
+        // also set subscription_status to 'trialing' (unless admin_tier_override is active)
+        if (parsed > new Date() && !body.admin_tier_override) {
+          const { data: current } = await serviceClient
+            .from('tenants')
+            .select('subscription_status, admin_tier_override')
+            .eq('id', id)
+            .single();
+
+          if (current && !current.admin_tier_override &&
+              (current.subscription_status === 'canceled' || current.subscription_status === 'expired')) {
+            update.subscription_status = 'trialing';
+          }
+        }
       } else {
         update.trial_ends_at = null;
       }

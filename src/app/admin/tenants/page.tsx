@@ -785,6 +785,9 @@ function TenantProfilePanel({
                 {detail?.tenant && (
                   <TrialExtensionRow
                     trialEndsAt={detail.tenant.trial_ends_at}
+                    subscriptionStatus={tenant.subscription_status}
+                    adminTierOverride={detail.tenant.admin_tier_override ?? tenant.admin_tier_override}
+                    stripeSubscriptionId={detail.tenant.stripe_subscription_id}
                     onExtend={(newDate) => onUpdateTenant({ trial_ends_at: newDate })}
                     disabled={actionLoading}
                   />
@@ -1310,21 +1313,49 @@ function OnboardingJourney({ tenant }: { tenant: any }) {
 
 function TrialExtensionRow({
   trialEndsAt,
+  subscriptionStatus,
+  adminTierOverride,
+  stripeSubscriptionId,
   onExtend,
   disabled,
 }: {
   trialEndsAt: string | null;
+  subscriptionStatus: string | null;
+  adminTierOverride: boolean;
+  stripeSubscriptionId: string | null;
   onExtend: (newDate: string) => void;
   disabled: boolean;
 }) {
   const [showPicker, setShowPicker] = useState(false);
   const [customDate, setCustomDate] = useState('');
 
+  // Paying subscriber with active Stripe subscription — no trial editor needed
+  if (subscriptionStatus === 'active' && stripeSubscriptionId && !adminTierOverride) {
+    return (
+      <div className="px-4 py-3 flex items-center justify-between">
+        <span className="text-sm text-[var(--text-secondary)]">Trial</span>
+        <span className="text-xs text-green-500 font-medium">Paying subscriber — no trial</span>
+      </div>
+    );
+  }
+
+  // Admin override active — no trial needed
+  if (adminTierOverride) {
+    return (
+      <div className="px-4 py-3 flex items-center justify-between">
+        <span className="text-sm text-[var(--text-secondary)]">Trial</span>
+        <span className="text-xs text-blue-400 font-medium">Admin override — no trial needed</span>
+      </div>
+    );
+  }
+
   const currentEnd = trialEndsAt ? new Date(trialEndsAt) : null;
-  const isExpired = currentEnd ? currentEnd <= new Date() : true;
+  const now = new Date();
+  const isExpired = currentEnd ? currentEnd <= now : true;
+  const daysDiff = currentEnd ? Math.ceil(Math.abs(currentEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
 
   function handleQuickExtend(days: number) {
-    const base = currentEnd && currentEnd > new Date() ? currentEnd : new Date();
+    const base = currentEnd && currentEnd > now ? currentEnd : new Date();
     const newEnd = new Date(base);
     newEnd.setDate(newEnd.getDate() + days);
     onExtend(newEnd.toISOString());
@@ -1346,11 +1377,14 @@ function TrialExtensionRow({
           <span className="text-sm text-[var(--text-secondary)]">Trial Ends</span>
           <p className="text-xs text-[var(--text-tertiary)]">
             {currentEnd
-              ? isExpired
-                ? `Expired ${format(currentEnd, 'MMM d, yyyy')}`
-                : format(currentEnd, 'MMM d, yyyy')
+              ? format(currentEnd, 'MMM d, yyyy')
               : 'No trial set'}
           </p>
+          {currentEnd && (
+            <p className={cn('text-[11px] font-medium', isExpired ? 'text-red-400' : 'text-green-500')}>
+              {isExpired ? `Expired ${daysDiff} day${daysDiff !== 1 ? 's' : ''} ago` : `${daysDiff} day${daysDiff !== 1 ? 's' : ''} left`}
+            </p>
+          )}
         </div>
         <button
           onClick={() => setShowPicker(!showPicker)}
@@ -1358,13 +1392,13 @@ function TrialExtensionRow({
           className="px-3 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
           style={{ color: '#FF7A00', backgroundColor: 'rgba(255, 122, 0, 0.12)' }}
         >
-          Extend
+          {showPicker ? 'Cancel' : 'Extend'}
         </button>
       </div>
       {showPicker && (
         <div className="space-y-2 mt-2">
           <div className="flex flex-wrap gap-2">
-            {[7, 14, 30].map(days => (
+            {[7, 14, 30, 60].map(days => (
               <button
                 key={days}
                 onClick={() => handleQuickExtend(days)}
