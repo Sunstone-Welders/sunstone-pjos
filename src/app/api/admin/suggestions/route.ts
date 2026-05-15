@@ -1,17 +1,25 @@
 // src/app/api/admin/suggestions/route.ts
 // GET: Returns "Needs Attention" suggestions for admin dashboard
-// Priority: past_due > trial_expiring > inactive > new_signups
+// Priority: trial_expired > trial_expiring > never_logged_in > no_sales > no_stripe
 
 import { NextResponse } from 'next/server';
 import { verifyPlatformAdmin, AdminAuthError } from '@/lib/admin/verify-platform-admin';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 
-interface Suggestion {
-  type: 'past_due' | 'trial_expiring' | 'inactive' | 'new_signup';
+export type AttentionReason =
+  | 'trial_expired'
+  | 'trial_expiring'
+  | 'never_logged_in'
+  | 'no_sales'
+  | 'no_stripe';
+
+interface AttentionItem {
   tenantId: string;
   tenantName: string;
-  message: string;
-  urgency: number; // lower = more urgent
+  reason: AttentionReason;
+  reasonLabel: string;
+  signupDaysAgo: number;
+  urgency: number;
 }
 
 export async function GET() {
@@ -21,87 +29,102 @@ export async function GET() {
 
     const { data: tenants, error } = await serviceClient
       .from('tenants')
-      .select('id, name, subscription_tier, subscription_status, trial_ends_at, updated_at, created_at, is_suspended, admin_tier_override');
+      .select('id, name, slug, subscription_status, trial_ends_at, created_at, is_suspended, admin_tier_override, last_owner_login_at, sales_count, stripe_account_id, square_merchant_id');
 
     if (error) {
       return NextResponse.json({ error: 'Failed to fetch tenants' }, { status: 500 });
     }
 
-    const suggestions: Suggestion[] = [];
+    const items: AttentionItem[] = [];
     const now = new Date();
 
     for (const t of tenants || []) {
+      // Exclusions
       if (t.is_suspended) continue;
-      // Skip tenants with admin tier override — they're intentionally managed
       if (t.admin_tier_override) continue;
+      if (t.slug?.startsWith('demo-')) continue;
 
-      // Past due subscriptions
-      if (t.subscription_status === 'past_due') {
-        suggestions.push({
-          type: 'past_due',
-          tenantId: t.id,
-          tenantName: t.name,
-          message: `${t.name} — subscription past due`,
-          urgency: 1,
-        });
+      const created = new Date(t.created_at);
+      const signupDaysAgo = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+
+      // Check conditions in priority order — only the most urgent one is kept
+      // 1. Trial expired (highest priority)
+      if (t.subscription_status === 'trialing' && t.trial_ends_at) {
+        const trialEnd = new Date(t.trial_ends_at);
+        if (trialEnd <= now) {
+          items.push({
+            tenantId: t.id,
+            tenantName: t.name,
+            reason: 'trial_expired',
+            reasonLabel: 'Trial expired',
+            signupDaysAgo,
+            urgency: 1,
+          });
+          continue;
+        }
       }
 
-      // Trial expiring in next 7 days
+      // 2. Trial expiring soon (within 7 days)
       if (t.subscription_status === 'trialing' && t.trial_ends_at) {
         const trialEnd = new Date(t.trial_ends_at);
         const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
         if (daysLeft > 0 && daysLeft <= 7) {
-          suggestions.push({
-            type: 'trial_expiring',
+          items.push({
             tenantId: t.id,
             tenantName: t.name,
-            message: `${t.name} — trial expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
+            reason: 'trial_expiring',
+            reasonLabel: `Trial expires in ${daysLeft}d`,
+            signupDaysAgo,
             urgency: 2,
           });
+          continue;
         }
       }
 
-      // Inactive tenants (no update in 14+ days, on paid plan)
-      if (
-        (t.subscription_tier === 'pro' || t.subscription_tier === 'business') &&
-        t.subscription_status === 'active' &&
-        t.updated_at
-      ) {
-        const lastActive = new Date(t.updated_at);
-        const daysSince = Math.floor((now.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24));
-        if (daysSince >= 14) {
-          const tierLabel = t.subscription_tier.charAt(0).toUpperCase() + t.subscription_tier.slice(1);
-          suggestions.push({
-            type: 'inactive',
-            tenantId: t.id,
-            tenantName: t.name,
-            message: `${t.name} — no activity in ${daysSince} days (${tierLabel})`,
-            urgency: 3,
-          });
-        }
-      }
-
-      // New signups (last 7 days)
-      const created = new Date(t.created_at);
-      const hoursAge = (now.getTime() - created.getTime()) / (1000 * 60 * 60);
-      if (hoursAge <= 168) {
-        const daysAgo = Math.floor(hoursAge / 24);
-        const label = daysAgo === 0 ? 'signed up today' : daysAgo === 1 ? 'signed up yesterday' : `signed up ${daysAgo} days ago`;
-        suggestions.push({
-          type: 'new_signup',
+      // 3. Never logged in (signed up 2+ days ago)
+      if (signupDaysAgo >= 2 && !t.last_owner_login_at) {
+        items.push({
           tenantId: t.id,
           tenantName: t.name,
-          message: `${t.name} — ${label}`,
+          reason: 'never_logged_in',
+          reasonLabel: 'Never logged in',
+          signupDaysAgo,
+          urgency: 3,
+        });
+        continue;
+      }
+
+      // 4. No sales yet (signed up 7+ days ago)
+      if (signupDaysAgo >= 7 && (t.sales_count === 0 || t.sales_count === null)) {
+        items.push({
+          tenantId: t.id,
+          tenantName: t.name,
+          reason: 'no_sales',
+          reasonLabel: 'No sales yet',
+          signupDaysAgo,
           urgency: 4,
         });
+        continue;
+      }
+
+      // 5. No Stripe connected (signed up 7+ days ago)
+      if (signupDaysAgo >= 7 && !t.stripe_account_id && !t.square_merchant_id) {
+        items.push({
+          tenantId: t.id,
+          tenantName: t.name,
+          reason: 'no_stripe',
+          reasonLabel: 'No Stripe connected',
+          signupDaysAgo,
+          urgency: 5,
+        });
+        continue;
       }
     }
 
-    // Sort by urgency then limit to 8
-    suggestions.sort((a, b) => a.urgency - b.urgency);
-    const topSuggestions = suggestions.slice(0, 8);
+    // Sort by urgency
+    items.sort((a, b) => a.urgency - b.urgency);
 
-    return NextResponse.json({ suggestions: topSuggestions });
+    return NextResponse.json({ suggestions: items });
   } catch (err) {
     if (err instanceof AdminAuthError) {
       return NextResponse.json({ error: err.message }, { status: 403 });

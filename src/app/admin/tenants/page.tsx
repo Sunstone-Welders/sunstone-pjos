@@ -121,11 +121,19 @@ interface AdminActivityEntry {
   };
 }
 
+type AttentionReason =
+  | 'trial_expired'
+  | 'trial_expiring'
+  | 'never_logged_in'
+  | 'no_sales'
+  | 'no_stripe';
+
 interface Suggestion {
-  type: 'past_due' | 'trial_expiring' | 'inactive' | 'new_signup';
   tenantId: string;
   tenantName: string;
-  message: string;
+  reason: AttentionReason;
+  reasonLabel: string;
+  signupDaysAgo: number;
   urgency: number;
 }
 
@@ -143,7 +151,7 @@ export default function AdminTenantsPage() {
 
   // Needs Attention
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [suggestionsHidden, setSuggestionsHidden] = useState(false);
+  const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(false);
 
   // Profile slide-in
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -315,36 +323,49 @@ export default function AdminTenantsPage() {
       </div>
 
       {/* ── Needs Attention ── */}
-      {suggestions.length > 0 && !suggestionsHidden && (
+      {suggestions.length > 0 && (
         <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border-subtle)]">
+          <button
+            onClick={() => setSuggestionsCollapsed(!suggestionsCollapsed)}
+            className="w-full flex items-center justify-between px-5 py-3 border-b border-[var(--border-subtle)] hover:bg-[var(--surface-subtle)] transition-colors"
+          >
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#FF7A00' }} />
               <h3 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
-                Needs Attention
+                Needs Attention ({suggestions.length})
               </h3>
             </div>
-            <button onClick={() => setSuggestionsHidden(true)} className="text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors">
-              Hide
-            </button>
-          </div>
-          <div className="divide-y divide-[var(--border-subtle)]">
-            {suggestions.map((s, i) => (
-              <div key={i} className="flex items-center justify-between px-5 py-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <SuggestionTypeIcon type={s.type} />
-                  <span className="text-sm text-[var(--text-primary)] truncate">{s.message}</span>
+            <svg
+              className={cn('w-4 h-4 text-[var(--text-tertiary)] transition-transform', !suggestionsCollapsed && 'rotate-180')}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+            </svg>
+          </button>
+          {!suggestionsCollapsed && (
+            <div className="divide-y divide-[var(--border-subtle)]">
+              {suggestions.map((s, i) => (
+                <div key={i} className="flex items-center justify-between px-5 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <AttentionReasonBadge reason={s.reason} label={s.reasonLabel} />
+                    <div className="min-w-0">
+                      <span className="text-sm text-[var(--text-primary)] truncate block">{s.tenantName}</span>
+                      <span className="text-xs text-[var(--text-tertiary)]">
+                        {s.signupDaysAgo === 0 ? 'Today' : s.signupDaysAgo === 1 ? '1 day ago' : `${s.signupDaysAgo} days ago`}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => selectTenant(s.tenantId)}
+                    className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                    style={{ color: '#FF7A00', backgroundColor: 'rgba(255, 122, 0, 0.12)' }}
+                  >
+                    View
+                  </button>
                 </div>
-                <button
-                  onClick={() => selectTenant(s.tenantId)}
-                  className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-                  style={{ color: '#FF7A00', backgroundColor: 'rgba(255, 122, 0, 0.12)' }}
-                >
-                  View
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1326,7 +1347,6 @@ function TrialExtensionRow({
   onExtend: (newDate: string) => void;
   disabled: boolean;
 }) {
-  const [showPicker, setShowPicker] = useState(false);
   const [customDate, setCustomDate] = useState('');
 
   // Paying subscriber with active Stripe subscription — no trial editor needed
@@ -1359,13 +1379,11 @@ function TrialExtensionRow({
     const newEnd = new Date(base);
     newEnd.setDate(newEnd.getDate() + days);
     onExtend(newEnd.toISOString());
-    setShowPicker(false);
   }
 
   function handleCustomDate() {
     if (customDate) {
       onExtend(new Date(customDate + 'T23:59:59').toISOString());
-      setShowPicker(false);
       setCustomDate('');
     }
   }
@@ -1374,7 +1392,7 @@ function TrialExtensionRow({
     <div className="px-4 py-3">
       <div className="flex items-center justify-between mb-2">
         <div>
-          <span className="text-sm text-[var(--text-secondary)]">Trial Ends</span>
+          <span className="text-sm text-[var(--text-secondary)]">Trial Extension</span>
           <p className="text-xs text-[var(--text-tertiary)]">
             {currentEnd
               ? format(currentEnd, 'MMM d, yyyy')
@@ -1386,47 +1404,37 @@ function TrialExtensionRow({
             </p>
           )}
         </div>
-        <button
-          onClick={() => setShowPicker(!showPicker)}
-          disabled={disabled}
-          className="px-3 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-          style={{ color: '#FF7A00', backgroundColor: 'rgba(255, 122, 0, 0.12)' }}
-        >
-          {showPicker ? 'Cancel' : 'Extend'}
-        </button>
       </div>
-      {showPicker && (
-        <div className="space-y-2 mt-2">
-          <div className="flex flex-wrap gap-2">
-            {[7, 14, 30, 60].map(days => (
-              <button
-                key={days}
-                onClick={() => handleQuickExtend(days)}
-                disabled={disabled}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--border-default)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[#FF7A00] transition-colors disabled:opacity-50"
-              >
-                +{days} days
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="date"
-              value={customDate}
-              onChange={e => setCustomDate(e.target.value)}
-              className="flex-1 px-2 py-1.5 text-xs border border-[var(--border-default)] rounded-lg bg-[var(--surface-raised)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#FF7A00]"
-            />
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-2">
+          {[7, 14, 30, 60].map(days => (
             <button
-              onClick={handleCustomDate}
-              disabled={disabled || !customDate}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg text-white disabled:opacity-50"
-              style={{ backgroundColor: '#FF7A00' }}
+              key={days}
+              onClick={() => handleQuickExtend(days)}
+              disabled={disabled}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--border-default)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[#FF7A00] transition-colors disabled:opacity-50"
             >
-              Set
+              +{days}d
             </button>
-          </div>
+          ))}
         </div>
-      )}
+        <div className="flex gap-2">
+          <input
+            type="date"
+            value={customDate}
+            onChange={e => setCustomDate(e.target.value)}
+            className="flex-1 px-2 py-1.5 text-xs border border-[var(--border-default)] rounded-lg bg-[var(--surface-raised)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#FF7A00]"
+          />
+          <button
+            onClick={handleCustomDate}
+            disabled={disabled || !customDate}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg text-white disabled:opacity-50"
+            style={{ backgroundColor: '#FF7A00' }}
+          >
+            Set
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1626,36 +1634,21 @@ function GearIcon({ className }: { className?: string }) {
   );
 }
 
-function SuggestionTypeIcon({ type }: { type: string }) {
-  const colors: Record<string, string> = {
-    past_due: '#D06050',
-    trial_expiring: '#E8B84C',
-    inactive: '#9B9590',
-    new_signup: '#6B8E6B',
+function AttentionReasonBadge({ reason, label }: { reason: AttentionReason; label: string }) {
+  const styles: Record<AttentionReason, { bg: string; text: string }> = {
+    trial_expired:    { bg: 'rgba(153, 27, 27, 0.15)', text: '#991B1B' },
+    trial_expiring:   { bg: 'rgba(220, 38, 38, 0.12)', text: '#DC2626' },
+    never_logged_in:  { bg: 'rgba(234, 138, 46, 0.12)', text: '#C2762D' },
+    no_sales:         { bg: 'rgba(202, 138, 4, 0.12)', text: '#A16207' },
+    no_stripe:        { bg: 'rgba(202, 138, 4, 0.12)', text: '#A16207' },
   };
-  const color = colors[type] || '#9B9590';
+  const s = styles[reason] || styles.no_sales;
   return (
-    <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}20` }}>
-      {type === 'past_due' && (
-        <svg className="w-3.5 h-3.5" style={{ color }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-        </svg>
-      )}
-      {type === 'trial_expiring' && (
-        <svg className="w-3.5 h-3.5" style={{ color }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      )}
-      {type === 'inactive' && (
-        <svg className="w-3.5 h-3.5" style={{ color }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
-        </svg>
-      )}
-      {type === 'new_signup' && (
-        <svg className="w-3.5 h-3.5" style={{ color }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      )}
-    </div>
+    <span
+      className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap shrink-0"
+      style={{ backgroundColor: s.bg, color: s.text }}
+    >
+      {label}
+    </span>
   );
 }

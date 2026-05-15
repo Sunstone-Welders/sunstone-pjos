@@ -63,7 +63,7 @@ export default function AdminMentorPage() {
 
   async function loadGaps() {
     try {
-      const res = await fetch('/api/admin/mentor/gaps?status=pending&limit=100');
+      const res = await fetch('/admin/mentor/gaps?status=pending&limit=100');
       const data = await res.json();
       if (res.ok) {
         setGaps(data.gaps || []);
@@ -75,7 +75,7 @@ export default function AdminMentorPage() {
 
   async function loadAdditions() {
     try {
-      const res = await fetch('/api/admin/mentor/additions');
+      const res = await fetch('/admin/mentor/additions');
       const data = await res.json();
       if (res.ok) setAdditions(data.additions || []);
     } catch { /* */ }
@@ -200,7 +200,7 @@ function GapsTab({
   async function dismissGap(id: string, notes?: string) {
     setActionLoading(id);
     try {
-      const res = await fetch(`/api/admin/mentor/gaps/${id}`, {
+      const res = await fetch(`/admin/mentor/gaps/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'dismissed', admin_notes: notes || null }),
@@ -213,7 +213,7 @@ function GapsTab({
   async function approveAndAdd(gapId: string, question: string, answer: string, category: string) {
     setActionLoading(gapId);
     try {
-      const res = await fetch('/api/admin/mentor/additions', {
+      const res = await fetch('/admin/mentor/additions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ category, question, answer, source_gap_id: gapId }),
@@ -437,7 +437,7 @@ function KnowledgeTab({
   async function updateAddition(id: string, updates: Record<string, any>) {
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/admin/mentor/additions/${id}`, {
+      const res = await fetch(`/admin/mentor/additions/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -454,7 +454,7 @@ function KnowledgeTab({
     if (!newKnowledge.question.trim() || !newKnowledge.answer.trim()) return;
     setActionLoading(true);
     try {
-      const res = await fetch('/api/admin/mentor/additions', {
+      const res = await fetch('/admin/mentor/additions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newKnowledge),
