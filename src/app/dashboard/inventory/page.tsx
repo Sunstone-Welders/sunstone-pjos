@@ -18,6 +18,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useTenant } from '@/hooks/use-tenant';
 import { toast } from 'sonner';
+import { trackEvent } from '@/lib/track-usage-client';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
@@ -2270,6 +2271,9 @@ function InventoryItemForm({ tenant, editingItem, onClose, onSaved, onDelete }: 
       }
 
       toast.success(isEditing ? 'Item updated' : 'Item added');
+      if (!isEditing) {
+        trackEvent(tenant.id, 'inventory_item_added', { product_type: type });
+      }
 
       // Check for chain auto-create offer
       if (type === 'chain' && sunstoneProductId && selectedProduct) {

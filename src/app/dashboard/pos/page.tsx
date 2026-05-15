@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { PLATFORM_FEE_RATES } from '@/types';
 import { generateQRData } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { trackEvent } from '@/lib/track-usage-client';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
 import { QRCode, FullScreenQR } from '@/components/QRCode';
 import CartPanel from '@/components/CartPanel';
@@ -586,6 +587,9 @@ export default function StoreModePage() {
       setEmailSent(false); setSmsSent(false); setEmailError(''); setSmsError('');
       setQueueRefresh((n) => n + 1);
       toast.success('Sale completed');
+      if (['cash', 'venmo', 'card_external'].includes(effectivePaymentMethod)) {
+        trackEvent(tenant.id, 'sale_completed', { payment_method: effectivePaymentMethod, amount: cart.total, source: 'store' });
+      }
 
       // Fire-and-forget auto-send receipts
       if (tenant.auto_email_receipt && receiptEmail) {

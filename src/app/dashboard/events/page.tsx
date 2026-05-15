@@ -7,6 +7,7 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
+import { trackEvent } from '@/lib/track-usage-client';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useTenant } from '@/hooks/use-tenant';
@@ -192,6 +193,7 @@ function EventsContent() {
       }
 
       toast.success(`${events.length} recurring events created`);
+      trackEvent(tenant.id, 'event_created', { event_name: eventData.name, recurring: true, count: events.length });
     } else {
       // Create single event
       const { data: newEvent, error } = await supabase
@@ -205,6 +207,7 @@ function EventsContent() {
       }
       await saveEventExtras(newEvent.id);
       toast.success('Event created');
+      trackEvent(tenant.id, 'event_created', { event_name: eventData.name });
     }
 
     setShowForm(false);

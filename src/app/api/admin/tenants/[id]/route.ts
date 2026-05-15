@@ -213,6 +213,25 @@ export async function PATCH(
           }
           update.crm_subscription_id = null;
         }
+      } else {
+        // Toggling override OFF — revert to real subscription state
+        const { data: current } = await serviceClient
+          .from('tenants')
+          .select('stripe_subscription_id, trial_ends_at')
+          .eq('id', id)
+          .single();
+
+        if (current?.stripe_subscription_id) {
+          // Has active Stripe billing — they're a paying customer
+          update.subscription_status = 'active';
+        } else if (current?.trial_ends_at && new Date(current.trial_ends_at) > new Date()) {
+          // Trial hasn't expired yet
+          update.subscription_status = 'trialing';
+        } else {
+          // No Stripe sub, no valid trial → canceled
+          update.subscription_status = 'canceled';
+        }
+        console.log(`Admin override removed for tenant ${id}: reverted to ${update.subscription_status}`);
       }
     }
 
