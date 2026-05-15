@@ -802,17 +802,15 @@ function TenantProfilePanel({
                   </button>
                 </div>
 
-                {/* Trial Extension */}
-                {detail?.tenant && (
-                  <TrialExtensionRow
-                    trialEndsAt={detail.tenant.trial_ends_at}
-                    subscriptionStatus={tenant.subscription_status}
-                    adminTierOverride={detail.tenant.admin_tier_override ?? tenant.admin_tier_override}
-                    stripeSubscriptionId={detail.tenant.stripe_subscription_id}
-                    onExtend={(newDate) => onUpdateTenant({ trial_ends_at: newDate })}
-                    disabled={actionLoading}
-                  />
-                )}
+                {/* Trial Extension — always render using list data as fallback */}
+                <TrialExtensionRow
+                  trialEndsAt={detail?.tenant?.trial_ends_at ?? tenant.trial_ends_at ?? null}
+                  subscriptionStatus={tenant.subscription_status}
+                  adminTierOverride={detail?.tenant?.admin_tier_override ?? tenant.admin_tier_override ?? false}
+                  stripeSubscriptionId={detail?.tenant?.stripe_subscription_id ?? tenant.stripe_subscription_id ?? null}
+                  onExtend={(newDate) => onUpdateTenant({ trial_ends_at: newDate })}
+                  disabled={actionLoading}
+                />
 
                 {/* CRM toggle */}
                 <div className="px-4 py-3 flex items-center justify-between">
@@ -1341,7 +1339,7 @@ function TrialExtensionRow({
   disabled,
 }: {
   trialEndsAt: string | null;
-  subscriptionStatus: string | null;
+  subscriptionStatus: string;
   adminTierOverride: boolean;
   stripeSubscriptionId: string | null;
   onExtend: (newDate: string) => void;

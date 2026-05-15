@@ -182,10 +182,10 @@ export async function PATCH(
 
     if (body.admin_tier_override !== undefined) {
       update.admin_tier_override = Boolean(body.admin_tier_override);
-      // When enabling override, ensure tenant is active with no trial expiry
+      // When enabling override, ensure tenant is active — preserve trial_ends_at
+      // so toggling override OFF can restore the original trial state
       if (update.admin_tier_override) {
         update.subscription_status = 'active';
-        update.trial_ends_at = null;
 
         // Cancel active Stripe subscriptions so the tenant stops being billed
         const { data: existing } = await serviceClient
