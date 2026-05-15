@@ -32,6 +32,7 @@ import {
 import { runAgenticLoop, buildAgenticSSEStream } from '@/lib/agentic-loop';
 import { logAnthropicCost } from '@/lib/cost-tracker';
 import { SUNNY_TOOL_DEFINITIONS, executeSunnyTool, getSunnyToolStatusLabel } from '@/lib/sunny-tools';
+import { trackUsage } from '@/lib/track-usage';
 
 // ============================================================================
 // Smart model routing — Sonnet default, Opus for complex reasoning
@@ -1290,6 +1291,11 @@ After a tool executes, summarize the result naturally. If a tool errors, explain
           .eq('id', tenantId);
       }
     }
+
+    // 8b. Usage tracking (fire-and-forget)
+    trackUsage(tenantId, 'sunny_question_asked', user.id, {
+      question_preview: latestUserMsg.slice(0, 100),
+    }).catch(() => {});
 
     // 9. Post-response: gap detection
     try {

@@ -24,6 +24,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import { getPlatformFeePercent, type SubscriptionTier } from '@/lib/subscription';
 import { sendSMS } from '@/lib/twilio';
 import { markReferralConverted, markReferralChurned, createCommissionEntry } from '@/lib/commission-engine';
+import { trackUsage } from '@/lib/track-usage';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-02-24.acacia' as any,
@@ -189,6 +190,17 @@ export async function POST(request: NextRequest) {
           }
 
           console.log(`[Webhook] POS payment completed — sale ${saleId}, fee collected: $${feeCollected}`);
+
+          // Usage tracking (fire-and-forget)
+          const saleTenantId = session.metadata?.tenant_id;
+          if (saleTenantId) {
+            trackUsage(saleTenantId, 'sale_completed', null, {
+              amount: (session.amount_total || 0) / 100,
+              payment_method: 'stripe_link',
+              source: session.metadata?.event_id ? 'event' : 'store',
+            }).catch(() => {});
+          }
+
           break;
         }
 

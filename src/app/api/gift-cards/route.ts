@@ -11,6 +11,7 @@ import { generateGiftCardCode, formatGiftCardCode } from '@/lib/gift-cards';
 import { logSmsCost, logEmailCost } from '@/lib/cost-tracker';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendSMS } from '@/lib/twilio';
+import { trackUsage } from '@/lib/track-usage';
 
 const RATE_LIMIT = { prefix: 'gift-card', limit: 20, windowSeconds: 60 };
 
@@ -167,6 +168,9 @@ export async function POST(request: NextRequest) {
         console.error('[GiftCard Email] Error:', emailErr);
       }
     }
+
+    // Usage tracking (fire-and-forget)
+    trackUsage(tenantId, 'gift_card_purchased', user.id, { amount: Number(amount) }).catch(() => {});
 
     return NextResponse.json({ ...giftCard, formatted_code: formatted });
   } catch (err: any) {

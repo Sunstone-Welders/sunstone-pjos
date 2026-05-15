@@ -5,6 +5,7 @@ import { renderTemplate } from '@/lib/templates';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logSmsCost, logEmailCost } from '@/lib/cost-tracker';
 import { sendSMS as twilioSendSMS } from '@/lib/twilio';
+import { trackUsage } from '@/lib/track-usage';
 
 const RATE_LIMIT = { prefix: 'broadcast-send', limit: 5, windowSeconds: 60 };
 
@@ -208,6 +209,14 @@ export async function POST(
     skipped_count: skippedCount,
     sent_at: new Date().toISOString(),
   }).eq('id', id);
+
+  // Usage tracking (fire-and-forget)
+  if (sentCount > 0) {
+    trackUsage(tenantId, 'broadcast_sent', user.id, {
+      channel: broadcast.channel,
+      sent_count: sentCount,
+    }).catch(() => {});
+  }
 
   return NextResponse.json({
     status: 'completed',
