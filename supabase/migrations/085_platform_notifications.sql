@@ -57,13 +57,9 @@ CREATE INDEX idx_platform_notification_reads_user ON platform_notification_reads
 ALTER TABLE platform_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE platform_notification_reads ENABLE ROW LEVEL SECURITY;
 
--- Admin: full access to notifications
-CREATE POLICY "admin_full_access_notifications" ON platform_notifications
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_super_admin = true)
-  );
+-- Authenticated users can read sent notifications
+-- (Admin routes use service role client and bypass RLS entirely)
 
--- Authenticated users: can read sent notifications only
 CREATE POLICY "users_read_sent_notifications" ON platform_notifications
   FOR SELECT USING (
     auth.role() = 'authenticated' AND status = 'sent'
@@ -85,12 +81,6 @@ CREATE POLICY "users_update_own_reads" ON platform_notification_reads
 CREATE POLICY "users_select_own_reads" ON platform_notification_reads
   FOR SELECT USING (
     user_id = auth.uid()
-  );
-
--- Admin: full access to reads (for analytics)
-CREATE POLICY "admin_full_access_reads" ON platform_notification_reads
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_super_admin = true)
   );
 
 -- ============================================================================
