@@ -15,7 +15,7 @@ import { useTenant } from '@/hooks/use-tenant';
 import { getSubscriptionTier, getSunnyQuestionLimit } from '@/lib/subscription';
 import UpgradePrompt from '@/components/ui/UpgradePrompt';
 import { toast } from 'sonner';
-import { ThumbsDown } from 'lucide-react';
+import { ThumbsDown, ThumbsUp, ChevronDown, Plus, MessageSquare } from 'lucide-react';
 
 // Compute luminance from a hex color (0 = black, 1 = white)
 function getLuminance(hex: string): number {
@@ -31,17 +31,41 @@ function getContrastTextColor(bgHex: string): string {
   return getLuminance(bgHex) > 0.55 ? '#1A1A1A' : '#FFFFFF';
 }
 
+// Format a timestamp as relative time (e.g. "2h ago", "3d ago")
+function formatTimeAgo(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 30) return `${diffDay}d ago`;
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 // ============================================================================
 // Types
 // ============================================================================
 
 interface ChatMessage {
   id: string;
+  dbMessageId?: string; // real DB message ID for feedback persistence
   role: 'user' | 'assistant';
   content: string;
   products?: Product[];
   isStreaming?: boolean;
   toolStatus?: string;
+  feedback?: 'thumbs_up' | 'thumbs_down';
+}
+
+interface ConversationSummary {
+  id: string;
+  title: string;
+  message_count: number;
+  updated_at: string;
 }
 
 interface Product {
@@ -143,6 +167,13 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
   const [flaggedMessages, setFlaggedMessages] = useState<Set<string>>(new Set());
   const [flagModalMsg, setFlagModalMsg] = useState<ChatMessage | null>(null);
 
+  // Conversation persistence state
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [loadingConversation, setLoadingConversation] = useState(false);
+
   const pathname = usePathname();
   const { tenant } = useTenant();
   const effectiveTier = tenant ? getSubscriptionTier(tenant) : 'starter';
@@ -193,10 +224,69 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
     }
   }, [isLoading, flagModalMsg, isOpen]);
 
+  // Fetch past conversations when panel opens
+  const fetchConversations = useCallback(async () => {
+    setLoadingHistory(true);
+    try {
+      const res = await fetch('/api/mentor/conversations');
+      if (res.ok) {
+        const data = await res.json();
+        setConversations(data.conversations || []);
+      }
+    } catch {
+      // Silently fail — history is non-critical
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
+  // Load a specific past conversation
+  const loadConversation = useCallback(async (convId: string) => {
+    setLoadingConversation(true);
+    try {
+      const res = await fetch(`/api/mentor/conversations/${convId}/messages`);
+      if (res.ok) {
+        const data = await res.json();
+        const loadedMessages: ChatMessage[] = (data.messages || []).map((m: any) => ({
+          id: m.id,
+          dbMessageId: m.id,
+          role: m.role,
+          content: m.content,
+          feedback: m.feedback || undefined,
+        }));
+        setMessages(loadedMessages);
+        setConversationId(convId);
+        setShowHistory(false);
+        // Pre-populate flagged messages from loaded feedback
+        const flagged = new Set<string>();
+        for (const m of loadedMessages) {
+          if (m.feedback === 'thumbs_down') flagged.add(m.id);
+        }
+        setFlaggedMessages(flagged);
+      }
+    } catch {
+      toast.error('Could not load conversation');
+    } finally {
+      setLoadingConversation(false);
+    }
+  }, []);
+
+  // Start a new conversation
+  const startNewConversation = useCallback(() => {
+    setMessages([]);
+    setConversationId(null);
+    setShowHistory(false);
+    setFlaggedMessages(new Set());
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
       setHasBeenOpened(true);
       setTimeout(() => inputRef.current?.focus(), 300);
+      // Fetch conversation history when panel opens (if we have no messages yet)
+      if (messages.length === 0) {
+        fetchConversations();
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -234,7 +324,11 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
       const response = await fetch('/api/mentor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages, currentPage: pathname }),
+        body: JSON.stringify({
+          messages: apiMessages,
+          currentPage: pathname,
+          ...(conversationId ? { conversation_id: conversationId } : {}),
+        }),
       });
 
       // Handle 429 — question limit reached
@@ -266,6 +360,11 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
         console.error('[MentorChat] API error:', errorDetail);
         throw new Error(errorDetail);
       }
+
+      // Read conversation ID and assistant message ID from response headers
+      const respConvId = response.headers.get('X-Conversation-Id');
+      const respMsgId = response.headers.get('X-Assistant-Message-Id');
+      if (respConvId) setConversationId(respConvId);
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No reader');
@@ -354,7 +453,7 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
       setMessages(prev =>
         prev.map(m =>
           m.id === assistantMsg.id
-            ? { ...m, content: cleanText, isStreaming: false, products: products.length > 0 ? products : undefined }
+            ? { ...m, content: cleanText, isStreaming: false, products: products.length > 0 ? products : undefined, dbMessageId: respMsgId || undefined }
             : m
         )
       );
@@ -377,7 +476,7 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [messages, isLoading, limitReached, isMetered, questionLimit]);
+  }, [messages, isLoading, limitReached, isMetered, questionLimit, conversationId]);
 
   // ============================================================================
   // Keyboard handler
@@ -434,13 +533,41 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
               <p className="text-[11px] text-text-secondary leading-none">Your PJ Mentor</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {/* Question counter for Starter users */}
             {isMetered && (
-              <span className="text-[11px] text-text-tertiary tabular-nums">
+              <span className="text-[11px] text-text-tertiary tabular-nums mr-1">
                 {questionsRemaining} of {questionLimit} left
               </span>
             )}
+            {/* New conversation button */}
+            {(messages.length > 0 || conversationId) && (
+              <button
+                onClick={startNewConversation}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-raised transition-colors text-text-secondary hover:text-text-primary"
+                aria-label="New conversation"
+                title="New conversation"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            )}
+            {/* History toggle */}
+            <button
+              onClick={() => {
+                setShowHistory(!showHistory);
+                if (!showHistory && conversations.length === 0) fetchConversations();
+              }}
+              className={cn(
+                'w-8 h-8 flex items-center justify-center rounded-lg transition-colors',
+                showHistory
+                  ? 'bg-accent-100 text-accent-600'
+                  : 'hover:bg-surface-raised text-text-secondary hover:text-text-primary'
+              )}
+              aria-label="Conversation history"
+              title="Past conversations"
+            >
+              <MessageSquare className="w-4 h-4" />
+            </button>
             <button
               onClick={onClose}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-raised transition-colors text-text-secondary hover:text-text-primary"
@@ -451,9 +578,59 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
           </div>
         </div>
 
+        {/* Past Conversations Panel */}
+        {showHistory && (
+          <div className="border-b border-border-default bg-[var(--surface-subtle)] overflow-y-auto" style={{ maxHeight: '50%' }}>
+            <div className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Recent Conversations</h3>
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="text-[11px] text-accent-500 hover:text-accent-600 font-medium"
+                >
+                  Close
+                </button>
+              </div>
+              {loadingHistory ? (
+                <p className="text-xs text-text-tertiary py-4 text-center">Loading...</p>
+              ) : conversations.length === 0 ? (
+                <p className="text-xs text-text-tertiary py-4 text-center">No past conversations yet</p>
+              ) : (
+                <div className="space-y-1">
+                  {conversations.map(conv => (
+                    <button
+                      key={conv.id}
+                      onClick={() => loadConversation(conv.id)}
+                      disabled={loadingConversation}
+                      className={cn(
+                        'w-full text-left px-3 py-2.5 rounded-lg transition-colors',
+                        conv.id === conversationId
+                          ? 'bg-accent-100 border border-accent-200'
+                          : 'hover:bg-[var(--surface-raised)] border border-transparent'
+                      )}
+                      style={{ minHeight: 48 }}
+                    >
+                      <p className="text-sm text-text-primary truncate font-medium">
+                        {conv.title || 'Untitled conversation'}
+                      </p>
+                      <p className="text-[11px] text-text-tertiary mt-0.5">
+                        {conv.message_count} messages &middot; {formatTimeAgo(conv.updated_at)}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
-          {messages.length === 0 ? (
+          {loadingConversation ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-sm text-text-tertiary">Loading conversation...</p>
+            </div>
+          ) : messages.length === 0 ? (
             <EmptyState onSelectPrompt={sendMessage} />
           ) : (
             <>
@@ -464,6 +641,18 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
                   userBubbleTextColor={userBubbleTextColor}
                   isFlagged={flaggedMessages.has(msg.id)}
                   onFlag={msg.role === 'assistant' && !msg.isStreaming && msg.content ? () => setFlagModalMsg(msg) : undefined}
+                  onThumbsUp={msg.role === 'assistant' && !msg.isStreaming && msg.content && msg.dbMessageId ? async () => {
+                    try {
+                      const res = await fetch(`/api/mentor/messages/${msg.dbMessageId}/feedback`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ feedback: 'thumbs_up' }),
+                      });
+                      if (res.ok) {
+                        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, feedback: 'thumbs_up' } : m));
+                      }
+                    } catch { /* silently fail */ }
+                  } : undefined}
                 />
               ))}
               {isLoading && messages[messages.length - 1]?.content === '' && (
@@ -545,6 +734,7 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
               if (messages[i].role === 'user') { context = messages[i].content; break; }
             }
             try {
+              // Submit knowledge gap flag (existing behavior)
               const res = await fetch('/api/mentor/flag', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -557,9 +747,18 @@ export default function MentorChat({ isOpen, onClose }: MentorChatProps) {
               });
               if (res.ok) {
                 setFlaggedMessages(prev => new Set(prev).add(flagModalMsg.id));
+                setMessages(prev => prev.map(m => m.id === flagModalMsg.id ? { ...m, feedback: 'thumbs_down' } : m));
                 toast.success('Thanks for the feedback! We\'ll review this.');
               } else {
                 toast.error('Could not submit feedback — try again.');
+              }
+              // Also persist feedback to sunny_messages (fire-and-forget)
+              if (flagModalMsg.dbMessageId) {
+                fetch(`/api/mentor/messages/${flagModalMsg.dbMessageId}/feedback`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ feedback: 'thumbs_down' }),
+                }).catch(() => {});
               }
             } catch {
               toast.error('Could not submit feedback — try again.');
@@ -673,13 +872,16 @@ function EmptyState({ onSelectPrompt }: { onSelectPrompt: (text: string) => void
 // Message bubble
 // ============================================================================
 
-function MessageBubble({ message, userBubbleTextColor, isFlagged, onFlag }: {
+function MessageBubble({ message, userBubbleTextColor, isFlagged, onFlag, onThumbsUp }: {
   message: ChatMessage;
   userBubbleTextColor: string;
   isFlagged?: boolean;
   onFlag?: () => void;
+  onThumbsUp?: () => void;
 }) {
   const isUser = message.role === 'user';
+  const hasThumbsUp = message.feedback === 'thumbs_up';
+  const hasThumbsDown = message.feedback === 'thumbs_down' || isFlagged;
 
   return (
     <div className={cn('flex group', isUser ? 'justify-end' : 'justify-start')}>
@@ -712,24 +914,47 @@ function MessageBubble({ message, userBubbleTextColor, isFlagged, onFlag }: {
           </div>
         )}
 
-        {/* Thumbs-down flag button on assistant messages */}
-        {onFlag && (
-          <div className="flex justify-start">
-            <button
-              onClick={isFlagged ? undefined : onFlag}
-              disabled={isFlagged}
-              className={cn(
-                'flex items-center justify-center rounded-lg transition-all duration-150',
-                isFlagged
-                  ? 'text-[var(--text-tertiary)] cursor-default opacity-100'
-                  : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer'
-              )}
-              style={{ minHeight: 44, minWidth: 44 }}
-              aria-label={isFlagged ? 'Flagged as wrong' : 'Flag as wrong'}
-              tabIndex={-1}
-            >
-              <ThumbsDown size={16} fill={isFlagged ? 'currentColor' : 'none'} />
-            </button>
+        {/* Feedback buttons on assistant messages */}
+        {(onFlag || onThumbsUp) && (
+          <div className="flex justify-start gap-0">
+            {onThumbsUp && (
+              <button
+                onClick={hasThumbsUp ? undefined : onThumbsUp}
+                disabled={hasThumbsUp || hasThumbsDown}
+                className={cn(
+                  'flex items-center justify-center rounded-lg transition-all duration-150',
+                  hasThumbsUp
+                    ? 'text-green-500 cursor-default opacity-100'
+                    : hasThumbsDown
+                    ? 'hidden'
+                    : 'text-[var(--text-tertiary)] hover:text-green-500 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer'
+                )}
+                style={{ minHeight: 44, minWidth: 44 }}
+                aria-label={hasThumbsUp ? 'Liked' : 'Like this response'}
+                tabIndex={-1}
+              >
+                <ThumbsUp size={16} fill={hasThumbsUp ? 'currentColor' : 'none'} />
+              </button>
+            )}
+            {onFlag && (
+              <button
+                onClick={hasThumbsDown ? undefined : onFlag}
+                disabled={hasThumbsDown}
+                className={cn(
+                  'flex items-center justify-center rounded-lg transition-all duration-150',
+                  hasThumbsDown
+                    ? 'text-[var(--text-tertiary)] cursor-default opacity-100'
+                    : hasThumbsUp
+                    ? 'hidden'
+                    : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer'
+                )}
+                style={{ minHeight: 44, minWidth: 44 }}
+                aria-label={hasThumbsDown ? 'Flagged as wrong' : 'Flag as wrong'}
+                tabIndex={-1}
+              >
+                <ThumbsDown size={16} fill={hasThumbsDown ? 'currentColor' : 'none'} />
+              </button>
+            )}
           </div>
         )}
 
