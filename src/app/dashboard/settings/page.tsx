@@ -1212,11 +1212,12 @@ function SettingsPage() {
   const stripeConnected = !!tenant.stripe_account_id;
   const showTeamSection = can('team:manage');
 
-  const trialActive = isTrialActive(tenant.subscription_status, tenant.trial_ends_at);
-  const trialDays = getTrialDaysRemaining(tenant.trial_ends_at);
-  const hasActiveSubscription = tenant.subscription_status === 'active';
-  const isPastDue = tenant.subscription_status === 'past_due';
-  const effectiveTier = trialActive ? tier : (hasActiveSubscription ? tier : 'starter');
+  const isOverride = !!tenant.admin_tier_override;
+  const trialActive = isOverride ? false : isTrialActive(tenant.subscription_status, tenant.trial_ends_at);
+  const trialDays = isOverride ? 0 : getTrialDaysRemaining(tenant.trial_ends_at);
+  const hasActiveSubscription = isOverride || tenant.subscription_status === 'active';
+  const isPastDue = isOverride ? false : tenant.subscription_status === 'past_due';
+  const effectiveTier = isOverride ? tier : (trialActive ? tier : (hasActiveSubscription ? tier : 'starter'));
 
   const activeMembers = teamMembers.filter((m) => !m.is_pending);
   const pendingMembers = teamMembers.filter((m) => m.is_pending);
@@ -1230,13 +1231,15 @@ function SettingsPage() {
     venmoUsername && 'Venmo',
   ].filter(Boolean).join(' + ') || 'Connect a payment processor';
 
-  const billingSummary = isPastDue
-    ? 'Payment failed — update payment method'
-    : trialActive
-      ? `Pro Trial · ${trialDays} day${trialDays !== 1 ? 's' : ''} left`
-      : hasActiveSubscription
-        ? `${tier.charAt(0).toUpperCase() + tier.slice(1)} Plan · $${SUBSCRIPTION_PRICES[tier]}/mo`
-        : `Starter · $${SUBSCRIPTION_PRICES.starter}/mo`;
+  const billingSummary = isOverride
+    ? `${tier.charAt(0).toUpperCase() + tier.slice(1)} Plan · Admin Override`
+    : isPastDue
+      ? 'Payment failed — update payment method'
+      : trialActive
+        ? `Pro Trial · ${trialDays} day${trialDays !== 1 ? 's' : ''} left`
+        : hasActiveSubscription
+          ? `${tier.charAt(0).toUpperCase() + tier.slice(1)} Plan · $${SUBSCRIPTION_PRICES[tier]}/mo`
+          : `Starter · $${SUBSCRIPTION_PRICES.starter}/mo`;
 
   const receiptAutoStatus = [
     autoEmailReceipt && 'Email',
@@ -1775,6 +1778,29 @@ function SettingsPage() {
       >
         <div className="space-y-6 pt-4">
 
+          {/* Admin override banner */}
+          {isOverride && (
+            <div className="flex items-center justify-between p-4 rounded-xl border border-success-200 bg-success-50">
+              <div className="flex items-center gap-3">
+                <Badge variant="accent" size="md">
+                  {tier.charAt(0).toUpperCase() + tier.slice(1)} Plan
+                </Badge>
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-success-600 bg-success-100 px-2 py-0.5 rounded-full">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Active (Admin Override)
+                </span>
+              </div>
+            </div>
+          )}
+
+          {isOverride && (
+            <p className="text-xs text-[var(--text-tertiary)]">
+              Your plan is managed by Sunstone. Contact support for changes.
+            </p>
+          )}
+
           {/* Trial banner */}
           {trialActive && (
             <div className="bg-gradient-to-r from-[var(--accent-50)] to-[var(--accent-100)] border border-[var(--accent-200)] rounded-2xl p-5">
@@ -1832,8 +1858,8 @@ function SettingsPage() {
             </div>
           )}
 
-          {/* Current plan status (active subscription) */}
-          {hasActiveSubscription && !isPastDue && (
+          {/* Current plan status (active subscription — not override, which has its own banner above) */}
+          {hasActiveSubscription && !isPastDue && !isOverride && (
             <div className="flex items-center justify-between p-4 rounded-xl border border-[var(--border-default)] bg-[var(--surface-base)]">
               <div className="flex items-center gap-3">
                 <Badge variant="accent" size="md">

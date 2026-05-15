@@ -33,9 +33,9 @@ const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
 // Map Stripe price IDs to our tier names
 function getTierFromPriceId(priceId: string): SubscriptionTier {
-  if (priceId === process.env.STRIPE_PRICE_STARTER) return 'starter';
-  if (priceId === process.env.STRIPE_PRICE_PRO) return 'pro';
-  if (priceId === process.env.STRIPE_PRICE_BUSINESS) return 'business';
+  if (priceId === process.env.STRIPE_STARTER_PRICE_ID) return 'starter';
+  if (priceId === process.env.STRIPE_PRO_PRICE_ID) return 'pro';
+  if (priceId === process.env.STRIPE_BUSINESS_PRICE_ID) return 'business';
   return 'starter';
 }
 
@@ -288,12 +288,18 @@ export async function POST(request: NextRequest) {
           // Fallback: look up tenant by stripe_customer_id
           const { data: tenant } = await serviceRole
             .from('tenants')
-            .select('id, trial_ends_at')
+            .select('id, trial_ends_at, admin_tier_override')
             .eq('stripe_customer_id', customerId)
             .single();
 
           if (!tenant) {
             console.error('No tenant found for customer:', customerId);
+            break;
+          }
+
+          // Skip status update for admin-overridden tenants
+          if (tenant.admin_tier_override) {
+            console.warn(`[Webhook] Skipping checkout.session.completed status update for admin-overridden tenant ${tenant.id}`);
             break;
           }
 
@@ -314,9 +320,15 @@ export async function POST(request: NextRequest) {
           // Check if trial is expired for this tenant (reactivation tracking)
           const { data: existingTenant } = await serviceRole
             .from('tenants')
-            .select('trial_ends_at')
+            .select('trial_ends_at, admin_tier_override')
             .eq('id', tenantId)
             .single();
+
+          // Skip status update for admin-overridden tenants
+          if (existingTenant?.admin_tier_override) {
+            console.warn(`[Webhook] Skipping checkout.session.completed status update for admin-overridden tenant ${tenantId}`);
+            break;
+          }
 
           const isReactivation = existingTenant?.trial_ends_at && new Date(existingTenant.trial_ends_at) < new Date();
 
@@ -382,7 +394,7 @@ export async function POST(request: NextRequest) {
         // Look up tenant by stripe_customer_id
         const { data: tenant } = await serviceRole
           .from('tenants')
-          .select('id')
+          .select('id, admin_tier_override')
           .eq('stripe_customer_id', customerId)
           .single();
 
@@ -390,6 +402,18 @@ export async function POST(request: NextRequest) {
           // Try metadata
           const tenantId = subscription.metadata?.tenant_id;
           if (tenantId) {
+            // Check override before updating
+            const { data: metaTenant } = await serviceRole
+              .from('tenants')
+              .select('admin_tier_override')
+              .eq('id', tenantId)
+              .single();
+
+            if (metaTenant?.admin_tier_override) {
+              console.warn(`[Webhook] Skipping ${event.type} status update for admin-overridden tenant ${tenantId}`);
+              break;
+            }
+
             await serviceRole
               .from('tenants')
               .update({
@@ -404,6 +428,12 @@ export async function POST(request: NextRequest) {
           } else {
             console.error('No tenant found for customer:', customerId);
           }
+          break;
+        }
+
+        // Skip status update for admin-overridden tenants
+        if (tenant.admin_tier_override) {
+          console.warn(`[Webhook] Skipping ${event.type} status update for admin-overridden tenant ${tenant.id}`);
           break;
         }
 
@@ -431,12 +461,18 @@ export async function POST(request: NextRequest) {
 
         const { data: tenant } = await serviceRole
           .from('tenants')
-          .select('id, crm_subscription_id, stripe_subscription_id, subscription_tier')
+          .select('id, crm_subscription_id, stripe_subscription_id, subscription_tier, admin_tier_override')
           .eq('stripe_customer_id', customerId)
           .single();
 
         if (!tenant) {
           console.error('No tenant found for deleted subscription, customer:', customerId);
+          break;
+        }
+
+        // Skip status update for admin-overridden tenants (admin already cancelled the Stripe sub intentionally)
+        if (tenant.admin_tier_override) {
+          console.warn(`[Webhook] Skipping subscription.deleted status update for admin-overridden tenant ${tenant.id}`);
           break;
         }
 
@@ -499,11 +535,16 @@ export async function POST(request: NextRequest) {
 
         const { data: tenant } = await serviceRole
           .from('tenants')
-          .select('id')
+          .select('id, admin_tier_override')
           .eq('stripe_customer_id', customerId)
           .single();
 
         if (tenant) {
+          if (tenant.admin_tier_override) {
+            console.warn(`[Webhook] Skipping invoice.payment_failed status update for admin-overridden tenant ${tenant.id}`);
+            break;
+          }
+
           await serviceRole
             .from('tenants')
             .update({ subscription_status: 'past_due' })
@@ -529,9 +570,10 @@ export async function POST(request: NextRequest) {
           .eq('stripe_customer_id', customerId)
           .single();
 
-        // Safety net: warn if an admin-overridden tenant is still being billed
+        // Safety net: skip status updates for admin-overridden tenants
         if (tenant?.admin_tier_override) {
-          console.warn(`WARNING: invoice.payment_succeeded for admin-overridden tenant ${tenant.id}. This should not happen — subscription should have been cancelled.`);
+          console.warn(`[Webhook] Skipping invoice.payment_succeeded status update for admin-overridden tenant ${tenant.id}. Subscription should have been cancelled.`);
+          break;
         }
 
         if (tenant && tenant.subscription_status === 'past_due') {
