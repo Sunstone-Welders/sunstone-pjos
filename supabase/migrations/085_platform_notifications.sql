@@ -88,7 +88,7 @@ CREATE POLICY "users_select_own_reads" ON platform_notification_reads
 -- ============================================================================
 CREATE TRIGGER set_platform_notifications_updated_at
   BEFORE UPDATE ON platform_notifications
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- ============================================================================
 -- Reload PostgREST schema cache
