@@ -26,6 +26,8 @@ const CATEGORY_MAP: Record<string, string> = {
   team_member_invited: 'setup',
   sms_sent: 'crm',
   page_view: 'navigation',
+  notification_inbox_opened: 'notifications',
+  notification_cta_clicked: 'notifications',
 };
 
 export function trackEvent(

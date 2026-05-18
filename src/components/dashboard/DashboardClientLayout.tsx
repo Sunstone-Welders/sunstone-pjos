@@ -19,6 +19,8 @@ import type { Permission } from '@/lib/permissions';
 import MentorChat from '@/components/MentorChat';
 import QuickReplyToast from '@/components/QuickReplyToast';
 import DemoBanner from '@/components/DemoBanner';
+import NotificationBell, { useNotificationUnreadCount } from '@/components/NotificationBell';
+import NotificationInbox from '@/components/NotificationInbox';
 import { getSubscriptionTier, isTrialActive } from '@/lib/subscription';
 import { getCrmStatus } from '@/lib/crm-status';
 import { canShowBillingUI } from '@/lib/billing-gate';
@@ -151,13 +153,25 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
   const { tenant, isLoading: tenantLoading, isOwner } = useTenant();
   const [isSunnyOpen, setIsSunnyOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [spotlight, setSpotlight] = useState<SpotlightMiniData | null>(null);
   const [spotlightDismissed, setSpotlightDismissed] = useState(false);
+  const notifUnread = useNotificationUnreadCount();
 
   const openSunny = useCallback(() => setIsSunnyOpen(true), []);
   const closeSunny = useCallback(() => setIsSunnyOpen(false), []);
   const openMore = useCallback(() => setIsMoreOpen(true), []);
   const closeMore = useCallback(() => setIsMoreOpen(false), []);
+  const toggleNotif = useCallback(() => setIsNotifOpen(prev => !prev), []);
+  const closeNotif = useCallback(() => setIsNotifOpen(false), []);
+  const openNotif = useCallback(() => setIsNotifOpen(true), []);
+
+  // Listen for custom event from WhatsNewCard to open inbox
+  useEffect(() => {
+    const handler = () => openNotif();
+    window.addEventListener('open-notification-inbox', handler);
+    return () => window.removeEventListener('open-notification-inbox', handler);
+  }, [openNotif]);
 
   // Onboarding redirect is now handled server-side in dashboard layout.tsx
 
@@ -217,7 +231,7 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Phone top bar: below md */}
-        <PhoneTopBar onSunnyOpen={openSunny} />
+        <PhoneTopBar onSunnyOpen={openSunny} onNotifToggle={toggleNotif} notifCount={notifUnread.count} notifWiggle={notifUnread.shouldWiggle} />
 
         {/* Trial banner */}
         <TrialBanner />
@@ -228,8 +242,9 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
         {/* Mobile spotlight banner (below md) */}
         {showSpotlight && <SpotlightBanner spotlight={spotlight} onDismiss={() => setSpotlightDismissed(true)} />}
 
-        {/* Desktop/Tablet header bar — Ask Sunny pill (md+) */}
-        <div className="hidden md:flex items-center justify-end px-4 lg:px-8 py-2 shrink-0">
+        {/* Desktop/Tablet header bar — Notification bell + Ask Sunny pill (md+) */}
+        <div className="hidden md:flex items-center justify-end gap-2 px-4 lg:px-8 py-2 shrink-0">
+          <NotificationBell count={notifUnread.count} shouldWiggle={notifUnread.shouldWiggle} onClick={toggleNotif} />
           <SunnyPill onClick={openSunny} />
         </div>
 
@@ -249,6 +264,14 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
         isOpen={isMoreOpen}
         onClose={closeMore}
         onSunnyOpen={openSunny}
+      />
+
+      {/* Notification Inbox — slide-out panel */}
+      <NotificationInbox
+        isOpen={isNotifOpen}
+        onClose={closeNotif}
+        onRead={notifUnread.decrement}
+        onMarkAllRead={notifUnread.reset}
       />
 
       {/* Mentor Chat — controlled externally */}
@@ -381,7 +404,7 @@ function SunnyPill({ onClick, collapsed, label }: { onClick: () => void; collaps
 // PhoneTopBar (below md)
 // ============================================================================
 
-function PhoneTopBar({ onSunnyOpen }: { onSunnyOpen: () => void }) {
+function PhoneTopBar({ onSunnyOpen, onNotifToggle, notifCount, notifWiggle }: { onSunnyOpen: () => void; onNotifToggle: () => void; notifCount: number; notifWiggle: boolean }) {
   const { tenant } = useTenant();
 
   return (
@@ -392,7 +415,10 @@ function PhoneTopBar({ onSunnyOpen }: { onSunnyOpen: () => void }) {
           {tenant?.name || 'Loading...'}
         </div>
       </div>
-      <SunnyPill onClick={onSunnyOpen} />
+      <div className="flex items-center gap-1">
+        <NotificationBell count={notifCount} shouldWiggle={notifWiggle} onClick={onNotifToggle} />
+        <SunnyPill onClick={onSunnyOpen} />
+      </div>
     </div>
   );
 }
