@@ -24,6 +24,7 @@ import NotificationInbox from '@/components/NotificationInbox';
 import { getSubscriptionTier, isTrialActive } from '@/lib/subscription';
 import { getCrmStatus } from '@/lib/crm-status';
 import { canShowBillingUI } from '@/lib/billing-gate';
+import TapToPaySplashTrigger from '@/components/TapToPaySplashTrigger';
 
 // ============================================================================
 // Unread message count hook (polls every 30s)
@@ -222,6 +223,9 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--surface-base)]">
+      {/* Tap to Pay discovery splash — shown once per tenant on compatible devices */}
+      <TapToPaySplashTrigger />
+
       {/* Tablet sidebar: md–lg */}
       <TabletSidebar />
 

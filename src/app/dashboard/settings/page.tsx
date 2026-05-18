@@ -40,6 +40,9 @@ import SunnyTutorial from '@/components/SunnyTutorial';
 import ProductTypesSection from '@/components/settings/ProductTypesSection';
 import SuppliersSection from '@/components/settings/SuppliersSection';
 import { canShowBillingUI } from '@/lib/billing-gate';
+import { isNativeApp, getPlatform } from '@/lib/native';
+import TapToPaySetup from '@/components/TapToPaySetup';
+import TapToPayEducation from '@/components/TapToPayEducation';
 
 // ============================================================================
 // Constants
@@ -110,7 +113,7 @@ interface TeamMember {
 }
 
 type PaymentProcessor = 'square' | 'stripe';
-type SectionId = 'business' | 'communications' | 'pricing' | 'payments' | 'billing' | 'tax' | 'waiver' | 'suppliers' | 'team' | 'profile';
+type SectionId = 'business' | 'communications' | 'pricing' | 'payments' | 'tap_to_pay' | 'billing' | 'tax' | 'waiver' | 'suppliers' | 'team' | 'profile';
 
 // ============================================================================
 // Subscription Helpers
@@ -198,6 +201,13 @@ const IconBusiness = (
 const IconPayments = (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+  </svg>
+);
+
+const IconTapToPay = (
+  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3" />
+    <path strokeLinecap="round" d="M14 10c0-1.1.9-2 2-2M14 10c0-2.2 1.8-4 4-4M14 10c0-3.3 2.7-6 6-6" />
   </svg>
 );
 
@@ -321,7 +331,7 @@ function ThemePreviewCard({
 // ============================================================================
 
 function SettingsPage() {
-  const { tenant, can, isOwner, refetch } = useTenant();
+  const { tenant, can, isOwner, membership, refetch } = useTenant();
   const searchParams = useSearchParams();
   const router = useRouter();
   // Stable reference — prevents dependency cycles in effects
@@ -410,6 +420,11 @@ function SettingsPage() {
   const [savingProcessor, setSavingProcessor] = useState(false);
   const [venmoUsername, setVenmoUsername] = useState('');
   const [savingVenmo, setSavingVenmo] = useState(false);
+
+  // ── Tap to Pay ──
+  const [tapToPaySetupOpen, setTapToPaySetupOpen] = useState(false);
+  const [tapToPayTutorialOpen, setTapToPayTutorialOpen] = useState(false);
+  const [disablingTapToPay, setDisablingTapToPay] = useState(false);
 
   // ── Suppliers state (for summary count) ──
   const [suppliers, setSuppliers] = useState<{ id: string }[]>([]);
@@ -530,7 +545,7 @@ function SettingsPage() {
     }
 
     // Deep-link to a specific section (e.g., ?section=pricing)
-    const validSections: SectionId[] = ['business', 'communications', 'pricing', 'payments', 'billing', 'tax', 'waiver', 'suppliers', 'team', 'profile'];
+    const validSections: SectionId[] = ['business', 'communications', 'pricing', 'payments', 'tap_to_pay', 'billing', 'tax', 'waiver', 'suppliers', 'team', 'profile'];
     if (sectionParam && validSections.includes(sectionParam as SectionId)) {
       setOpenSection(sectionParam as SectionId);
     }
@@ -1262,6 +1277,12 @@ function SettingsPage() {
     ? waiverText.slice(0, 60) + (waiverText.length > 60 ? '...' : '')
     : 'Default waiver text';
 
+  const tapToPayEnabled = !!(tenant as any).tap_to_pay_enabled;
+  const isNative = isNativeApp();
+  const tapToPaySummary = tapToPayEnabled
+    ? `Enabled · ${stripeConnected ? 'Stripe' : squareConnected ? 'Square' : 'Not connected'}`
+    : 'Accept contactless payments from your phone';
+
   const totalTeamMembers = activeMembers.length + pendingMembers.length;
   const teamSummary = totalTeamMembers > 0
     ? `${activeMembers.length} member${activeMembers.length !== 1 ? 's' : ''}${pendingMembers.length > 0 ? ` · ${pendingMembers.length} pending` : ''}`
@@ -1765,6 +1786,153 @@ function SettingsPage() {
           </div>
         </div>
       </AccordionSection>
+
+      {/* ================================================================ */}
+      {/* Tap to Pay — only shown in native app                           */}
+      {/* ================================================================ */}
+      {isNative && (
+        <AccordionSection
+          icon={IconTapToPay}
+          title="Tap to Pay"
+          summary={tapToPaySummary}
+          isOpen={openSection === 'tap_to_pay'}
+          onToggle={() => toggleSection('tap_to_pay')}
+        >
+          <div className="space-y-5 pt-4">
+            {/* ── Enabled state ── */}
+            {tapToPayEnabled ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    Ready to accept contactless payments.
+                  </p>
+                  <Badge variant="accent" size="sm">Enabled</Badge>
+                </div>
+
+                <div className="rounded-xl border border-[var(--border-default)] p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-[var(--text-secondary)]">Connected via</span>
+                    <span className="text-sm font-medium text-[var(--text-primary)]">
+                      {stripeConnected && squareConnected ? 'Stripe and Square' : stripeConnected ? 'Stripe' : squareConnected ? 'Square' : 'No processor'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-[var(--text-secondary)]">Device</span>
+                    <span className="text-sm font-medium text-green-600">Compatible</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setTapToPayTutorialOpen(true)}
+                  >
+                    View Tutorial
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    loading={disablingTapToPay}
+                    onClick={async () => {
+                      setDisablingTapToPay(true);
+                      await supabase
+                        .from('tenants')
+                        .update({ tap_to_pay_enabled: false })
+                        .eq('id', tenant.id);
+                      refetch();
+                      setDisablingTapToPay(false);
+                      toast.success('Tap to Pay disabled.');
+                    }}
+                  >
+                    Disable Tap to Pay
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* ── Not set up state ── */}
+                <p className="text-sm text-[var(--text-secondary)]">
+                  Accept contactless payments right from your phone — no card reader needed.
+                </p>
+
+                <div className="flex justify-center py-4">
+                  <div className="w-16 h-16 rounded-full bg-[color-mix(in_srgb,var(--accent-primary)_12%,transparent)] flex items-center justify-center">
+                    <svg className="w-8 h-8 text-[var(--accent-primary)]" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <rect x="6" y="8" width="20" height="16" rx="3" />
+                      <rect x="9" y="11" width="5" height="4" rx="1" opacity="0.3" fill="currentColor" />
+                      <path strokeLinecap="round" d="M20 16c0-1.7 1.3-3 3-3M20 16c0-3.3 2.7-6 6-6" />
+                    </svg>
+                  </div>
+                </div>
+
+                <p className="text-xs text-[var(--text-tertiary)] text-center">
+                  Works with your connected {stripeConnected && squareConnected ? 'Stripe and Square' : stripeConnected ? 'Stripe' : squareConnected ? 'Square' : 'payment processor'} account.
+                </p>
+
+                {/* Admin/owner can set up */}
+                {(isOwner || can('settings:manage')) ? (
+                  <Button
+                    variant="primary"
+                    className="w-full"
+                    onClick={() => setTapToPaySetupOpen(true)}
+                  >
+                    Set Up Tap to Pay
+                  </Button>
+                ) : (
+                  <div className="bg-[var(--surface-subtle)] border border-[var(--border-default)] rounded-xl p-4">
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      Only the account owner or a manager can enable Tap to Pay. Contact your admin to set it up.
+                    </p>
+                  </div>
+                )}
+
+                {/* Requirements */}
+                <div className="border-t border-[var(--border-subtle)] pt-4">
+                  <p className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wide mb-2">Requirements</p>
+                  <ul className="text-xs text-[var(--text-tertiary)] space-y-1">
+                    <li className="flex items-center gap-2">
+                      <svg className="w-3 h-3 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+                      {getPlatform() === 'ios' ? 'iPhone XS or later (iOS 16.4+)' : 'Compatible Android device'}
+                    </li>
+                    <li className="flex items-center gap-2">
+                      {stripeConnected || squareConnected ? (
+                        <svg className="w-3 h-3 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+                      ) : (
+                        <svg className="w-3 h-3 text-[var(--text-tertiary)] shrink-0" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth="2"><circle cx="10" cy="10" r="7"/></svg>
+                      )}
+                      Stripe or Square account connected
+                    </li>
+                  </ul>
+                </div>
+              </>
+            )}
+          </div>
+        </AccordionSection>
+      )}
+
+      {/* Tap to Pay Setup overlay */}
+      {tapToPaySetupOpen && tenant && (
+        <TapToPaySetup
+          tenantId={tenant.id}
+          userId={membership?.user_id || tenant.owner_id}
+          processor={stripeConnected && squareConnected ? 'Stripe and Square' : stripeConnected ? 'Stripe' : 'Square'}
+          onComplete={() => {
+            setTapToPaySetupOpen(false);
+            refetch();
+            toast.success('Tap to Pay is ready!');
+          }}
+          onClose={() => setTapToPaySetupOpen(false)}
+        />
+      )}
+
+      {/* Tap to Pay Tutorial overlay */}
+      {tapToPayTutorialOpen && (
+        <TapToPayEducation
+          onComplete={() => setTapToPayTutorialOpen(false)}
+          onClose={() => setTapToPayTutorialOpen(false)}
+        />
+      )}
 
       {/* ================================================================ */}
       {/* Section 3: Plan & Billing (hidden entirely on native iOS/Android) */}

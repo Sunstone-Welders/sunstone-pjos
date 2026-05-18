@@ -24,7 +24,8 @@ export type Feature =
   | 'atlas_sms_support'
   | 'white_label_receipts'
   | 'multi_location'
-  | 'custom_storefront_domain';
+  | 'custom_storefront_domain'
+  | 'tap_to_pay';
 
 // Feature access matrix — tiers differentiate by features, not fees (May 2026)
 const FEATURE_ACCESS: Record<Feature, SubscriptionTier[]> = {
@@ -44,6 +45,7 @@ const FEATURE_ACCESS: Record<Feature, SubscriptionTier[]> = {
   white_label_receipts:     ['business'],
   multi_location:           ['business'],
   custom_storefront_domain: ['business'],           // Coming soon
+  tap_to_pay:              ['starter', 'pro', 'business'],  // Core payment feature — all tiers
 };
 
 // Platform fee rates by tier (as decimal) — fees removed from all tiers May 2026
