@@ -154,6 +154,35 @@ export default function AdminNotificationsPage() {
 
   const filtered = filter === 'all' ? notifications : notifications.filter(n => n.status === filter);
 
+  // ─── Analytics calculations ───────────────────────────────────────────────
+
+  const sentNotifications = notifications.filter(n => n.status === 'sent');
+  const draftCount = notifications.filter(n => n.status === 'draft').length;
+  const scheduledNotifications = notifications.filter(n => n.status === 'scheduled');
+
+  const avgReadRate = sentNotifications.length > 0
+    ? Math.round(
+        sentNotifications.reduce((sum, n) => {
+          const targeted = Math.max(n.total_targeted, n.read_count, 1);
+          return sum + (n.read_count / targeted) * 100;
+        }, 0) / sentNotifications.length
+      )
+    : 0;
+
+  const sentWithCta = sentNotifications.filter(n => n.cta_text);
+  const avgClickRate = sentWithCta.length > 0
+    ? Math.round(
+        sentWithCta.reduce((sum, n) => {
+          const readers = Math.max(n.read_count, 1);
+          return sum + (n.click_count / readers) * 100;
+        }, 0) / sentWithCta.length
+      )
+    : 0;
+
+  const nextScheduled = scheduledNotifications
+    .filter(n => n.scheduled_for)
+    .sort((a, b) => new Date(a.scheduled_for!).getTime() - new Date(b.scheduled_for!).getTime())[0];
+
   // ─── Loading state ─────────────────────────────────────────────────────────
 
   if (loading) {
@@ -198,6 +227,39 @@ export default function AdminNotificationsPage() {
           New Notification
         </button>
       </div>
+
+      {/* Analytics Summary Cards */}
+      {notifications.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] p-4">
+            <div className="text-[11px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Total Sent</div>
+            <div className="text-xl font-bold text-[var(--text-primary)]">{sentNotifications.length}</div>
+          </div>
+          <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] p-4">
+            <div className="text-[11px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Avg Read Rate</div>
+            <div className="text-xl font-bold text-[var(--text-primary)]">{avgReadRate}%</div>
+          </div>
+          <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] p-4">
+            <div className="text-[11px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Avg Click Rate</div>
+            <div className="text-xl font-bold text-[var(--text-primary)]">
+              {sentWithCta.length > 0 ? `${avgClickRate}%` : '—'}
+            </div>
+          </div>
+          <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] p-4">
+            <div className="text-[11px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Active Drafts</div>
+            <div className="text-xl font-bold text-[var(--text-primary)]">{draftCount}</div>
+          </div>
+          <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] p-4">
+            <div className="text-[11px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Scheduled</div>
+            <div className="text-xl font-bold text-[var(--text-primary)]">{scheduledNotifications.length}</div>
+            {nextScheduled?.scheduled_for && (
+              <div className="text-[11px] text-[var(--text-tertiary)] mt-0.5">
+                Next: {format(new Date(nextScheduled.scheduled_for), 'MMM d, h:mm a')}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Filter chips */}
       <div className="flex items-center gap-2 flex-wrap">

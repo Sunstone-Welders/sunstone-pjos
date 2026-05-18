@@ -51,11 +51,30 @@ export async function GET(
       tenant_name: tenantNames[r.tenant_id] || 'Unknown',
     }));
 
+    // Compute total_targeted for accurate rate calculations
+    let totalTargeted = 0;
+    if (notification.target_type === 'specific' && notification.target_tenant_ids) {
+      totalTargeted = notification.target_tenant_ids.length;
+    } else if (notification.target_type === 'tier' && notification.target_value) {
+      const { count } = await serviceClient
+        .from('tenants')
+        .select('id', { count: 'exact', head: true })
+        .eq('subscription_tier', notification.target_value);
+      totalTargeted = count || 0;
+    } else {
+      // 'all' or 'tag'
+      const { count } = await serviceClient
+        .from('tenants')
+        .select('id', { count: 'exact', head: true });
+      totalTargeted = count || 0;
+    }
+
     return NextResponse.json({
       notification,
       reads: enrichedReads,
       read_count: enrichedReads.length,
       click_count: enrichedReads.filter(r => r.cta_clicked_at).length,
+      total_targeted: totalTargeted,
     });
   } catch (err) {
     if (err instanceof AdminAuthError) {

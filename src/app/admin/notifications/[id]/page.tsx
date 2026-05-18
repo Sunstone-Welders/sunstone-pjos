@@ -67,6 +67,7 @@ export default function NotificationDetailPage() {
   const [reads, setReads] = useState<ReadRecord[]>([]);
   const [readCount, setReadCount] = useState(0);
   const [clickCount, setClickCount] = useState(0);
+  const [totalTargeted, setTotalTargeted] = useState(0);
   const [loading, setLoading] = useState(true);
   const [archiving, setArchiving] = useState(false);
 
@@ -87,6 +88,7 @@ export default function NotificationDetailPage() {
       setReads(data.reads || []);
       setReadCount(data.read_count || 0);
       setClickCount(data.click_count || 0);
+      setTotalTargeted(data.total_targeted || 0);
     } catch {
       toast.error('Failed to load notification');
       router.push('/admin/notifications');
@@ -114,12 +116,11 @@ export default function NotificationDetailPage() {
   }
 
   function getTotalTargeted(): number {
+    if (totalTargeted > 0) return totalTargeted;
     if (!notification) return 0;
     if (notification.target_type === 'specific' && notification.target_tenant_ids) {
       return notification.target_tenant_ids.length;
     }
-    // For 'all' and 'tier' targeting, we don't have precise count from this endpoint
-    // Use read_count as a floor estimate
     return Math.max(readCount, 1);
   }
 
@@ -222,11 +223,19 @@ export default function NotificationDetailPage() {
       </div>
 
       {/* Analytics Summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={cn(
+        'grid gap-4',
+        notification.cta_text ? 'grid-cols-2 lg:grid-cols-5' : 'grid-cols-2 lg:grid-cols-3'
+      )}>
+        <StatCard label="Total Targeted" value={getTotalTargeted()} />
         <StatCard label="Total Read" value={readCount} />
         <StatCard label="Read Rate" value={`${readRate}%`} />
-        <StatCard label="CTA Clicks" value={clickCount} />
-        <StatCard label="Click Rate" value={readCount > 0 ? `${clickRate}%` : '—'} />
+        {notification.cta_text && (
+          <>
+            <StatCard label="CTA Clicks" value={clickCount} />
+            <StatCard label="Click Rate" value={readCount > 0 ? `${clickRate}%` : '—'} />
+          </>
+        )}
       </div>
 
       {/* Read Table */}

@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdmin, AdminAuthError } from '@/lib/admin/verify-platform-admin';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { sendPlatformNotificationPush } from '@/lib/send-platform-notification-push';
 
 export async function POST(
   request: NextRequest,
@@ -48,9 +49,28 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to send notification' }, { status: 500 });
     }
 
-    // NOTE: Push notification dispatch will be added in Phase 4.
+    // Fire push notifications (fire-and-forget — don't block the response)
+    const pushPromise = sendPlatformNotificationPush(
+      id,
+      notification.title,
+      notification.body,
+      notification.cta_link
+    ).catch((err) =>
+      console.error('[send-notification] Push dispatch failed:', err?.message)
+    );
 
-    return NextResponse.json({ notification });
+    // For small tenant counts (< 100), await to include stats in response.
+    // For larger audiences, let it finish in background.
+    let push: { sent: number; failed: number } | null = null;
+    const result = await Promise.race([
+      pushPromise,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+    ]);
+    if (result && typeof result === 'object' && 'sent' in result) {
+      push = result as { sent: number; failed: number };
+    }
+
+    return NextResponse.json({ notification, push });
   } catch (err) {
     if (err instanceof AdminAuthError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
