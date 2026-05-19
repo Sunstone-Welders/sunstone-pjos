@@ -27,6 +27,7 @@ interface Tenant {
   created_at: string;
   brand_color: string;
   admin_tier_override?: boolean;
+  ambassador_only?: boolean;
   trial_ends_at?: string | null;
   stripe_subscription_id?: string | null;
 }
@@ -853,6 +854,25 @@ function TenantProfilePanel({
                     {tenant.is_suspended ? 'Unsuspend' : 'Suspend'}
                   </button>
                 </div>
+
+                {/* Ambassador-only mode */}
+                <div className="px-4 py-3 flex items-center justify-between">
+                  <div>
+                    <span className="text-sm text-[var(--text-secondary)]">Ambassador Only</span>
+                    <p className="text-[11px] text-[var(--text-tertiary)]">Influencer — no Studio tools</p>
+                  </div>
+                  <button
+                    onClick={() => onUpdateTenant({ ambassador_only: !(detail?.tenant?.ambassador_only ?? tenant.ambassador_only) })}
+                    disabled={actionLoading}
+                    className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
+                      (detail?.tenant?.ambassador_only ?? tenant.ambassador_only) ? 'bg-purple-500' : 'bg-[var(--surface-raised)] border border-[var(--border-default)]'
+                    }`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                      (detail?.tenant?.ambassador_only ?? tenant.ambassador_only) ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1508,6 +1528,11 @@ function SubscriptionStatusBadge({ tenant, showTier }: { tenant: Tenant; showTie
         </span>
         {status.subLabel && (
           <span className="text-[10px] text-[var(--text-tertiary)]">{status.subLabel}</span>
+        )}
+        {tenant.ambassador_only && (
+          <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium bg-purple-500/10 text-purple-400">
+            Amb. Only
+          </span>
         )}
       </div>
       {showTier && (

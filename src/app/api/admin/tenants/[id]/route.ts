@@ -29,7 +29,7 @@ export async function GET(
         is_suspended, suspended_at, suspended_reason,
         crm_enabled, created_at, updated_at, phone, email, website,
         dedicated_phone_number, dedicated_phone_sid, platform_fee_percent,
-        admin_tier_override, last_owner_login_at,
+        admin_tier_override, ambassador_only, last_owner_login_at,
         referred_by_ambassador_id, referral_code_used,
         onboarding_welcome_sent_at, onboarding_inventory_nudge_sent_at,
         onboarding_first_sale_nudge_sent_at, onboarding_week1_active_sent_at,
@@ -150,6 +150,12 @@ export async function PATCH(
 
     if (body.crm_enabled !== undefined) {
       update.crm_enabled = Boolean(body.crm_enabled);
+    }
+
+    if (body.ambassador_only !== undefined) {
+      update.ambassador_only = Boolean(body.ambassador_only);
+      // When disabling ambassador_only, ensure onboarding flag is correct
+      // (they may need to go through onboarding if they haven't already set up Studio)
     }
 
     if (body.trial_ends_at !== undefined) {

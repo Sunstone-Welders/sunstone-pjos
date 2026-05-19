@@ -167,6 +167,49 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Step 2b: Auto-link ambassador record (non-fatal) ────────────────
+    // If an ambassador application exists with this email (and no user_id yet),
+    // link it to this account and mark the tenant as ambassador-only.
+    let isAmbassadorOnly = false;
+    if (user.email) {
+      try {
+        const { data: existingAmbassador } = await supabase
+          .from('ambassadors')
+          .select('id, status')
+          .ilike('email', user.email)
+          .is('user_id', null)
+          .limit(1)
+          .single();
+
+        if (existingAmbassador) {
+          // Link the ambassador record to this user + tenant
+          await supabase
+            .from('ambassadors')
+            .update({ user_id: userId, tenant_id: tenant.id })
+            .eq('id', existingAmbassador.id);
+
+          // Mark tenant as ambassador-only and skip onboarding
+          await supabase
+            .from('tenants')
+            .update({
+              ambassador_only: true,
+              onboarding_completed: true,
+            })
+            .eq('id', tenant.id);
+
+          isAmbassadorOnly = true;
+          console.log('[signup] Auto-linked ambassador record', {
+            userId,
+            tenantId: tenant.id,
+            ambassadorId: existingAmbassador.id,
+            ambassadorStatus: existingAmbassador.status,
+          });
+        }
+      } catch (ambErr) {
+        console.warn('[signup] Ambassador auto-link failed (non-fatal):', ambErr);
+      }
+    }
+
     // ── Step 3: Store name in auth user metadata (non-fatal) ─────────────
     if (firstName) {
       const parsedFirst = firstName.trim().split(/\s+/)[0] || firstName.trim();
@@ -304,6 +347,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       tenantId: tenant.id,
       requiresVerification: !!normalizedPhone,
+      ambassadorOnly: isAmbassadorOnly,
     });
   } catch (error: any) {
     console.error('[signup] Unhandled error:', error);

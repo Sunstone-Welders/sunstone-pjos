@@ -36,6 +36,7 @@ interface Ambassador {
   created_at: string;
   commission_rate: number;
   commission_duration_months: number;
+  ambassador_only: boolean | null;
   stats: AmbassadorStats;
   pendingCommission: number;
   lastPayout: { amount: number; date: string } | null;
@@ -317,7 +318,19 @@ export default function AdminAmbassadorsPage() {
                   <div className="text-xs text-gray-300 truncate">{a.referral_code}</div>
 
                   {/* Type */}
-                  <div>{typeBadge(a.type)}</div>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {typeBadge(a.type)}
+                    {a.ambassador_only === true && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-purple-500/10 text-purple-400">
+                        Amb Only
+                      </span>
+                    )}
+                    {a.ambassador_only === false && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400">
+                        Studio
+                      </span>
+                    )}
+                  </div>
 
                   {/* Status */}
                   <div>{statusBadge(a.status)}</div>

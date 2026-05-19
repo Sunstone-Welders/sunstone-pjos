@@ -243,6 +243,9 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
         {/* Demo mode banner */}
         <DemoBanner />
 
+        {/* Ambassador-only upsell banner */}
+        <AmbassadorOnlyBanner />
+
         {/* Mobile spotlight banner (below md) */}
         {showSpotlight && <SpotlightBanner spotlight={spotlight} onDismiss={() => setSpotlightDismissed(true)} />}
 
@@ -313,11 +316,16 @@ function useFilteredItems(items: NavItem[]) {
   const isAmbassador = useIsAmbassador();
   const isPaidSubscriber = tenant?.subscription_status === 'active' && !isTrialActive(tenant as Parameters<typeof isTrialActive>[0]);
   const hasAdminOverride = !!tenant?.admin_tier_override;
+  const isAmbassadorOnly = !!(tenant as any)?.ambassador_only;
   // Memoize to prevent creating a new array reference on every render,
   // which would cause unnecessary re-renders in consuming components.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(
     () => items.filter((item) => {
+      // Ambassador-only mode: show only Ambassador + Settings
+      if (isAmbassadorOnly) {
+        return item.label === 'Ambassador' || item.label === 'Settings';
+      }
       if (item.requirePermission && !can(item.requirePermission)) return false;
       if (item.requirePaid && !hasPaidPlan) return false;
       if (item.requireAmbassador && !isAmbassador && !isPaidSubscriber && !hasAdminOverride) return false;
@@ -325,7 +333,7 @@ function useFilteredItems(items: NavItem[]) {
     }),
     // items is a stable constant defined outside the component; can depends on role/isOwner
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [can, hasPaidPlan, isAmbassador, isPaidSubscriber, hasAdminOverride]
+    [can, hasPaidPlan, isAmbassador, isPaidSubscriber, hasAdminOverride, isAmbassadorOnly]
   );
 }
 
@@ -435,10 +443,22 @@ function PhoneBottomNav({ onMoreOpen }: { onMoreOpen: () => void }) {
   const pathname = usePathname();
   const unreadCount = useUnreadCount();
   const crmStatus = useCrmStatus();
+  const { tenant } = useTenant();
+  const isAmbassadorOnly = !!(tenant as any)?.ambassador_only;
 
   // Hide bottom nav inside POS sessions (full-screen experience)
   if (pathname.startsWith('/dashboard/pos') || pathname.startsWith('/dashboard/events/event-mode')) {
     return null;
+  }
+
+  // Ambassador-only mode: simplified bottom nav
+  if (isAmbassadorOnly) {
+    return (
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-end justify-around bg-[var(--surface-base)] border-t border-border-default px-2 safe-area-bottom" style={{ overflow: 'visible' }}>
+        <PhoneTab href="/dashboard/ambassador" label="Ambassador" icon={AmbassadorIcon} />
+        <PhoneTab href="/dashboard/settings" label="Settings" icon={SettingsIcon} />
+      </nav>
+    );
   }
 
   return (
@@ -538,6 +558,7 @@ function MoreSheet({ isOpen, onClose, onSunnyOpen }: { isOpen: boolean; onClose:
   const isAmbassador = useIsAmbassador();
   const isPaidSubscriber = tenant?.subscription_status === 'active' && !isTrialActive(tenant as Parameters<typeof isTrialActive>[0]);
   const hasAdminOverride = !!tenant?.admin_tier_override;
+  const isAmbassadorOnly = !!(tenant as any)?.ambassador_only;
 
   // Lock body scroll when open
   useEffect(() => {
@@ -548,6 +569,9 @@ function MoreSheet({ isOpen, onClose, onSunnyOpen }: { isOpen: boolean; onClose:
   }, [isOpen]);
 
   const filteredMoreItems = moreSheetItems.filter((item) => {
+    if (isAmbassadorOnly) {
+      return item.label === 'Ambassador' || item.label === 'Settings';
+    }
     if (item.requirePermission && !can(item.requirePermission)) return false;
     if (item.requirePaid && !hasPaidPlan) return false;
     if (item.requireAmbassador && !isAmbassador && !isPaidSubscriber && !hasAdminOverride) return false;
@@ -892,6 +916,27 @@ function DesktopSidebar() {
 // ============================================================================
 // Trial Expiry Banner (unchanged from v5)
 // ============================================================================
+
+function AmbassadorOnlyBanner() {
+  const { tenant } = useTenant();
+  const isAmbassadorOnly = !!(tenant as any)?.ambassador_only;
+
+  if (!isAmbassadorOnly) return null;
+
+  return (
+    <div className="bg-[var(--accent-50,#eff6ff)] border-b border-[var(--accent-200,#bfdbfe)] px-4 py-2.5 flex items-center justify-between shrink-0">
+      <span className="text-sm text-[var(--accent-700,#1d4ed8)]">
+        Want to run your PJ business on Sunstone Studio?
+      </span>
+      <Link
+        href="/onboarding"
+        className="text-sm font-semibold text-[var(--accent-700,#1d4ed8)] hover:text-[var(--accent-800)] underline underline-offset-2 whitespace-nowrap ml-2"
+      >
+        Activate Studio &rarr;
+      </Link>
+    </div>
+  );
+}
 
 function TrialBanner() {
   const { tenant } = useTenant();

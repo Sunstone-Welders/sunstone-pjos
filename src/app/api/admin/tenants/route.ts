@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
         stripe_subscription_id,
         onboarding_completed, is_suspended, suspended_at, suspended_reason,
         crm_enabled, brand_color, logo_url, created_at, updated_at,
-        last_owner_login_at, admin_tier_override
+        last_owner_login_at, admin_tier_override, ambassador_only
       `)
       .order('created_at', { ascending: false });
 

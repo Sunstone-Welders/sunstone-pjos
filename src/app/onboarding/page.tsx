@@ -411,7 +411,7 @@ function OnboardingFlow() {
     setSaving(true);
     await supabase
       .from('tenants')
-      .update({ onboarding_completed: true, onboarding_step: TOTAL_STEPS })
+      .update({ onboarding_completed: true, onboarding_step: TOTAL_STEPS, ambassador_only: false })
       .eq('id', tenant.id);
     await refetch();
     router.replace('/dashboard');
@@ -426,6 +426,7 @@ function OnboardingFlow() {
         onboarding_completed: true,
         onboarding_step: TOTAL_STEPS,
         theme_id: selectedTheme,
+        ambassador_only: false,
       })
       .eq('id', tenant.id);
     await refetch();

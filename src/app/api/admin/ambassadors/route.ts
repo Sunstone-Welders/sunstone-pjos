@@ -68,9 +68,23 @@ export async function GET() {
       statsMap[r.ambassador_id].totalEarned += Number(r.total_commission_earned || 0);
     }
 
+    // Look up ambassador_only flag for linked tenants
+    const linkedTenantIds = (ambassadors || []).map(a => a.tenant_id).filter(Boolean);
+    const ambassadorOnlyMap: Record<string, boolean> = {};
+    if (linkedTenantIds.length > 0) {
+      const { data: linkedTenants } = await supabase
+        .from('tenants')
+        .select('id, ambassador_only')
+        .in('id', linkedTenantIds);
+      for (const t of linkedTenants || []) {
+        ambassadorOnlyMap[t.id] = !!t.ambassador_only;
+      }
+    }
+
     // Enrich ambassadors with stats + commission data
     const enriched = (ambassadors || []).map((a) => ({
       ...a,
+      ambassador_only: a.tenant_id ? (ambassadorOnlyMap[a.tenant_id] ?? false) : null,
       stats: statsMap[a.id] || { totalReferrals: 0, signups: 0, converted: 0, totalEarned: 0 },
       pendingCommission: pendingMap[a.id] || 0,
       lastPayout: lastPayoutMap[a.id] || null,
