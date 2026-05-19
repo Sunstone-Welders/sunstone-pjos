@@ -19,9 +19,12 @@ import type { Permission } from '@/lib/permissions';
 import MentorChat from '@/components/MentorChat';
 import QuickReplyToast from '@/components/QuickReplyToast';
 import DemoBanner from '@/components/DemoBanner';
+import NotificationBell, { useNotificationUnreadCount } from '@/components/NotificationBell';
+import NotificationInbox from '@/components/NotificationInbox';
 import { getSubscriptionTier, isTrialActive } from '@/lib/subscription';
 import { getCrmStatus } from '@/lib/crm-status';
 import { canShowBillingUI } from '@/lib/billing-gate';
+import TapToPaySplashTrigger from '@/components/TapToPaySplashTrigger';
 
 // ============================================================================
 // Unread message count hook (polls every 30s)
@@ -151,13 +154,25 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
   const { tenant, isLoading: tenantLoading, isOwner } = useTenant();
   const [isSunnyOpen, setIsSunnyOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [spotlight, setSpotlight] = useState<SpotlightMiniData | null>(null);
   const [spotlightDismissed, setSpotlightDismissed] = useState(false);
+  const notifUnread = useNotificationUnreadCount();
 
   const openSunny = useCallback(() => setIsSunnyOpen(true), []);
   const closeSunny = useCallback(() => setIsSunnyOpen(false), []);
   const openMore = useCallback(() => setIsMoreOpen(true), []);
   const closeMore = useCallback(() => setIsMoreOpen(false), []);
+  const toggleNotif = useCallback(() => setIsNotifOpen(prev => !prev), []);
+  const closeNotif = useCallback(() => setIsNotifOpen(false), []);
+  const openNotif = useCallback(() => setIsNotifOpen(true), []);
+
+  // Listen for custom event from WhatsNewCard to open inbox
+  useEffect(() => {
+    const handler = () => openNotif();
+    window.addEventListener('open-notification-inbox', handler);
+    return () => window.removeEventListener('open-notification-inbox', handler);
+  }, [openNotif]);
 
   // Onboarding redirect is now handled server-side in dashboard layout.tsx
 
@@ -208,6 +223,9 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--surface-base)]">
+      {/* Tap to Pay discovery splash — shown once per tenant on compatible devices */}
+      <TapToPaySplashTrigger />
+
       {/* Tablet sidebar: md–lg */}
       <TabletSidebar />
 
@@ -217,7 +235,7 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Phone top bar: below md */}
-        <PhoneTopBar onSunnyOpen={openSunny} />
+        <PhoneTopBar onSunnyOpen={openSunny} onNotifToggle={toggleNotif} notifCount={notifUnread.count} notifWiggle={notifUnread.shouldWiggle} />
 
         {/* Trial banner */}
         <TrialBanner />
@@ -225,11 +243,15 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
         {/* Demo mode banner */}
         <DemoBanner />
 
+        {/* Ambassador-only upsell banner */}
+        <AmbassadorOnlyBanner />
+
         {/* Mobile spotlight banner (below md) */}
         {showSpotlight && <SpotlightBanner spotlight={spotlight} onDismiss={() => setSpotlightDismissed(true)} />}
 
-        {/* Desktop/Tablet header bar — Ask Sunny pill (md+) */}
-        <div className="hidden md:flex items-center justify-end px-4 lg:px-8 py-2 shrink-0">
+        {/* Desktop/Tablet header bar — Notification bell + Ask Sunny pill (md+) */}
+        <div className="hidden md:flex items-center justify-end gap-2 px-4 lg:px-8 py-2 shrink-0">
+          <NotificationBell count={notifUnread.count} shouldWiggle={notifUnread.shouldWiggle} onClick={toggleNotif} />
           <SunnyPill onClick={openSunny} />
         </div>
 
@@ -249,6 +271,14 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
         isOpen={isMoreOpen}
         onClose={closeMore}
         onSunnyOpen={openSunny}
+      />
+
+      {/* Notification Inbox — slide-out panel */}
+      <NotificationInbox
+        isOpen={isNotifOpen}
+        onClose={closeNotif}
+        onRead={notifUnread.decrement}
+        onMarkAllRead={notifUnread.reset}
       />
 
       {/* Mentor Chat — controlled externally */}
@@ -286,11 +316,16 @@ function useFilteredItems(items: NavItem[]) {
   const isAmbassador = useIsAmbassador();
   const isPaidSubscriber = tenant?.subscription_status === 'active' && !isTrialActive(tenant as Parameters<typeof isTrialActive>[0]);
   const hasAdminOverride = !!tenant?.admin_tier_override;
+  const isAmbassadorOnly = !!(tenant as any)?.ambassador_only;
   // Memoize to prevent creating a new array reference on every render,
   // which would cause unnecessary re-renders in consuming components.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(
     () => items.filter((item) => {
+      // Ambassador-only mode: show only Ambassador + Settings
+      if (isAmbassadorOnly) {
+        return item.label === 'Ambassador' || item.label === 'Settings';
+      }
       if (item.requirePermission && !can(item.requirePermission)) return false;
       if (item.requirePaid && !hasPaidPlan) return false;
       if (item.requireAmbassador && !isAmbassador && !isPaidSubscriber && !hasAdminOverride) return false;
@@ -298,7 +333,7 @@ function useFilteredItems(items: NavItem[]) {
     }),
     // items is a stable constant defined outside the component; can depends on role/isOwner
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [can, hasPaidPlan, isAmbassador, isPaidSubscriber, hasAdminOverride]
+    [can, hasPaidPlan, isAmbassador, isPaidSubscriber, hasAdminOverride, isAmbassadorOnly]
   );
 }
 
@@ -381,7 +416,7 @@ function SunnyPill({ onClick, collapsed, label }: { onClick: () => void; collaps
 // PhoneTopBar (below md)
 // ============================================================================
 
-function PhoneTopBar({ onSunnyOpen }: { onSunnyOpen: () => void }) {
+function PhoneTopBar({ onSunnyOpen, onNotifToggle, notifCount, notifWiggle }: { onSunnyOpen: () => void; onNotifToggle: () => void; notifCount: number; notifWiggle: boolean }) {
   const { tenant } = useTenant();
 
   return (
@@ -392,7 +427,10 @@ function PhoneTopBar({ onSunnyOpen }: { onSunnyOpen: () => void }) {
           {tenant?.name || 'Loading...'}
         </div>
       </div>
-      <SunnyPill onClick={onSunnyOpen} />
+      <div className="flex items-center gap-1">
+        <NotificationBell count={notifCount} shouldWiggle={notifWiggle} onClick={onNotifToggle} />
+        <SunnyPill onClick={onSunnyOpen} />
+      </div>
     </div>
   );
 }
@@ -405,10 +443,22 @@ function PhoneBottomNav({ onMoreOpen }: { onMoreOpen: () => void }) {
   const pathname = usePathname();
   const unreadCount = useUnreadCount();
   const crmStatus = useCrmStatus();
+  const { tenant } = useTenant();
+  const isAmbassadorOnly = !!(tenant as any)?.ambassador_only;
 
   // Hide bottom nav inside POS sessions (full-screen experience)
   if (pathname.startsWith('/dashboard/pos') || pathname.startsWith('/dashboard/events/event-mode')) {
     return null;
+  }
+
+  // Ambassador-only mode: simplified bottom nav
+  if (isAmbassadorOnly) {
+    return (
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-end justify-around bg-[var(--surface-base)] border-t border-border-default px-2 safe-area-bottom" style={{ overflow: 'visible' }}>
+        <PhoneTab href="/dashboard/ambassador" label="Ambassador" icon={AmbassadorIcon} />
+        <PhoneTab href="/dashboard/settings" label="Settings" icon={SettingsIcon} />
+      </nav>
+    );
   }
 
   return (
@@ -508,6 +558,7 @@ function MoreSheet({ isOpen, onClose, onSunnyOpen }: { isOpen: boolean; onClose:
   const isAmbassador = useIsAmbassador();
   const isPaidSubscriber = tenant?.subscription_status === 'active' && !isTrialActive(tenant as Parameters<typeof isTrialActive>[0]);
   const hasAdminOverride = !!tenant?.admin_tier_override;
+  const isAmbassadorOnly = !!(tenant as any)?.ambassador_only;
 
   // Lock body scroll when open
   useEffect(() => {
@@ -518,6 +569,9 @@ function MoreSheet({ isOpen, onClose, onSunnyOpen }: { isOpen: boolean; onClose:
   }, [isOpen]);
 
   const filteredMoreItems = moreSheetItems.filter((item) => {
+    if (isAmbassadorOnly) {
+      return item.label === 'Ambassador' || item.label === 'Settings';
+    }
     if (item.requirePermission && !can(item.requirePermission)) return false;
     if (item.requirePaid && !hasPaidPlan) return false;
     if (item.requireAmbassador && !isAmbassador && !isPaidSubscriber && !hasAdminOverride) return false;
@@ -862,6 +916,27 @@ function DesktopSidebar() {
 // ============================================================================
 // Trial Expiry Banner (unchanged from v5)
 // ============================================================================
+
+function AmbassadorOnlyBanner() {
+  const { tenant } = useTenant();
+  const isAmbassadorOnly = !!(tenant as any)?.ambassador_only;
+
+  if (!isAmbassadorOnly) return null;
+
+  return (
+    <div className="bg-[var(--accent-50,#eff6ff)] border-b border-[var(--accent-200,#bfdbfe)] px-4 py-2.5 flex items-center justify-between shrink-0">
+      <span className="text-sm text-[var(--accent-700,#1d4ed8)]">
+        Want to run your PJ business on Sunstone Studio?
+      </span>
+      <Link
+        href="/onboarding"
+        className="text-sm font-semibold text-[var(--accent-700,#1d4ed8)] hover:text-[var(--accent-800)] underline underline-offset-2 whitespace-nowrap ml-2"
+      >
+        Activate Studio &rarr;
+      </Link>
+    </div>
+  );
+}
 
 function TrialBanner() {
   const { tenant } = useTenant();

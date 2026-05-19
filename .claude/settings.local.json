@@ -26,7 +26,28 @@
       "Bash(git -C /Users/meganatwood/sunstone-pjos show --stat HEAD)",
       "Bash(git -C /Users/meganatwood/sunstone-pjos show --stat cde684a)",
       "WebFetch(domain:developer.squareup.com)",
-      "Bash(git -C /Users/meganatwood/sunstone-pjos log --oneline -5 -- src/app/api/ambassador/)"
+      "Bash(git -C /Users/meganatwood/sunstone-pjos log --oneline -5 -- src/app/api/ambassador/)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos pull origin main --no-rebase)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos status)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos stash list)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos stash drop)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos diff .claude/settings.local.json)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos checkout -- .claude/settings.local.json)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos show :3:src/lib/tap-to-pay.ts)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos show :3:src/components/pos/checkout/TapToPayFlow.tsx)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos show :3:src/app/dashboard/settings/page.tsx)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos show :3:src/components/TapToPaySetup.tsx)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos show :3:src/components/pos/checkout/PaymentScreen.tsx)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos diff --name-only --diff-filter=U)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos status src/components/pos/checkout/CheckoutFlow.tsx)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos add .claude/settings.local.json)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos checkout --theirs -- src/components/pos/checkout/TapToPayFlow.tsx src/app/dashboard/settings/page.tsx src/components/pos/checkout/PaymentScreen.tsx)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos status --short)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos add src/components/pos/checkout/TapToPayFlow.tsx src/app/dashboard/settings/page.tsx src/components/pos/checkout/PaymentScreen.tsx)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos add src/lib/tap-to-pay.ts)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos diff --check)",
+      "Bash(npx --prefix /Users/meganatwood/sunstone-pjos tsc --noEmit -p /Users/meganatwood/sunstone-pjos)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos add -u)"
     ]
   }
 }

@@ -1,5 +1,5 @@
 // src/app/admin/revenue/page.tsx
-// Revenue analytics — platform fees, GMV, breakdowns by tenant and plan tier
+// Revenue analytics — subscription MRR, sales volume, breakdowns by tenant and plan tier
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -8,14 +8,15 @@ import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 
 interface DailyTierData {
-  gmv: number; fees: number; count: number;
+  sales_volume: number; count: number;
 }
 
 interface RevenueData {
-  totals: { gmv: number; platform_fees: number; sales_count: number };
-  by_tier: Record<string, { gmv: number; fees: number; count: number }>;
-  by_tenant: Array<{ tenant_id: string; name: string; tier: string; gmv: number; fees: number; count: number }>;
-  daily: Array<{ date: string; gmv: number; fees: number; count: number; byTier?: Record<string, DailyTierData> }>;
+  totals: { sales_volume: number; sales_count: number; mrr: number; revenue_per_tenant: number };
+  subscribers: Record<string, number>;
+  by_tier: Record<string, { sales_volume: number; count: number; subscribers: number }>;
+  by_tenant: Array<{ tenant_id: string; name: string; tier: string; sales_volume: number; count: number }>;
+  daily: Array<{ date: string; sales_volume: number; count: number; byTier?: Record<string, DailyTierData> }>;
 }
 
 type TimeRange = '7d' | '30d' | '90d' | 'all';
@@ -84,8 +85,8 @@ export default function AdminRevenuePage() {
         <h1 className="text-2xl font-bold text-[var(--text-primary)]" style={{ fontFamily: 'var(--font-display, Georgia)' }}>
           Revenue
         </h1>
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(3)].map((_, i) => (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
             <div key={i} className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] p-6 animate-pulse">
               <div className="h-4 w-20 bg-[var(--surface-subtle)] rounded mb-3" />
               <div className="h-8 w-24 bg-[var(--surface-subtle)] rounded" />
@@ -99,16 +100,15 @@ export default function AdminRevenuePage() {
   if (!data) return null;
 
   const filteredDaily = getFilteredDaily();
-  const maxDailyFee = Math.max(...filteredDaily.map(d => d.fees), 1);
+  const maxDailyVolume = Math.max(...filteredDaily.map(d => d.sales_volume), 1);
 
   // Calculate filtered totals
   const filteredTotals = filteredDaily.reduce(
     (acc, d) => ({
-      gmv: acc.gmv + d.gmv,
-      fees: acc.fees + d.fees,
+      sales_volume: acc.sales_volume + d.sales_volume,
       count: acc.count + d.count,
     }),
-    { gmv: 0, fees: 0, count: 0 }
+    { sales_volume: 0, count: 0 }
   );
 
   return (
@@ -137,56 +137,56 @@ export default function AdminRevenuePage() {
       </div>
 
       {/* ── Top-line Stats ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] p-6">
-          <div className="text-xs font-medium text-[var(--text-secondary)] mb-1">Platform Fees</div>
+          <div className="text-xs font-medium text-[var(--text-secondary)] mb-1">MRR</div>
           <div className="text-2xl font-bold text-accent-600 ">
-            {formatCurrency(timeRange === 'all' ? data.totals.platform_fees : filteredTotals.fees)}
+            {formatCurrency(data.totals.mrr)}
+          </div>
+          <div className="text-xs text-[var(--text-tertiary)] mt-1">Monthly Recurring Revenue</div>
+        </div>
+        <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] p-6">
+          <div className="text-xs font-medium text-[var(--text-secondary)] mb-1">Revenue per Tenant</div>
+          <div className="text-2xl font-bold text-[var(--text-primary)] ">
+            {formatCurrency(data.totals.revenue_per_tenant)}
+          </div>
+          <div className="text-xs text-[var(--text-tertiary)] mt-1">MRR / active subscribers</div>
+        </div>
+        <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] p-6">
+          <div className="text-xs font-medium text-[var(--text-secondary)] mb-1">Platform Sales Volume</div>
+          <div className="text-2xl font-bold text-[var(--text-primary)] ">
+            {formatCurrency(timeRange === 'all' ? data.totals.sales_volume : filteredTotals.sales_volume)}
           </div>
           <div className="text-xs text-[var(--text-tertiary)] mt-1">
             {timeRange === 'all' ? data.totals.sales_count : filteredTotals.count} sales
           </div>
         </div>
         <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] p-6">
-          <div className="text-xs font-medium text-[var(--text-secondary)] mb-1">Gross Merchandise Value</div>
+          <div className="text-xs font-medium text-[var(--text-secondary)] mb-1">Active Subscribers</div>
           <div className="text-2xl font-bold text-[var(--text-primary)] ">
-            {formatCurrency(timeRange === 'all' ? data.totals.gmv : filteredTotals.gmv)}
+            {Object.values(data.subscribers).reduce((a, b) => a + b, 0)}
           </div>
-          <div className="text-xs text-[var(--text-tertiary)] mt-1">Total sales value</div>
-        </div>
-        <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] p-6">
-          <div className="text-xs font-medium text-[var(--text-secondary)] mb-1">Take Rate</div>
-          <div className="text-2xl font-bold text-[var(--text-primary)] ">
-            {((timeRange === 'all' ? data.totals.gmv : filteredTotals.gmv) > 0
-              ? (
-                  ((timeRange === 'all' ? data.totals.platform_fees : filteredTotals.fees) /
-                    (timeRange === 'all' ? data.totals.gmv : filteredTotals.gmv)) *
-                  100
-                ).toFixed(2)
-              : '0.00'
-            )}%
-          </div>
-          <div className="text-xs text-[var(--text-tertiary)] mt-1">Fee ÷ GMV</div>
+          <div className="text-xs text-[var(--text-tertiary)] mt-1">Across all tiers</div>
         </div>
       </div>
 
-      {/* ── Daily Revenue Chart (simple bar chart) ── */}
+      {/* ── Daily Sales Volume Chart (simple bar chart) ── */}
       {filteredDaily.length > 0 && (
         <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] p-6">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Daily Platform Fees</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Daily Sales Volume</h2>
           <div className="flex items-end gap-[2px] h-40 overflow-x-auto pb-2">
             {filteredDaily.map((d, i) => {
-              const height = maxDailyFee > 0 ? (d.fees / maxDailyFee) * 100 : 0;
+              const height = maxDailyVolume > 0 ? (d.sales_volume / maxDailyVolume) * 100 : 0;
               return (
                 <div key={d.date} className="flex flex-col items-center group relative" style={{ minWidth: filteredDaily.length > 60 ? 4 : 12 }}>
                   <div
                     className="w-full bg-accent-400 rounded-t-sm hover:bg-accent-500 transition-colors cursor-default"
                     style={{ height: `${Math.max(height, 2)}%` }}
-                    title={`${d.date}: ${formatCurrency(d.fees)}`}
+                    title={`${d.date}: ${formatCurrency(d.sales_volume)}`}
                   />
                   {/* Tooltip on hover */}
                   <div className="hidden group-hover:block absolute bottom-full mb-2 bg-[var(--surface-overlay)] text-[var(--text-primary)] text-[10px] rounded-md px-2 py-1 whitespace-nowrap z-10 pointer-events-none border border-[var(--border-default)] shadow-md">
-                    {d.date}: {formatCurrency(d.fees)}
+                    {d.date}: {formatCurrency(d.sales_volume)}
                   </div>
                 </div>
               );
@@ -201,20 +201,23 @@ export default function AdminRevenuePage() {
 
       {/* ── By Plan Tier ── */}
       <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] p-6">
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Revenue by Plan Tier</h2>
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Activity by Plan Tier</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {(['starter', 'pro', 'business'] as const).map(tier => {
             // Compute filtered tier totals from daily data when a time range is active
             const tierData = timeRange === 'all'
-              ? (data.by_tier[tier] || { gmv: 0, fees: 0, count: 0 })
-              : filteredDaily.reduce(
-                  (acc, d) => {
-                    const t = d.byTier?.[tier];
-                    if (!t) return acc;
-                    return { gmv: acc.gmv + t.gmv, fees: acc.fees + t.fees, count: acc.count + t.count };
-                  },
-                  { gmv: 0, fees: 0, count: 0 }
-                );
+              ? (data.by_tier[tier] || { sales_volume: 0, count: 0, subscribers: 0 })
+              : {
+                  ...filteredDaily.reduce(
+                    (acc, d) => {
+                      const t = d.byTier?.[tier];
+                      if (!t) return acc;
+                      return { sales_volume: acc.sales_volume + t.sales_volume, count: acc.count + t.count };
+                    },
+                    { sales_volume: 0, count: 0 }
+                  ),
+                  subscribers: data.by_tier[tier]?.subscribers || 0,
+                };
             const tierColors: Record<string, string> = {
               starter: 'border-l-[var(--text-tertiary)]',
               pro: 'border-l-info-500',
@@ -228,12 +231,12 @@ export default function AdminRevenuePage() {
                 <div className="text-sm font-medium text-[var(--text-secondary)] capitalize mb-2">{tier}</div>
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-[var(--text-secondary)]">Fees</span>
-                    <span className=" font-medium text-[var(--text-primary)]">{formatCurrency(tierData.fees)}</span>
+                    <span className="text-[var(--text-secondary)]">Subscribers</span>
+                    <span className=" font-medium text-[var(--text-primary)]">{tierData.subscribers}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[var(--text-secondary)]">GMV</span>
-                    <span className=" text-[var(--text-secondary)]">{formatCurrency(tierData.gmv)}</span>
+                    <span className="text-[var(--text-secondary)]">Sales Volume</span>
+                    <span className=" text-[var(--text-secondary)]">{formatCurrency(tierData.sales_volume)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[var(--text-secondary)]">Sales</span>
@@ -246,10 +249,10 @@ export default function AdminRevenuePage() {
         </div>
       </div>
 
-      {/* ── Top Tenants by Platform Fees ── */}
+      {/* ── Top Tenants by Sales Volume ── */}
       <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)]">
         <div className="px-6 py-4 border-b border-[var(--border-subtle)]">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Top Tenants by Platform Fees</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Top Tenants by Sales Volume</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -258,16 +261,15 @@ export default function AdminRevenuePage() {
                 <th className="text-left text-xs font-medium text-[var(--text-secondary)] px-4 py-3">#</th>
                 <th className="text-left text-xs font-medium text-[var(--text-secondary)] px-4 py-3">Tenant</th>
                 <th className="text-left text-xs font-medium text-[var(--text-secondary)] px-4 py-3">Plan</th>
-                <th className="text-right text-xs font-medium text-[var(--text-secondary)] px-4 py-3">Platform Fees</th>
-                <th className="text-right text-xs font-medium text-[var(--text-secondary)] px-4 py-3">GMV</th>
+                <th className="text-right text-xs font-medium text-[var(--text-secondary)] px-4 py-3">Sales Volume</th>
                 <th className="text-right text-xs font-medium text-[var(--text-secondary)] px-4 py-3">Sales</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-subtle)]">
               {data.by_tenant.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-[var(--text-tertiary)]">
-                    No revenue data yet
+                  <td colSpan={5} className="px-4 py-12 text-center text-[var(--text-tertiary)]">
+                    No sales data yet
                   </td>
                 </tr>
               )}
@@ -279,10 +281,7 @@ export default function AdminRevenuePage() {
                     <TierBadge tier={t.tier} />
                   </td>
                   <td className="px-4 py-3 text-right  text-accent-600 font-medium">
-                    {formatCurrency(t.fees)}
-                  </td>
-                  <td className="px-4 py-3 text-right  text-[var(--text-secondary)]">
-                    {formatCurrency(t.gmv)}
+                    {formatCurrency(t.sales_volume)}
                   </td>
                   <td className="px-4 py-3 text-right  text-[var(--text-secondary)]">{t.count}</td>
                 </tr>

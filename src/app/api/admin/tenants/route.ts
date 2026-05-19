@@ -17,9 +17,10 @@ export async function GET(request: NextRequest) {
       .select(`
         id, name, slug, owner_id, subscription_tier, subscription_status, trial_ends_at,
         square_merchant_id, stripe_account_id, stripe_onboarding_complete,
+        stripe_subscription_id,
         onboarding_completed, is_suspended, suspended_at, suspended_reason,
         crm_enabled, brand_color, logo_url, created_at, updated_at,
-        last_owner_login_at, admin_tier_override
+        last_owner_login_at, admin_tier_override, ambassador_only
       `)
       .order('created_at', { ascending: false });
 

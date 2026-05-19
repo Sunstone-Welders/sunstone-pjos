@@ -84,12 +84,15 @@ export async function sendSMS(params: {
   to: string;
   body: string;
   tenantId?: string;
+  /** Direct FROM number override — bypasses tenant lookup and Messaging Service.
+   *  Use for admin/Atlas SMS where the FROM number must be predictable for reply routing. */
+  from?: string;
   /** Queue entry ID — used to check sms_consent before sending */
   queueEntryId?: string;
   /** Skip consent check (for CRM two-way messages where user initiated) */
   skipConsentCheck?: boolean;
 }): Promise<string | null> {
-  const { to, body, tenantId, queueEntryId, skipConsentCheck } = params;
+  const { to, body, tenantId, from: fromOverride, queueEntryId, skipConsentCheck } = params;
 
   if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
     console.log(`[Twilio SMS Skipped] Would send to ${to}: ${body.slice(0, 50)}`);
@@ -114,26 +117,30 @@ export async function sendSMS(params: {
     }
   }
 
-  const from = tenantId
-    ? await getFromNumber(tenantId)
-    : (process.env.TWILIO_PHONE_NUMBER || '');
+  // Determine FROM number and whether to use Messaging Service
+  const from = fromOverride
+    ? fromOverride
+    : tenantId
+      ? await getFromNumber(tenantId)
+      : (process.env.TWILIO_PHONE_NUMBER || '');
 
   const twilio = require('twilio');
   const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
-  // Build message params — prefer Messaging Service SID for A2P 10DLC compliance
+  // Build message params — prefer Messaging Service SID for A2P 10DLC compliance.
+  // When fromOverride is set, skip Messaging Service so replies route predictably.
   const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
   const messageParams: Record<string, string> = {
     body,
     to: normalizePhone(to),
   };
 
-  if (messagingServiceSid) {
+  if (!fromOverride && messagingServiceSid) {
     messageParams.messagingServiceSid = messagingServiceSid;
     // Include from number so the recipient sees the tenant's dedicated number
     if (from) messageParams.from = from;
   } else {
-    // Fallback for dev/testing without a Messaging Service
+    // Direct send: explicit FROM override or dev/testing without a Messaging Service
     messageParams.from = from;
   }
 

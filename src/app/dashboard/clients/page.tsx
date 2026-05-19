@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useTenant } from '@/hooks/use-tenant';
 import { toast } from 'sonner';
+import { trackEvent } from '@/lib/track-usage-client';
 import {
   ClientsHeader,
   ClientSearch,
@@ -166,6 +167,7 @@ export default function ClientsPage() {
     const { error } = await supabase.from('clients').insert({ ...data, tenant_id: tenant.id });
     if (error) { toast.error(error.message); return; }
     toast.success('Client added');
+    trackEvent(tenant.id, 'client_created', { source: 'manual' });
     setShowForm(false);
     fetchClients();
   };

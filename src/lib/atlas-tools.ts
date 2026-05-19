@@ -194,9 +194,9 @@ export function getAtlasToolStatusLabel(name: string): string {
 // SMS via Twilio (admin-level, uses shared utility)
 // ============================================================================
 
-// Admin-level SMS sends from platform number (no tenantId)
+// Admin-level SMS sends from Atlas number so replies route back to Atlas
 async function sendSMS(to: string, body: string) {
-  await twilioSendSMS({ to, body });
+  await twilioSendSMS({ to, body, from: process.env.ATLAS_PHONE_NUMBER || undefined });
 }
 
 // ============================================================================

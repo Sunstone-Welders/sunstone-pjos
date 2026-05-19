@@ -32,6 +32,7 @@ import {
 import { runAgenticLoop, buildAgenticSSEStream } from '@/lib/agentic-loop';
 import { logAnthropicCost } from '@/lib/cost-tracker';
 import { SUNNY_TOOL_DEFINITIONS, executeSunnyTool, getSunnyToolStatusLabel } from '@/lib/sunny-tools';
+import { trackUsage } from '@/lib/track-usage';
 
 // ============================================================================
 // Smart model routing — Sonnet default, Opus for complex reasoning
@@ -975,7 +976,11 @@ export async function POST(request: NextRequest) {
 
     // 3. Parse
     const body = await request.json();
-    const { messages, currentPage } = body as { messages: Array<{ role: 'user' | 'assistant'; content: string }>; currentPage?: string };
+    const { messages, currentPage, conversation_id: incomingConversationId } = body as {
+      messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+      currentPage?: string;
+      conversation_id?: string;
+    };
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: 'Messages required' }, { status: 400 });
     }
@@ -1291,6 +1296,11 @@ After a tool executes, summarize the result naturally. If a tool errors, explain
       }
     }
 
+    // 8b. Usage tracking (fire-and-forget)
+    trackUsage(tenantId, 'sunny_question_asked', user.id, {
+      question_preview: latestUserMsg.slice(0, 100),
+    }).catch(() => {});
+
     // 9. Post-response: gap detection
     try {
       const gapMatch = fullResponseText.match(/<!--\s*KNOWLEDGE_GAP:\s*(\{[^}]+\})\s*-->/);
@@ -1344,7 +1354,83 @@ After a tool executes, summarize the result naturally. If a tool errors, explain
       console.error('[Mentor] Text correction detection error:', correctionError);
     }
 
-    // 10. Build simulated SSE stream
+    // 10. Persist conversation to sunny_conversations / sunny_messages (fire-and-forget)
+    let conversationId = incomingConversationId || '';
+    let userMessageId = '';
+    let assistantMessageId = '';
+    try {
+      // Clean response text for storage (strip markers)
+      const storedResponse = fullResponseText
+        .replace(/<!--\s*KNOWLEDGE_GAP:[\s\S]*?-->/g, '')
+        .replace(/<!--\s*PRODUCT_SEARCH:[\s\S]*?-->/g, '')
+        .trim();
+
+      // Create conversation if this is the first message
+      if (!conversationId) {
+        const { data: conv } = await serviceClient
+          .from('sunny_conversations')
+          .insert({
+            tenant_id: tenantId,
+            user_id: user.id,
+            title: latestUserMsg.substring(0, 60),
+            message_count: 0,
+          })
+          .select('id')
+          .single();
+        conversationId = conv?.id || '';
+      }
+
+      if (conversationId) {
+        // Save user message
+        const { data: userMsgRow } = await serviceClient
+          .from('sunny_messages')
+          .insert({
+            conversation_id: conversationId,
+            tenant_id: tenantId,
+            role: 'user',
+            content: latestUserMsg,
+          })
+          .select('id')
+          .single();
+        userMessageId = userMsgRow?.id || '';
+
+        // Save assistant message
+        const toolCallsData = toolStatusEvents.length > 0 ? toolStatusEvents : null;
+        const totalTokens = usage ? (usage.input_tokens || 0) + (usage.output_tokens || 0) : null;
+        const { data: assistantMsgRow } = await serviceClient
+          .from('sunny_messages')
+          .insert({
+            conversation_id: conversationId,
+            tenant_id: tenantId,
+            role: 'assistant',
+            content: storedResponse,
+            tokens_used: totalTokens,
+            tool_calls: toolCallsData,
+          })
+          .select('id')
+          .single();
+        assistantMessageId = assistantMsgRow?.id || '';
+
+        // Update conversation metadata — count all messages in conversation
+        const { count: msgCount } = await serviceClient
+          .from('sunny_messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('conversation_id', conversationId);
+
+        await serviceClient
+          .from('sunny_conversations')
+          .update({
+            message_count: msgCount || 0,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', conversationId);
+      }
+    } catch (convError) {
+      // Non-blocking — do not fail the response if persistence fails
+      console.error('[Mentor] Conversation persistence error:', convError);
+    }
+
+    // 11. Build simulated SSE stream
     const stream = buildAgenticSSEStream(fullResponseText, toolStatusEvents);
 
     return new Response(stream, {
@@ -1352,6 +1438,8 @@ After a tool executes, summarize the result naturally. If a tool errors, explain
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
+        ...(conversationId ? { 'X-Conversation-Id': conversationId } : {}),
+        ...(assistantMessageId ? { 'X-Assistant-Message-Id': assistantMessageId } : {}),
       },
     });
   } catch (error) {

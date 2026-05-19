@@ -14,3 +14,4 @@ export { PJUniversityCard } from './PJUniversityCard';
 export { SunnyTakeCard } from './SunnyTakeCard';
 export { TodaysPrioritiesCard } from './TodaysPrioritiesCard';
 export { GrowthTipCard } from './GrowthTipCard';
+export { WhatsNewCard } from './WhatsNewCard';

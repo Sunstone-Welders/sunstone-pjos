@@ -17,9 +17,12 @@ import type { PaymentMethod } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 import { GiftCardRedeemModal } from '@/components/pos/GiftCardRedeemModal';
 import { formatGiftCardCode } from '@/lib/gift-cards';
-import { TapToPayFlow } from '@/components/pos/checkout/TapToPayFlow';
-import type { TapToPayProcessor, TapToPayResult } from '@/lib/tap-to-pay';
 import { toast } from 'sonner';
+import { isNativeApp } from '@/lib/native';
+import { useTenant } from '@/hooks/use-tenant';
+import TapToPayFlow from '@/components/pos/checkout/TapToPayFlow';
+import TapToPaySetup from '@/components/TapToPaySetup';
+import type { TapToPayResult } from '@/lib/tap-to-pay';
 
 // ── Types ──
 
@@ -56,17 +59,16 @@ interface PaymentScreenProps {
   mode?: 'event' | 'store';
   // Gift card callback — tells parent to store gift card data for post-sale redemption
   onGiftCardApplied?: (data: GiftCardData | null) => void;
-  // Tap to Pay — parent decides which processor (square_tap or stripe_tap) to use.
-  // `tapToPayAvailable` should already factor in: native shell + device support +
-  // tap_to_pay_enabled on the tenant + the relevant processor being connected.
+  // Tap to Pay (native SDK) — when the parent supplies these, the in-app
+  // Tap to Pay path uses them to record the sale with the SDK-provided
+  // transactionId on payment_provider_id. If omitted, the modal falls back
+  // to selectMethod + onCompleteSale (transactionId is lost).
   tapToPayAvailable?: boolean;
-  tapToPayProcessor?: TapToPayProcessor;
-  // Called when an in-app Tap to Pay payment succeeds. Parent records the sale
-  // and stores the SDK-provided transactionId on payment_provider_id.
+  tapToPayProcessor?: 'square' | 'stripe';
   onTapToPaySuccess?: (result: TapToPayResult) => Promise<void> | void;
 }
 
-type PaymentPath = null | 'charge' | 'venmo' | 'external' | 'tap_to_pay';
+type PaymentPath = null | 'charge' | 'venmo' | 'external';
 type ChargeMethod = null | 'qr' | 'text';
 
 // ── SVG Icons ──
@@ -134,7 +136,7 @@ export function PaymentScreen({
   tenantName,
   mode,
   onGiftCardApplied,
-  tapToPayAvailable,
+  tapToPayAvailable: _tapToPayAvailable,
   tapToPayProcessor,
   onTapToPaySuccess,
 }: PaymentScreenProps) {
@@ -158,6 +160,14 @@ export function PaymentScreen({
   const [venmoLinkSent, setVenmoLinkSent] = useState(false);
   const [venmoSending, setVenmoSending] = useState(false);
   const [venmoPhone, setVenmoPhone] = useState(initialPhone || '');
+  // Tap to Pay state
+  const [tapToPayFlowOpen, setTapToPayFlowOpen] = useState(false);
+  const [tapToPaySetupOpen, setTapToPaySetupOpen] = useState(false);
+  const { tenant: tenantCtx, isOwner: isTTPOwner, can: ttpCan, membership: ttpMembership } = useTenant();
+  const isNative = isNativeApp();
+  const tapToPayEnabled = !!(tenantCtx as any)?.tap_to_pay_enabled;
+  const canSetupTapToPay = isTTPOwner || ttpCan('settings:manage');
+
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const pollCountRef = useRef(0);
   const supabase = createClient();
@@ -432,29 +442,6 @@ export function PaymentScreen({
     setAppliedGiftCard(null);
     onGiftCardApplied?.(null);
   };
-
-  // ============================================================
-  // TAP TO PAY — full-screen native SDK flow
-  // ============================================================
-
-  if (path === 'tap_to_pay' && tapToPayAvailable) {
-    const proc: TapToPayProcessor = tapToPayProcessor ?? 'square';
-    return (
-      <TapToPayFlow
-        amountDollars={effectiveTotal}
-        processor={proc}
-        note={activeQueueEntry?.name ? `Queue: ${activeQueueEntry.name}` : undefined}
-        onComplete={async (r) => {
-          // Lock the payment method so any downstream readers (receipts, etc.)
-          // see the SDK-collected tap, then hand off to the parent which
-          // records the sale with payment_provider_id = r.transactionId.
-          onSelectMethod(proc === 'square' ? 'square_tap' : 'stripe_tap');
-          await onTapToPaySuccess?.(r);
-        }}
-        onCancel={() => setPath(null)}
-      />
-    );
-  }
 
   // ============================================================
   // QR CODE WAITING SCREEN
@@ -753,27 +740,44 @@ export function PaymentScreen({
               </div>
             )}
 
-            {/* ── PATH 0: In-app Tap to Pay ── */}
-            {tapToPayAvailable && path === null && (
+            {/* ── TAP TO PAY — First & most prominent option (native app only) ── */}
+            {isNative && path === null && (
               <button
-                onClick={() => setPath('tap_to_pay')}
-                className="w-full rounded-2xl p-5 text-left transition-all min-h-[80px] border-2"
-                style={{
-                  backgroundColor: 'var(--surface-raised)',
-                  borderColor: 'var(--accent-primary)',
-                  color: 'var(--text-primary)',
+                onClick={() => {
+                  if (tapToPayEnabled) {
+                    // Ready — start payment collection
+                    setTapToPayFlowOpen(true);
+                  } else if (canSetupTapToPay) {
+                    // Not enabled — admin/owner can set up
+                    setTapToPaySetupOpen(true);
+                  } else {
+                    // Not enabled, not admin — show message
+                    toast.info("Tap to Pay hasn't been set up yet. Ask your account owner to enable it in Settings.");
+                  }
                 }}
+                className="w-full rounded-2xl p-5 text-left transition-all min-h-[80px] border-2 border-[var(--accent-primary)] bg-[color-mix(in_srgb,var(--accent-primary)_6%,var(--surface-raised))] hover:shadow-md active:scale-[0.98]"
               >
-                <div className="flex items-center gap-3">
-                  <div className="shrink-0 text-[var(--accent-primary)]">
-                    <CardIcon />
+                <div className="flex items-center gap-4">
+                  {/* Contactless wave icon */}
+                  <div className="w-12 h-12 rounded-xl bg-[var(--accent-primary)] flex items-center justify-center shrink-0">
+                    <svg className="w-7 h-7 text-white" viewBox="0 0 28 28" fill="none">
+                      <circle cx="8" cy="14" r="2" fill="currentColor" />
+                      <path d="M12 14c0-2.2 1.8-4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      <path d="M12 14c0-4.4 3.6-8 8-8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      <path d="M12 14c0-6.6 5.4-12 12-12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
                   </div>
-                  <div>
-                    <div className="text-lg font-bold">Tap to Pay</div>
-                    <p className="text-sm text-[var(--text-tertiary)] mt-0.5">
-                      Accept the card on this device — no extra hardware
+                  <div className="min-w-0 flex-1">
+                    <div className="text-lg font-bold text-[var(--text-primary)]">Tap to Pay</div>
+                    <p className="text-sm text-[var(--text-secondary)] mt-0.5">
+                      {tapToPayEnabled
+                        ? "Hold customer's card or phone near your device"
+                        : 'Set up contactless payments on your phone'}
                     </p>
                   </div>
+                  {tapToPayEnabled && (
+                    <div className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
+                  )}
                 </div>
               </button>
             )}
@@ -1051,6 +1055,50 @@ export function PaymentScreen({
             handleGiftCardApplied(result);
           }}
         />
+
+        {/* ── Tap to Pay — Payment Collection Flow ── */}
+        {tapToPayFlowOpen && (
+          <TapToPayFlow
+            amountCents={Math.round(effectiveTotal * 100)}
+            amountDisplay={`$${effectiveTotal.toFixed(2)}`}
+            onComplete={(result: TapToPayResult) => {
+              if (result.status === 'success') {
+                setTapToPayFlowOpen(false);
+                if (onTapToPaySuccess) {
+                  // Parent records the sale itself so the SDK-provided
+                  // transactionId / paymentIntentId is preserved on
+                  // payment_provider_id.
+                  void onTapToPaySuccess(result);
+                } else {
+                  // Fallback for callers that haven't wired the tap-success
+                  // handler yet — the sale is recorded with the right method
+                  // but transactionId is lost.
+                  const proc = tapToPayProcessor ?? chargeProcessor;
+                  const tapMethod = proc === 'square' ? 'square_tap' : 'stripe_tap';
+                  onSelectMethod(tapMethod as any);
+                  setTimeout(() => onCompleteSale(), 300);
+                }
+              }
+            }}
+            onCancel={() => setTapToPayFlowOpen(false)}
+            onRetry={() => {/* Flow handles retry internally */}}
+            onUseAnotherMethod={() => setTapToPayFlowOpen(false)}
+          />
+        )}
+
+        {/* ── Tap to Pay — Setup Flow ── */}
+        {tapToPaySetupOpen && tenantCtx && (
+          <TapToPaySetup
+            tenantId={tenantCtx.id}
+            userId={ttpMembership?.user_id || tenantCtx.owner_id}
+            processor={stripeConnected && squareConnected ? 'Stripe and Square' : stripeConnected ? 'Stripe' : 'Square'}
+            onComplete={() => {
+              setTapToPaySetupOpen(false);
+              toast.success('Tap to Pay is ready! Tap the button to collect a payment.');
+            }}
+            onClose={() => setTapToPaySetupOpen(false)}
+          />
+        )}
       </div>
     </div>
   );

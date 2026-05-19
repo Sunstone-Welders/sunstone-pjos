@@ -64,7 +64,6 @@ export interface Tenant {
   stripe_account_id: string | null;
   stripe_onboarding_complete: boolean;
   default_payment_processor: string | null;
-  tap_to_pay_enabled: boolean;
   // Branding
   logo_url: string | null;
   brand_color: string;
@@ -113,6 +112,13 @@ export interface Tenant {
   // Salesforce + Supply Reorder
   sf_account_id: string | null;
   stripe_reorder_customer_id: string | null;
+  // Tap to Pay
+  tap_to_pay_enabled: boolean;
+  tap_to_pay_terms_accepted_at: string | null;
+  tap_to_pay_terms_accepted_by: string | null;
+  tap_to_pay_splash_shown: boolean;
+  // Ambassador-only mode (influencers who don't use Studio tools)
+  ambassador_only: boolean;
   // Timestamps
   created_at: string;
   updated_at: string;

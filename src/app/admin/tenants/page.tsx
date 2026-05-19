@@ -27,7 +27,60 @@ interface Tenant {
   created_at: string;
   brand_color: string;
   admin_tier_override?: boolean;
+  ambassador_only?: boolean;
   trial_ends_at?: string | null;
+  stripe_subscription_id?: string | null;
+}
+
+type StatusFilter = 'all' | 'trialing' | 'active' | 'canceled' | 'override' | 'expired' | 'past_due';
+
+function getSubscriptionDisplayStatus(t: Tenant): {
+  label: string;
+  color: 'green' | 'amber' | 'blue' | 'red' | 'gray';
+  subLabel?: string;
+} {
+  if (t.is_suspended) {
+    return { label: 'Suspended', color: 'red' };
+  }
+  if (t.subscription_status === 'active' && t.admin_tier_override) {
+    return { label: 'Override', color: 'amber' };
+  }
+  if (t.subscription_status === 'active' && t.stripe_subscription_id) {
+    return { label: 'Paying', color: 'green' };
+  }
+  if (t.subscription_status === 'active') {
+    return { label: 'Active (Free)', color: 'blue' };
+  }
+  if (t.subscription_status === 'trialing') {
+    const trialEnd = t.trial_ends_at ? new Date(t.trial_ends_at) : null;
+    const now = new Date();
+    if (trialEnd && trialEnd > now) {
+      const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return { label: 'Trial', color: 'blue', subLabel: `${daysLeft}d left` };
+    }
+    return { label: 'Trial Expired', color: 'red' };
+  }
+  if (t.subscription_status === 'canceled') {
+    return { label: 'Canceled', color: 'gray' };
+  }
+  if (t.subscription_status === 'past_due') {
+    return { label: 'Past Due', color: 'red' };
+  }
+  // Fallback
+  return { label: t.subscription_status || 'Unknown', color: 'gray' };
+}
+
+function getStatusFilterKey(t: Tenant): StatusFilter {
+  if (t.subscription_status === 'active' && t.admin_tier_override) return 'override';
+  if (t.subscription_status === 'trialing') {
+    const trialEnd = t.trial_ends_at ? new Date(t.trial_ends_at) : null;
+    if (trialEnd && trialEnd > new Date()) return 'trialing';
+    return 'expired';
+  }
+  if (t.subscription_status === 'active') return 'active';
+  if (t.subscription_status === 'canceled') return 'canceled';
+  if (t.subscription_status === 'past_due') return 'past_due';
+  return 'all';
 }
 
 interface TenantMember {
@@ -52,7 +105,7 @@ interface TenantDetail {
     salesCount: number;
   };
   members: TenantMember[];
-  recent_sales: Array<{ id: string; total: number; platform_fee_amount: number; created_at: string }>;
+  recent_sales: Array<{ id: string; total: number; created_at: string }>;
   referredBy: { ambassadorName: string; referralCode: string; referralDate: string | null } | null;
 }
 
@@ -69,15 +122,23 @@ interface AdminActivityEntry {
   };
 }
 
+type AttentionReason =
+  | 'trial_expired'
+  | 'trial_expiring'
+  | 'never_logged_in'
+  | 'no_sales'
+  | 'no_stripe';
+
 interface Suggestion {
-  type: 'past_due' | 'trial_expiring' | 'inactive' | 'new_signup';
   tenantId: string;
   tenantName: string;
-  message: string;
+  reason: AttentionReason;
+  reasonLabel: string;
+  signupDaysAgo: number;
   urgency: number;
 }
 
-type SortKey = 'name' | 'created_at' | 'sales_count' | 'subscription_tier' | 'last_owner_login_at';
+type SortKey = 'name' | 'created_at' | 'sales_count' | 'subscription_tier' | 'last_owner_login_at' | 'subscription_status';
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
@@ -87,10 +148,11 @@ export default function AdminTenantsPage() {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortKey>('created_at');
   const [sortAsc, setSortAsc] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   // Needs Attention
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [suggestionsHidden, setSuggestionsHidden] = useState(false);
+  const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(false);
 
   // Profile slide-in
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -193,6 +255,9 @@ export default function AdminTenantsPage() {
         t.slug.toLowerCase().includes(q)
       );
     }
+    if (statusFilter !== 'all') {
+      list = list.filter(t => getStatusFilterKey(t) === statusFilter);
+    }
     list.sort((a, b) => {
       let cmp = 0;
       switch (sortBy) {
@@ -201,11 +266,22 @@ export default function AdminTenantsPage() {
         case 'sales_count': cmp = a.sales_count - b.sales_count; break;
         case 'subscription_tier': cmp = a.subscription_tier.localeCompare(b.subscription_tier); break;
         case 'last_owner_login_at': cmp = (a.last_owner_login_at || '').localeCompare(b.last_owner_login_at || ''); break;
+        case 'subscription_status': cmp = getSubscriptionDisplayStatus(a).label.localeCompare(getSubscriptionDisplayStatus(b).label); break;
       }
       return sortAsc ? cmp : -cmp;
     });
     return list;
-  }, [tenants, search, sortBy, sortAsc]);
+  }, [tenants, search, sortBy, sortAsc, statusFilter]);
+
+  // Status filter counts for chips
+  const statusCounts = useMemo(() => {
+    const counts: Record<StatusFilter, number> = { all: tenants.length, trialing: 0, active: 0, canceled: 0, override: 0, expired: 0, past_due: 0 };
+    for (const t of tenants) {
+      const key = getStatusFilterKey(t);
+      if (key !== 'all') counts[key]++;
+    }
+    return counts;
+  }, [tenants]);
 
   const selectedTenant = tenants.find(t => t.id === selectedId) || null;
 
@@ -248,42 +324,55 @@ export default function AdminTenantsPage() {
       </div>
 
       {/* ── Needs Attention ── */}
-      {suggestions.length > 0 && !suggestionsHidden && (
+      {suggestions.length > 0 && (
         <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)] overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border-subtle)]">
+          <button
+            onClick={() => setSuggestionsCollapsed(!suggestionsCollapsed)}
+            className="w-full flex items-center justify-between px-5 py-3 border-b border-[var(--border-subtle)] hover:bg-[var(--surface-subtle)] transition-colors"
+          >
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#FF7A00' }} />
               <h3 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
-                Needs Attention
+                Needs Attention ({suggestions.length})
               </h3>
             </div>
-            <button onClick={() => setSuggestionsHidden(true)} className="text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors">
-              Hide
-            </button>
-          </div>
-          <div className="divide-y divide-[var(--border-subtle)]">
-            {suggestions.map((s, i) => (
-              <div key={i} className="flex items-center justify-between px-5 py-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <SuggestionTypeIcon type={s.type} />
-                  <span className="text-sm text-[var(--text-primary)] truncate">{s.message}</span>
+            <svg
+              className={cn('w-4 h-4 text-[var(--text-tertiary)] transition-transform', !suggestionsCollapsed && 'rotate-180')}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+            </svg>
+          </button>
+          {!suggestionsCollapsed && (
+            <div className="divide-y divide-[var(--border-subtle)]">
+              {suggestions.map((s, i) => (
+                <div key={i} className="flex items-center justify-between px-5 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <AttentionReasonBadge reason={s.reason} label={s.reasonLabel} />
+                    <div className="min-w-0">
+                      <span className="text-sm text-[var(--text-primary)] truncate block">{s.tenantName}</span>
+                      <span className="text-xs text-[var(--text-tertiary)]">
+                        {s.signupDaysAgo === 0 ? 'Today' : s.signupDaysAgo === 1 ? '1 day ago' : `${s.signupDaysAgo} days ago`}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => selectTenant(s.tenantId)}
+                    className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                    style={{ color: '#FF7A00', backgroundColor: 'rgba(255, 122, 0, 0.12)' }}
+                  >
+                    View
+                  </button>
                 </div>
-                <button
-                  onClick={() => selectTenant(s.tenantId)}
-                  className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-                  style={{ color: '#FF7A00', backgroundColor: 'rgba(255, 122, 0, 0.12)' }}
-                >
-                  View
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* ── Search + Table ── */}
       <div className="bg-[var(--surface-raised)] rounded-xl border border-[var(--border-default)]">
-        <div className="p-4 border-b border-[var(--border-subtle)]">
+        <div className="p-4 border-b border-[var(--border-subtle)] space-y-3">
           <div className="relative max-w-md">
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-tertiary)]" />
             <input
@@ -293,6 +382,32 @@ export default function AdminTenantsPage() {
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--surface-subtle)] focus:bg-[var(--surface-raised)] focus:outline-none focus:ring-2 focus:ring-[#FF7A00] focus:border-[#FF7A00] transition"
             />
+          </div>
+          {/* Status filter chips */}
+          <div className="flex flex-wrap gap-1.5">
+            {([
+              { key: 'all' as StatusFilter, label: 'All' },
+              { key: 'trialing' as StatusFilter, label: 'Trialing' },
+              { key: 'active' as StatusFilter, label: 'Active' },
+              { key: 'override' as StatusFilter, label: 'Override' },
+              { key: 'past_due' as StatusFilter, label: 'Past Due' },
+              { key: 'expired' as StatusFilter, label: 'Expired' },
+              { key: 'canceled' as StatusFilter, label: 'Canceled' },
+            ]).filter(f => f.key === 'all' || statusCounts[f.key] > 0).map(f => (
+              <button
+                key={f.key}
+                onClick={() => setStatusFilter(f.key)}
+                className={cn(
+                  'px-3 py-1 rounded-full text-xs font-medium transition-colors border',
+                  statusFilter === f.key
+                    ? 'border-[#FF7A00] text-[#FF7A00] bg-[rgba(255,122,0,0.08)]'
+                    : 'border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                )}
+              >
+                {f.label}
+                <span className="ml-1 opacity-60">{statusCounts[f.key]}</span>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -306,7 +421,7 @@ export default function AdminTenantsPage() {
                 <SortHeader label="Last Active" sortKey="last_owner_login_at" current={sortBy} asc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
                 <SortHeader label="Sales" sortKey="sales_count" current={sortBy} asc={sortAsc} onSort={handleSort} className="hidden md:table-cell" />
                 <SortHeader label="Created" sortKey="created_at" current={sortBy} asc={sortAsc} onSort={handleSort} className="hidden md:table-cell" />
-                <th className="hidden md:table-cell text-left text-xs font-medium text-[var(--text-secondary)] px-4 py-3">Status</th>
+                <SortHeader label="Status" sortKey="subscription_status" current={sortBy} asc={sortAsc} onSort={handleSort} className="hidden md:table-cell" />
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-subtle)]">
@@ -345,15 +460,7 @@ export default function AdminTenantsPage() {
                   <td className="hidden md:table-cell px-4 py-3 text-[var(--text-secondary)]">{t.sales_count}</td>
                   <td className="hidden md:table-cell px-4 py-3 text-[var(--text-secondary)]">{new Date(t.created_at).toLocaleDateString()}</td>
                   <td className="hidden md:table-cell px-4 py-3">
-                    {t.is_suspended ? (
-                      <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-500/10 text-red-400">
-                        Suspended
-                      </span>
-                    ) : (
-                      <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-500/10 text-green-400">
-                        Active
-                      </span>
-                    )}
+                    <SubscriptionStatusBadge tenant={t} />
                   </td>
                 </tr>
               ))}
@@ -509,8 +616,9 @@ function TenantProfilePanel({
                 {tenant.name.substring(0, 2).toUpperCase()}
               </div>
               <h2 className="text-lg font-bold text-[var(--text-primary)]">{tenant.name}</h2>
-              <div className="mt-1.5">
+              <div className="mt-1.5 flex items-center justify-center gap-2">
                 <TierBadge tier={tenant.subscription_tier} />
+                <SubscriptionStatusBadge tenant={tenant} />
               </div>
               {detail?.owner && (
                 <div className="mt-2 space-y-0.5">
@@ -624,6 +732,43 @@ function TenantProfilePanel({
             <div ref={accountRef} className="px-6 pb-6">
               <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-3">Subscription Management</h3>
               <div className="bg-[var(--surface-subtle)] rounded-lg border border-[var(--border-default)] divide-y divide-[var(--border-subtle)]">
+                {/* Subscription status */}
+                <div className="px-4 py-3 flex items-center justify-between">
+                  <span className="text-sm text-[var(--text-secondary)]">Status</span>
+                  <SubscriptionStatusBadge tenant={tenant} />
+                </div>
+
+                {/* Trial info */}
+                {(tenant.subscription_status === 'trialing' || tenant.trial_ends_at) && (() => {
+                  const trialEnd = tenant.trial_ends_at ? new Date(tenant.trial_ends_at) : null;
+                  const now = new Date();
+                  const isExpired = trialEnd ? trialEnd <= now : true;
+                  const daysDiff = trialEnd ? Math.ceil(Math.abs(trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                  return (
+                    <div className="px-4 py-3 flex items-center justify-between">
+                      <span className="text-sm text-[var(--text-secondary)]">Trial End</span>
+                      <div className="text-right">
+                        <span className="text-sm text-[var(--text-primary)] font-medium">
+                          {trialEnd ? format(trialEnd, 'MMM d, yyyy') : 'Not set'}
+                        </span>
+                        {trialEnd && (
+                          <p className={cn('text-[11px]', isExpired ? 'text-red-400' : 'text-blue-400')}>
+                            {isExpired ? `expired ${daysDiff}d ago` : `${daysDiff}d remaining`}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Stripe subscription */}
+                <div className="px-4 py-3 flex items-center justify-between">
+                  <span className="text-sm text-[var(--text-secondary)]">Stripe Subscription</span>
+                  <span className={cn('text-sm font-medium', detail?.tenant?.stripe_subscription_id ? 'text-green-400' : 'text-[var(--text-tertiary)]')}>
+                    {detail?.tenant?.stripe_subscription_id ? 'Active' : 'None'}
+                  </span>
+                </div>
+
                 {/* Plan selector */}
                 <div className="px-4 py-3 flex items-center justify-between">
                   <span className="text-sm text-[var(--text-secondary)]">Plan</span>
@@ -658,14 +803,15 @@ function TenantProfilePanel({
                   </button>
                 </div>
 
-                {/* Trial Extension */}
-                {detail?.tenant && (
-                  <TrialExtensionRow
-                    trialEndsAt={detail.tenant.trial_ends_at}
-                    onExtend={(newDate) => onUpdateTenant({ trial_ends_at: newDate })}
-                    disabled={actionLoading}
-                  />
-                )}
+                {/* Trial Extension — always render using list data as fallback */}
+                <TrialExtensionRow
+                  trialEndsAt={detail?.tenant?.trial_ends_at ?? tenant.trial_ends_at ?? null}
+                  subscriptionStatus={tenant.subscription_status}
+                  adminTierOverride={detail?.tenant?.admin_tier_override ?? tenant.admin_tier_override ?? false}
+                  stripeSubscriptionId={detail?.tenant?.stripe_subscription_id ?? tenant.stripe_subscription_id ?? null}
+                  onExtend={(newDate) => onUpdateTenant({ trial_ends_at: newDate })}
+                  disabled={actionLoading}
+                />
 
                 {/* CRM toggle */}
                 <div className="px-4 py-3 flex items-center justify-between">
@@ -694,7 +840,7 @@ function TenantProfilePanel({
 
                 {/* Suspend toggle */}
                 <div className="px-4 py-3 flex items-center justify-between">
-                  <span className="text-sm text-[var(--text-secondary)]">Status</span>
+                  <span className="text-sm text-[var(--text-secondary)]">Account</span>
                   <button
                     onClick={onToggleSuspend}
                     disabled={actionLoading}
@@ -706,6 +852,25 @@ function TenantProfilePanel({
                     )}
                   >
                     {tenant.is_suspended ? 'Unsuspend' : 'Suspend'}
+                  </button>
+                </div>
+
+                {/* Ambassador-only mode */}
+                <div className="px-4 py-3 flex items-center justify-between">
+                  <div>
+                    <span className="text-sm text-[var(--text-secondary)]">Ambassador Only</span>
+                    <p className="text-[11px] text-[var(--text-tertiary)]">Influencer — no Studio tools</p>
+                  </div>
+                  <button
+                    onClick={() => onUpdateTenant({ ambassador_only: !(detail?.tenant?.ambassador_only ?? tenant.ambassador_only) })}
+                    disabled={actionLoading}
+                    className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
+                      (detail?.tenant?.ambassador_only ?? tenant.ambassador_only) ? 'bg-purple-500' : 'bg-[var(--surface-raised)] border border-[var(--border-default)]'
+                    }`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                      (detail?.tenant?.ambassador_only ?? tenant.ambassador_only) ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
                   </button>
                 </div>
               </div>
@@ -734,12 +899,7 @@ function TenantProfilePanel({
                   {detail.recent_sales.slice(0, 5).map(s => (
                     <div key={s.id} className="px-4 py-2.5 flex items-center justify-between text-sm">
                       <span className="text-[var(--text-tertiary)]">{new Date(s.created_at).toLocaleDateString()}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[var(--text-primary)] font-medium">{formatCurrency(Number(s.total))}</span>
-                        <span className="text-xs" style={{ color: '#FF7A00' }}>
-                          +{formatCurrency(Number(s.platform_fee_amount))}
-                        </span>
-                      </div>
+                      <span className="text-[var(--text-primary)] font-medium">{formatCurrency(Number(s.total))}</span>
                     </div>
                   ))}
                 </div>
@@ -1192,31 +1352,56 @@ function OnboardingJourney({ tenant }: { tenant: any }) {
 
 function TrialExtensionRow({
   trialEndsAt,
+  subscriptionStatus,
+  adminTierOverride,
+  stripeSubscriptionId,
   onExtend,
   disabled,
 }: {
   trialEndsAt: string | null;
+  subscriptionStatus: string;
+  adminTierOverride: boolean;
+  stripeSubscriptionId: string | null;
   onExtend: (newDate: string) => void;
   disabled: boolean;
 }) {
-  const [showPicker, setShowPicker] = useState(false);
   const [customDate, setCustomDate] = useState('');
 
+  // Paying subscriber with active Stripe subscription — no trial editor needed
+  if (subscriptionStatus === 'active' && stripeSubscriptionId && !adminTierOverride) {
+    return (
+      <div className="px-4 py-3 flex items-center justify-between">
+        <span className="text-sm text-[var(--text-secondary)]">Trial</span>
+        <span className="text-xs text-green-500 font-medium">Paying subscriber — no trial</span>
+      </div>
+    );
+  }
+
+  // Admin override active — no trial needed
+  if (adminTierOverride) {
+    return (
+      <div className="px-4 py-3 flex items-center justify-between">
+        <span className="text-sm text-[var(--text-secondary)]">Trial</span>
+        <span className="text-xs text-blue-400 font-medium">Admin override — no trial needed</span>
+      </div>
+    );
+  }
+
   const currentEnd = trialEndsAt ? new Date(trialEndsAt) : null;
-  const isExpired = currentEnd ? currentEnd <= new Date() : true;
+  const now = new Date();
+  const isExpired = currentEnd ? currentEnd <= now : true;
+  const daysDiff = currentEnd ? Math.ceil(Math.abs(currentEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
 
   function handleQuickExtend(days: number) {
-    const base = currentEnd && currentEnd > new Date() ? currentEnd : new Date();
+    const base = currentEnd && currentEnd > now ? currentEnd : new Date();
     const newEnd = new Date(base);
     newEnd.setDate(newEnd.getDate() + days);
     onExtend(newEnd.toISOString());
-    setShowPicker(false);
   }
 
   function handleCustomDate() {
     if (customDate) {
       onExtend(new Date(customDate + 'T23:59:59').toISOString());
-      setShowPicker(false);
       setCustomDate('');
     }
   }
@@ -1225,56 +1410,49 @@ function TrialExtensionRow({
     <div className="px-4 py-3">
       <div className="flex items-center justify-between mb-2">
         <div>
-          <span className="text-sm text-[var(--text-secondary)]">Trial Ends</span>
+          <span className="text-sm text-[var(--text-secondary)]">Trial Extension</span>
           <p className="text-xs text-[var(--text-tertiary)]">
             {currentEnd
-              ? isExpired
-                ? `Expired ${format(currentEnd, 'MMM d, yyyy')}`
-                : format(currentEnd, 'MMM d, yyyy')
+              ? format(currentEnd, 'MMM d, yyyy')
               : 'No trial set'}
           </p>
+          {currentEnd && (
+            <p className={cn('text-[11px] font-medium', isExpired ? 'text-red-400' : 'text-green-500')}>
+              {isExpired ? `Expired ${daysDiff} day${daysDiff !== 1 ? 's' : ''} ago` : `${daysDiff} day${daysDiff !== 1 ? 's' : ''} left`}
+            </p>
+          )}
         </div>
-        <button
-          onClick={() => setShowPicker(!showPicker)}
-          disabled={disabled}
-          className="px-3 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-          style={{ color: '#FF7A00', backgroundColor: 'rgba(255, 122, 0, 0.12)' }}
-        >
-          Extend
-        </button>
       </div>
-      {showPicker && (
-        <div className="space-y-2 mt-2">
-          <div className="flex flex-wrap gap-2">
-            {[7, 14, 30].map(days => (
-              <button
-                key={days}
-                onClick={() => handleQuickExtend(days)}
-                disabled={disabled}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--border-default)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[#FF7A00] transition-colors disabled:opacity-50"
-              >
-                +{days} days
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="date"
-              value={customDate}
-              onChange={e => setCustomDate(e.target.value)}
-              className="flex-1 px-2 py-1.5 text-xs border border-[var(--border-default)] rounded-lg bg-[var(--surface-raised)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#FF7A00]"
-            />
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-2">
+          {[7, 14, 30, 60].map(days => (
             <button
-              onClick={handleCustomDate}
-              disabled={disabled || !customDate}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg text-white disabled:opacity-50"
-              style={{ backgroundColor: '#FF7A00' }}
+              key={days}
+              onClick={() => handleQuickExtend(days)}
+              disabled={disabled}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--border-default)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[#FF7A00] transition-colors disabled:opacity-50"
             >
-              Set
+              +{days}d
             </button>
-          </div>
+          ))}
         </div>
-      )}
+        <div className="flex gap-2">
+          <input
+            type="date"
+            value={customDate}
+            onChange={e => setCustomDate(e.target.value)}
+            className="flex-1 px-2 py-1.5 text-xs border border-[var(--border-default)] rounded-lg bg-[var(--surface-raised)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#FF7A00]"
+          />
+          <button
+            onClick={handleCustomDate}
+            disabled={disabled || !customDate}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg text-white disabled:opacity-50"
+            style={{ backgroundColor: '#FF7A00' }}
+          >
+            Set
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1330,6 +1508,37 @@ function TierBadge({ tier }: { tier: string }) {
     <span className={cn('inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium', styles[tier] || styles.starter)}>
       {label}
     </span>
+  );
+}
+
+function SubscriptionStatusBadge({ tenant, showTier }: { tenant: Tenant; showTier?: boolean }) {
+  const status = getSubscriptionDisplayStatus(tenant);
+  const colorMap: Record<string, string> = {
+    green: 'bg-green-500/10 text-green-400',
+    amber: 'bg-amber-500/10 text-amber-400',
+    blue: 'bg-blue-500/10 text-blue-400',
+    red: 'bg-red-500/10 text-red-400',
+    gray: 'bg-[var(--surface-subtle)] text-[var(--text-tertiary)]',
+  };
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center gap-1.5">
+        <span className={cn('inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium', colorMap[status.color])}>
+          {status.label}
+        </span>
+        {status.subLabel && (
+          <span className="text-[10px] text-[var(--text-tertiary)]">{status.subLabel}</span>
+        )}
+        {tenant.ambassador_only && (
+          <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium bg-purple-500/10 text-purple-400">
+            Amb. Only
+          </span>
+        )}
+      </div>
+      {showTier && (
+        <span className="text-[10px] text-[var(--text-tertiary)] capitalize">{tenant.subscription_tier}</span>
+      )}
+    </div>
   );
 }
 
@@ -1448,36 +1657,21 @@ function GearIcon({ className }: { className?: string }) {
   );
 }
 
-function SuggestionTypeIcon({ type }: { type: string }) {
-  const colors: Record<string, string> = {
-    past_due: '#D06050',
-    trial_expiring: '#E8B84C',
-    inactive: '#9B9590',
-    new_signup: '#6B8E6B',
+function AttentionReasonBadge({ reason, label }: { reason: AttentionReason; label: string }) {
+  const styles: Record<AttentionReason, { bg: string; text: string }> = {
+    trial_expired:    { bg: 'rgba(153, 27, 27, 0.15)', text: '#991B1B' },
+    trial_expiring:   { bg: 'rgba(220, 38, 38, 0.12)', text: '#DC2626' },
+    never_logged_in:  { bg: 'rgba(234, 138, 46, 0.12)', text: '#C2762D' },
+    no_sales:         { bg: 'rgba(202, 138, 4, 0.12)', text: '#A16207' },
+    no_stripe:        { bg: 'rgba(202, 138, 4, 0.12)', text: '#A16207' },
   };
-  const color = colors[type] || '#9B9590';
+  const s = styles[reason] || styles.no_sales;
   return (
-    <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}20` }}>
-      {type === 'past_due' && (
-        <svg className="w-3.5 h-3.5" style={{ color }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-        </svg>
-      )}
-      {type === 'trial_expiring' && (
-        <svg className="w-3.5 h-3.5" style={{ color }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      )}
-      {type === 'inactive' && (
-        <svg className="w-3.5 h-3.5" style={{ color }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
-        </svg>
-      )}
-      {type === 'new_signup' && (
-        <svg className="w-3.5 h-3.5" style={{ color }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      )}
-    </div>
+    <span
+      className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap shrink-0"
+      style={{ backgroundColor: s.bg, color: s.text }}
+    >
+      {label}
+    </span>
   );
 }

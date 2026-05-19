@@ -3,8 +3,13 @@
 // PATCH: Update tenant (plan tier, suspension)
 
 import { NextRequest, NextResponse } from 'next/server';
+import Stripe from 'stripe';
 import { verifyPlatformAdmin, AdminAuthError } from '@/lib/admin/verify-platform-admin';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2025-02-24.acacia' as any,
+});
 
 export async function GET(
   request: NextRequest,
@@ -20,10 +25,11 @@ export async function GET(
       .from('tenants')
       .select(`
         id, name, slug, owner_id, subscription_tier, subscription_status, trial_ends_at,
-        stripe_account_id, stripe_customer_id, is_suspended, suspended_at, suspended_reason,
+        stripe_account_id, stripe_customer_id, stripe_subscription_id,
+        is_suspended, suspended_at, suspended_reason,
         crm_enabled, created_at, updated_at, phone, email, website,
         dedicated_phone_number, dedicated_phone_sid, platform_fee_percent,
-        admin_tier_override, last_owner_login_at,
+        admin_tier_override, ambassador_only, last_owner_login_at,
         referred_by_ambassador_id, referral_code_used,
         onboarding_welcome_sent_at, onboarding_inventory_nudge_sent_at,
         onboarding_first_sale_nudge_sent_at, onboarding_week1_active_sent_at,
@@ -47,7 +53,7 @@ export async function GET(
       serviceClient.from('events').select('id', { count: 'exact', head: true }).eq('tenant_id', id),
       serviceClient.from('inventory_items').select('id', { count: 'exact', head: true }).eq('tenant_id', id),
       serviceClient.from('clients').select('id', { count: 'exact', head: true }).eq('tenant_id', id),
-      serviceClient.from('sales').select('id, total, platform_fee_amount, created_at').eq('tenant_id', id).eq('status', 'completed').order('created_at', { ascending: false }).limit(10),
+      serviceClient.from('sales').select('id, total, created_at').eq('tenant_id', id).eq('status', 'completed').order('created_at', { ascending: false }).limit(10),
       serviceClient.from('tenant_members').select('user_id, role, display_name, invited_email, accepted_at').eq('tenant_id', id),
     ]);
 
@@ -146,6 +152,12 @@ export async function PATCH(
       update.crm_enabled = Boolean(body.crm_enabled);
     }
 
+    if (body.ambassador_only !== undefined) {
+      update.ambassador_only = Boolean(body.ambassador_only);
+      // When disabling ambassador_only, ensure onboarding flag is correct
+      // (they may need to go through onboarding if they haven't already set up Studio)
+    }
+
     if (body.trial_ends_at !== undefined) {
       // Allow setting to a valid ISO date string or null
       if (body.trial_ends_at !== null) {
@@ -154,6 +166,21 @@ export async function PATCH(
           return NextResponse.json({ error: 'Invalid trial_ends_at date' }, { status: 400 });
         }
         update.trial_ends_at = parsed.toISOString();
+
+        // Reactivation: if setting a future trial date on a canceled/expired tenant,
+        // also set subscription_status to 'trialing' (unless admin_tier_override is active)
+        if (parsed > new Date() && !body.admin_tier_override) {
+          const { data: current } = await serviceClient
+            .from('tenants')
+            .select('subscription_status, admin_tier_override')
+            .eq('id', id)
+            .single();
+
+          if (current && !current.admin_tier_override &&
+              (current.subscription_status === 'canceled' || current.subscription_status === 'expired')) {
+            update.subscription_status = 'trialing';
+          }
+        }
       } else {
         update.trial_ends_at = null;
       }
@@ -161,10 +188,56 @@ export async function PATCH(
 
     if (body.admin_tier_override !== undefined) {
       update.admin_tier_override = Boolean(body.admin_tier_override);
-      // When enabling override, ensure tenant is active with no trial expiry
+      // When enabling override, ensure tenant is active — preserve trial_ends_at
+      // so toggling override OFF can restore the original trial state
       if (update.admin_tier_override) {
         update.subscription_status = 'active';
-        update.trial_ends_at = null;
+
+        // Cancel active Stripe subscriptions so the tenant stops being billed
+        const { data: existing } = await serviceClient
+          .from('tenants')
+          .select('stripe_subscription_id, crm_subscription_id')
+          .eq('id', id)
+          .single();
+
+        if (existing?.stripe_subscription_id) {
+          try {
+            await stripe.subscriptions.cancel(existing.stripe_subscription_id);
+            console.log(`Admin override: cancelled Stripe subscription ${existing.stripe_subscription_id} for tenant ${id}`);
+          } catch (stripeErr: any) {
+            console.error(`Admin override: failed to cancel Stripe subscription ${existing.stripe_subscription_id} for tenant ${id}:`, stripeErr.message);
+          }
+          update.stripe_subscription_id = null;
+        }
+
+        if (existing?.crm_subscription_id) {
+          try {
+            await stripe.subscriptions.cancel(existing.crm_subscription_id);
+            console.log(`Admin override: cancelled CRM subscription ${existing.crm_subscription_id} for tenant ${id}`);
+          } catch (stripeErr: any) {
+            console.error(`Admin override: failed to cancel CRM subscription ${existing.crm_subscription_id} for tenant ${id}:`, stripeErr.message);
+          }
+          update.crm_subscription_id = null;
+        }
+      } else {
+        // Toggling override OFF — revert to real subscription state
+        const { data: current } = await serviceClient
+          .from('tenants')
+          .select('stripe_subscription_id, trial_ends_at')
+          .eq('id', id)
+          .single();
+
+        if (current?.stripe_subscription_id) {
+          // Has active Stripe billing — they're a paying customer
+          update.subscription_status = 'active';
+        } else if (current?.trial_ends_at && new Date(current.trial_ends_at) > new Date()) {
+          // Trial hasn't expired yet
+          update.subscription_status = 'trialing';
+        } else {
+          // No Stripe sub, no valid trial → canceled
+          update.subscription_status = 'canceled';
+        }
+        console.log(`Admin override removed for tenant ${id}: reverted to ${update.subscription_status}`);
       }
     }
 

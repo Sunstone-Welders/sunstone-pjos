@@ -9,6 +9,7 @@
 'use client';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
+import { trackEvent } from '@/lib/track-usage-client';
 import { createClient } from '@/lib/supabase/client';
 import { useSearchParams } from 'next/navigation';
 import { Button, Input, Select, Card, CardContent } from '@/components/ui';
@@ -231,6 +232,7 @@ function WaiverPageInner() {
         .single();
 
       if (waiverErr) throw waiverErr;
+      trackEvent(tenant!.id, 'waiver_signed', { has_event: !!resolvedEventId });
 
       // 3. Conditionally create queue entry — only for active, current events
       let didCreateQueue = false;

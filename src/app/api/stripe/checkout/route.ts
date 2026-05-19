@@ -20,9 +20,9 @@ export async function POST(request: NextRequest) {
   }
 
   const PRICE_IDS: Record<string, string | undefined> = {
-    starter: process.env.STRIPE_PRICE_STARTER,
-    pro: process.env.STRIPE_PRICE_PRO,
-    business: process.env.STRIPE_PRICE_BUSINESS,
+    starter: process.env.STRIPE_STARTER_PRICE_ID,
+    pro: process.env.STRIPE_PRO_PRICE_ID,
+    business: process.env.STRIPE_BUSINESS_PRICE_ID,
   };
 
   const stripe = new Stripe(stripeKey, {
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
     const priceId = PRICE_IDS[tier];
     if (!priceId) {
-      console.error(`[Checkout] STRIPE_PRICE_${tier.toUpperCase()} is not set`);
+      console.error(`[Checkout] STRIPE_${tier.toUpperCase()}_PRICE_ID is not set`);
       return NextResponse.json({ error: 'Plan pricing not configured. Please contact support.' }, { status: 500 });
     }
 

@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useTenant } from '@/hooks/use-tenant';
 import { useRouter } from 'next/navigation';
 import { DashboardCardGrid } from '@/components/dashboard';
+import { WhatsNewCard } from '@/components/dashboard/WhatsNewCard';
 import { Skeleton } from '@/components/ui';
 import type { DashboardCard } from '@/types';
 import { format } from 'date-fns';
@@ -253,6 +254,11 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {/* ================================================================ */}
+      {/* What's New — latest unread platform notification                  */}
+      {/* ================================================================ */}
+      <WhatsNewCard />
 
       {/* ================================================================ */}
       {/* Card Grid                                                        */}

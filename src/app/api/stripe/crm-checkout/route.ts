@@ -12,14 +12,14 @@ import { createServerSupabase } from '@/lib/supabase/server';
 export async function POST(request: NextRequest) {
   // ── Pre-flight: check env vars before doing anything ──
   const stripeKey = process.env.STRIPE_SECRET_KEY;
-  const crmPriceId = process.env.STRIPE_PRICE_CRM;
+  const crmPriceId = process.env.STRIPE_CRM_PRICE_ID;
 
   if (!stripeKey) {
     console.error('[CRM Checkout] STRIPE_SECRET_KEY is not set');
     return NextResponse.json({ error: 'Payment system not configured. Please contact support.' }, { status: 500 });
   }
   if (!crmPriceId) {
-    console.error('[CRM Checkout] STRIPE_PRICE_CRM is not set');
+    console.error('[CRM Checkout] STRIPE_CRM_PRICE_ID is not set');
     return NextResponse.json({ error: 'CRM pricing not configured. Please contact support.' }, { status: 500 });
   }
 

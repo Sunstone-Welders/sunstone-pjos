@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { Analytics } from '@vercel/analytics/next';
 import { Toaster } from 'sonner';
 import NativeBoot from '@/components/NativeBoot';
 import './globals.css';
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <NativeBoot />
         {children}
+        <Analytics />
         <Toaster
           position="top-right"
           theme="light"

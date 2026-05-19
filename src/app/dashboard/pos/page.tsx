@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { PLATFORM_FEE_RATES } from '@/types';
 import { generateQRData } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { trackEvent } from '@/lib/track-usage-client';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
 import { QRCode, FullScreenQR } from '@/components/QRCode';
 import CartPanel from '@/components/CartPanel';
@@ -26,6 +27,7 @@ import type { CompletedSaleData, CheckoutStep, GiftCardData } from '@/components
 import { calculateJumpRingNeeds, getLowStockWarnings } from '@/lib/jump-rings';
 import SunnyTutorial from '@/components/SunnyTutorial';
 import CashDrawerPanel from '@/components/CashDrawerPanel';
+import MiniQueueStrip from '@/components/MiniQueueStrip';
 import { createWarrantyRecords } from '@/lib/warranty';
 import { checkTapToPayAvailability, type TapToPayResult } from '@/lib/tap-to-pay';
 import type {
@@ -615,6 +617,9 @@ export default function StoreModePage() {
       setEmailSent(false); setSmsSent(false); setEmailError(''); setSmsError('');
       setQueueRefresh((n) => n + 1);
       toast.success('Sale completed');
+      if (['cash', 'venmo', 'card_external'].includes(effectivePaymentMethod)) {
+        trackEvent(tenant.id, 'sale_completed', { payment_method: effectivePaymentMethod, amount: cart.total, source: 'store' });
+      }
 
       // Fire-and-forget auto-send receipts
       if (tenant.auto_email_receipt && receiptEmail) {
@@ -719,14 +724,16 @@ export default function StoreModePage() {
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* Queue Badge */}
-          <QueueBadge
-            tenantId={tenant.id}
-            mode="store"
-            onStartSale={handleQueueStartSale}
-            isServingActive={!!activeQueueEntry}
-            refreshTrigger={queueRefresh}
-          />
+          {/* Queue Badge — only when queue mode is ON */}
+          {queueModeOn && (
+            <QueueBadge
+              tenantId={tenant.id}
+              mode="store"
+              onStartSale={handleQueueStartSale}
+              isServingActive={!!activeQueueEntry}
+              refreshTrigger={queueRefresh}
+            />
+          )}
 
           {/* Cash Drawer */}
           <CashDrawerPanel
@@ -821,6 +828,17 @@ export default function StoreModePage() {
             </svg>
           </button>
         </div>
+      )}
+
+      {/* ── MiniQueueStrip — only when queue mode is ON ── */}
+      {queueModeOn && step === 'items' && (
+        <MiniQueueStrip
+          tenantId={tenant.id}
+          mode="store"
+          onStartSale={handleQueueStartSale}
+          isServingActive={!!activeQueueEntry}
+          refreshTrigger={queueRefresh}
+        />
       )}
 
       {/* ── Main ── */}

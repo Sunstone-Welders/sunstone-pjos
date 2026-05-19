@@ -9,8 +9,8 @@ import Stripe from 'stripe';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { sendReferralConvertedEmail, sendPayoutProcessedEmail } from '@/lib/ambassador-emails';
 
-const COMMISSION_RATE = 0.20; // 20%
-const COMMISSION_DURATION_MONTHS = 8;
+const DEFAULT_COMMISSION_RATE = 0.20; // 20%
+const DEFAULT_COMMISSION_DURATION_MONTHS = 8;
 const MINIMUM_PAYOUT = 25; // $25 minimum
 
 /**
@@ -93,8 +93,9 @@ export async function createCommissionEntry(params: {
     return { created: false };
   }
 
-  // 3. Calculate commission
-  const commissionAmount = params.invoiceAmount * COMMISSION_RATE;
+  // 3. Calculate commission using per-ambassador rate (fallback to default)
+  const rate = Number(active.ambassador.commission_rate) || DEFAULT_COMMISSION_RATE;
+  const commissionAmount = params.invoiceAmount * rate;
 
   // 4. Insert commission entry
   const { data: entry, error: insertError } = await supabase
@@ -105,7 +106,7 @@ export async function createCommissionEntry(params: {
       tenant_id: params.tenantId,
       stripe_invoice_id: params.stripeInvoiceId,
       invoice_amount: params.invoiceAmount,
-      commission_rate: COMMISSION_RATE,
+      commission_rate: rate,
       commission_amount: commissionAmount,
       billing_period_start: params.billingPeriodStart,
       billing_period_end: params.billingPeriodEnd,
@@ -149,9 +150,19 @@ export async function markReferralConverted(tenantId: string): Promise<void> {
 
   if (!referral) return; // Already converted or no referral
 
-  // Calculate commission expiry (8 months from now)
+  // Get ambassador's custom duration (fallback to default)
+  const { data: amb } = await supabase
+    .from('ambassadors')
+    .select('commission_rate, commission_duration_months')
+    .eq('id', referral.ambassador_id)
+    .single();
+
+  const durationMonths = Number(amb?.commission_duration_months) || DEFAULT_COMMISSION_DURATION_MONTHS;
+  const ambassadorRate = Number(amb?.commission_rate) || DEFAULT_COMMISSION_RATE;
+
+  // Calculate commission expiry using per-ambassador duration
   const expiresAt = new Date();
-  expiresAt.setMonth(expiresAt.getMonth() + COMMISSION_DURATION_MONTHS);
+  expiresAt.setMonth(expiresAt.getMonth() + durationMonths);
 
   await supabase
     .from('referrals')
@@ -163,7 +174,7 @@ export async function markReferralConverted(tenantId: string): Promise<void> {
     })
     .eq('id', referral.id);
 
-  console.log(`[Commission] Referral ${referral.id} converted — commission window: 8 months`);
+  console.log(`[Commission] Referral ${referral.id} converted — commission window: ${durationMonths} months`);
 
   // Notify ambassador of conversion (fire-and-forget)
   try {
@@ -183,7 +194,7 @@ export async function markReferralConverted(tenantId: string): Promise<void> {
 
       const tierPrices: Record<string, number> = { starter: 99, pro: 169, business: 279 };
       const monthlyPrice = tierPrices[t?.subscription_tier || 'starter'] || 99;
-      const commissionAmount = monthlyPrice * COMMISSION_RATE;
+      const commissionAmount = monthlyPrice * ambassadorRate;
 
       sendReferralConvertedEmail({
         ambassadorEmail: amb.email,

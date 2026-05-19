@@ -70,6 +70,12 @@ export async function POST(request: NextRequest) {
 
     // Normalize phone if provided
     const normalizedPhone = phone ? normalizePhone(phone) : null;
+    console.log('[signup] Phone debug:', {
+      rawPhone: phone || '(not provided)',
+      normalizedPhone: normalizedPhone || '(null — will not be included in tenant INSERT)',
+      userId,
+      email: user.email,
+    });
 
     // ── Step 1: Create tenant ────────────────────────────────────────────
     const { data: tenant, error: tenantError } = await supabase
@@ -165,6 +171,108 @@ export async function POST(request: NextRequest) {
         { error: 'Account setup failed — please try signing up again. If this persists, contact support.' },
         { status: 500 }
       );
+    }
+
+    // ── Step 2b: Auto-link ambassador record (non-fatal) ────────────────
+    // If an ambassador application exists with this email (and no user_id yet),
+    // link it to this account and mark the tenant as ambassador-only.
+    let isAmbassadorOnly = false;
+    if (user.email) {
+      try {
+        console.log('[signup] Ambassador auto-link: searching for ambassador record', {
+          emailSearched: user.email,
+          userId,
+          tenantId: tenant.id,
+        });
+
+        const { data: existingAmbassador, error: ambassadorLookupError } = await supabase
+          .from('ambassadors')
+          .select('id, status, email')
+          .ilike('email', user.email)
+          .is('user_id', null)
+          .limit(1)
+          .single();
+
+        if (ambassadorLookupError) {
+          console.log('[signup] Ambassador auto-link: no matching record found', {
+            emailSearched: user.email,
+            errorCode: ambassadorLookupError.code,
+            errorMessage: ambassadorLookupError.message,
+          });
+        }
+
+        if (existingAmbassador) {
+          console.log('[signup] Ambassador auto-link: MATCH FOUND', {
+            ambassadorId: existingAmbassador.id,
+            ambassadorEmail: existingAmbassador.email,
+            ambassadorStatus: existingAmbassador.status,
+            userId,
+            tenantId: tenant.id,
+          });
+
+          // Link the ambassador record to this user + tenant
+          const { error: ambassadorUpdateError } = await supabase
+            .from('ambassadors')
+            .update({ user_id: userId, tenant_id: tenant.id })
+            .eq('id', existingAmbassador.id);
+
+          if (ambassadorUpdateError) {
+            console.error('[signup] Ambassador auto-link: FAILED to update ambassador record', {
+              ambassadorId: existingAmbassador.id,
+              userId,
+              tenantId: tenant.id,
+              errorCode: ambassadorUpdateError.code,
+              errorMessage: ambassadorUpdateError.message,
+            });
+          } else {
+            console.log('[signup] Ambassador auto-link: updated ambassador with user_id + tenant_id', {
+              ambassadorId: existingAmbassador.id,
+              userId,
+              tenantId: tenant.id,
+            });
+          }
+
+          // Mark tenant as ambassador-only and skip onboarding
+          const { error: tenantUpdateError } = await supabase
+            .from('tenants')
+            .update({
+              ambassador_only: true,
+              onboarding_completed: true,
+            })
+            .eq('id', tenant.id);
+
+          if (tenantUpdateError) {
+            console.error('[signup] Ambassador auto-link: FAILED to update tenant', {
+              tenantId: tenant.id,
+              errorCode: tenantUpdateError.code,
+              errorMessage: tenantUpdateError.message,
+            });
+          } else {
+            console.log('[signup] Ambassador auto-link: set tenant ambassador_only=true, onboarding_completed=true', {
+              tenantId: tenant.id,
+            });
+          }
+
+          isAmbassadorOnly = true;
+          console.log('[signup] Ambassador auto-link: COMPLETE', {
+            userId,
+            tenantId: tenant.id,
+            ambassadorId: existingAmbassador.id,
+            ambassadorStatus: existingAmbassador.status,
+            isAmbassadorOnly: true,
+          });
+        }
+      } catch (ambErr) {
+        console.error('[signup] Ambassador auto-link: EXCEPTION (non-fatal)', {
+          emailSearched: user.email,
+          userId,
+          tenantId: tenant.id,
+          error: ambErr instanceof Error ? ambErr.message : ambErr,
+          stack: ambErr instanceof Error ? ambErr.stack : undefined,
+        });
+      }
+    } else {
+      console.log('[signup] Ambassador auto-link: skipped — no email on auth user', { userId });
     }
 
     // ── Step 3: Store name in auth user metadata (non-fatal) ─────────────
@@ -304,6 +412,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       tenantId: tenant.id,
       requiresVerification: !!normalizedPhone,
+      ambassadorOnly: isAmbassadorOnly,
     });
   } catch (error: any) {
     console.error('[signup] Unhandled error:', error);

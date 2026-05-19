@@ -1,13 +1,13 @@
 // ============================================================================
-// Admin Shell v4 — src/app/admin/admin-shell.tsx
+// Admin Shell v5 — src/app/admin/admin-shell.tsx
 // ============================================================================
-// v4: Obsidian + Sunstone Fire fixed theme, bottom tab nav (mobile),
-//     updated desktop sidebar, Atlas pill in header (not floating)
+// v5: Obsidian + Sunstone Fire fixed theme, sidebar-only nav (no bottom tabs),
+//     mobile hamburger opens sidebar drawer overlay, Atlas pill in header
 // ============================================================================
 
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -83,9 +83,11 @@ const allNavItems: NavItem[] = [
   { href: '/admin/tenants', label: 'Tenants', icon: TenantsIcon },
   { href: '/admin/revenue', label: 'Revenue', icon: RevenueIcon, requiredRole: 'admin', allowRoles: ['marketing'] },
   { href: '/admin/costs', label: 'Costs', icon: CostsIcon, requiredRole: 'admin' },
+  { href: '/admin/usage', label: 'Usage', icon: UsageIcon, requiredRole: 'admin', allowRoles: ['marketing'] },
   { href: '/admin/spotlight', label: 'Spotlight', icon: SpotlightIcon, requiredRole: 'admin', allowRoles: ['marketing'] },
   { href: '/admin/catalog', label: 'Catalog', icon: CatalogIcon, requiredRole: 'admin', allowRoles: ['marketing'] },
   { href: '/admin/ambassadors', label: 'Ambassadors', icon: AmbassadorsIcon, requiredRole: 'admin', allowRoles: ['marketing'] },
+  { href: '/admin/notifications', label: 'Notifications', icon: NotificationsIcon, requiredRole: 'admin' },
   { href: '/admin/mentor', label: 'Learning', icon: SunnyIcon, badge: true, denyRoles: ['marketing'] },
   { href: '/admin/team', label: 'Team', icon: TeamIcon, requiredRole: 'super_admin' },
 ];
@@ -101,8 +103,6 @@ function filterNavByRole(items: NavItem[], role: string): NavItem[] {
     return userLevel >= (ROLE_LEVEL[item.requiredRole] ?? 0);
   });
 }
-
-// Bottom tab layout is derived from allNavItems at render time, filtered by role
 
 // ============================================================================
 // Shell
@@ -131,8 +131,8 @@ export function AdminShell({
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {/* Mobile header with Atlas pill */}
-        <MobileHeader onAtlasOpen={openAtlas} />
+        {/* Mobile header with hamburger drawer */}
+        <MobileHeader onAtlasOpen={openAtlas} userEmail={userEmail} adminRole={adminRole} />
 
         {/* Desktop header with Atlas pill */}
         <div className="hidden lg:flex items-center justify-end px-8 py-2 shrink-0">
@@ -140,13 +140,10 @@ export function AdminShell({
         </div>
 
         <main className="flex-1 overflow-y-auto">
-          <div className="p-4 lg:p-8 max-w-7xl mx-auto pb-24 lg:pb-8">
+          <div className="p-4 lg:p-8 max-w-7xl mx-auto pb-8">
             {children}
           </div>
         </main>
-
-        {/* Mobile bottom nav */}
-        <PhoneBottomNav adminRole={adminRole} />
       </div>
 
       {/* Atlas AI Chat — controlled externally */}
@@ -303,23 +300,18 @@ function DesktopSidebar({ userEmail, adminRole }: { userEmail: string; adminRole
 // Mobile Header — with Atlas pill
 // ============================================================================
 
-function MobileHeader({ onAtlasOpen }: { onAtlasOpen: () => void }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+function MobileHeader({ onAtlasOpen, userEmail, adminRole }: { onAtlasOpen: () => void; userEmail: string; adminRole: string }) {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  const pendingGapCount = usePendingGapCount();
+  const navItems = filterNavByRole(allNavItems, adminRole);
 
-  // Close on outside click
+  // Close drawer on route change
   useEffect(() => {
-    if (!menuOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [menuOpen]);
+    setDrawerOpen(false);
+  }, [pathname]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -328,165 +320,122 @@ function MobileHeader({ onAtlasOpen }: { onAtlasOpen: () => void }) {
   };
 
   return (
-    <div
-      className="lg:hidden flex items-center justify-between px-4 h-14 shrink-0"
-      style={{ backgroundColor: '#18181F', borderBottom: '1px solid #2A2A35' }}
-    >
-      <div className="flex items-center gap-2.5">
-        <div
-          className="w-7 h-7 rounded-md flex items-center justify-center"
-          style={{ backgroundColor: '#FF7A00' }}
-        >
-          <span className="text-white font-bold text-xs">S</span>
-        </div>
-        <div className="text-sm font-bold" style={{ color: '#E8E4DF' }}>Sunstone Admin</div>
-      </div>
-      <div className="flex items-center gap-2">
-        <AtlasPill onClick={onAtlasOpen} compact />
-        {/* Menu button */}
-        <div className="relative" ref={menuRef}>
+    <>
+      <div
+        className="lg:hidden flex items-center justify-between px-4 h-14 shrink-0"
+        style={{ backgroundColor: '#18181F', borderBottom: '1px solid #2A2A35' }}
+      >
+        <div className="flex items-center gap-2.5">
+          {/* Hamburger button */}
           <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors"
-            style={{ backgroundColor: menuOpen ? 'rgba(255, 122, 0, 0.12)' : 'transparent' }}
-            aria-label="Menu"
+            onClick={() => setDrawerOpen(true)}
+            className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors -ml-1"
+            style={{ backgroundColor: drawerOpen ? 'rgba(255, 122, 0, 0.12)' : 'transparent' }}
+            aria-label="Open navigation"
           >
-            <MobileMenuIcon className="w-5 h-5" style={{ color: '#FF7A00' }} />
+            <HamburgerIcon className="w-5 h-5" style={{ color: '#FF7A00' }} />
           </button>
-          {menuOpen && (
-            <div
-              className="absolute right-0 top-full mt-2 w-52 py-1 z-50"
-              style={{
-                backgroundColor: '#1F1F28',
-                border: '1px solid #2A2A35',
-                borderRadius: 12,
-                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-              }}
-            >
-              <a
-                href="/dashboard"
-                className="flex items-center gap-3 px-4 transition-colors hover:bg-[rgba(255,255,255,0.04)]"
-                style={{ color: '#E8E4DF', height: 44 }}
-              >
-                <BackIcon className="w-4 h-4" style={{ color: '#FF7A00' }} />
-                <span className="text-sm">Tenant Dashboard</span>
-              </a>
+          <div className="text-sm font-bold" style={{ color: '#E8E4DF' }}>Sunstone Admin</div>
+        </div>
+        <AtlasPill onClick={onAtlasOpen} compact />
+      </div>
+
+      {/* Sidebar drawer overlay */}
+      {drawerOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setDrawerOpen(false)}
+          />
+          {/* Drawer */}
+          <aside
+            className="relative w-72 max-w-[85vw] flex flex-col h-full"
+            style={{ backgroundColor: '#18181F', borderRight: '1px solid #2A2A35' }}
+          >
+            {/* Brand + close */}
+            <div className="px-5 py-5 flex items-center justify-between" style={{ borderBottom: '1px solid #2A2A35' }}>
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: '#FF7A00' }}
+                >
+                  <span className="text-white font-bold text-sm">S</span>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold truncate" style={{ color: '#E8E4DF' }}>Sunstone Admin</div>
+                  <div className="text-xs truncate" style={{ color: '#6B6560' }}>{userEmail}</div>
+                </div>
+              </div>
               <button
-                onClick={handleSignOut}
-                className="w-full flex items-center gap-3 px-4 transition-colors hover:bg-[rgba(255,255,255,0.04)]"
-                style={{ color: '#E8E4DF', height: 44 }}
+                onClick={() => setDrawerOpen(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-[rgba(255,255,255,0.06)]"
+                aria-label="Close navigation"
               >
-                <LogoutIcon className="w-4 h-4" style={{ color: '#FF7A00' }} />
-                <span className="text-sm">Sign Out</span>
+                <CloseIcon className="w-5 h-5" style={{ color: '#9B9590' }} />
               </button>
             </div>
-          )}
+
+            {/* Navigation */}
+            <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+              {navItems.map((item) => {
+                const isActive = item.exact
+                  ? pathname === item.href
+                  : pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'flex items-center gap-3 px-3 min-h-[48px] rounded-lg text-sm font-medium transition-colors',
+                      isActive
+                        ? 'border-l-[3px]'
+                        : 'hover:bg-[rgba(255,255,255,0.04)]'
+                    )}
+                    style={{
+                      color: isActive ? '#FF7A00' : '#6B6560',
+                      backgroundColor: isActive ? 'rgba(255, 122, 0, 0.12)' : undefined,
+                      borderColor: isActive ? '#FF7A00' : 'transparent',
+                    }}
+                  >
+                    <item.icon className="w-5 h-5 shrink-0" />
+                    <span className="flex-1">{item.label}</span>
+                    {item.badge && pendingGapCount > 0 && (
+                      <span
+                        className="px-2 py-0.5 text-[10px] font-bold rounded-full min-w-[20px] text-center"
+                        style={{ backgroundColor: '#FF7A00', color: '#FFFFFF' }}
+                      >
+                        {pendingGapCount}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {/* Footer */}
+            <div className="px-3 py-4 space-y-1" style={{ borderTop: '1px solid #2A2A35' }}>
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-3 px-3 min-h-[48px] rounded-lg text-sm transition-colors hover:bg-[rgba(255,255,255,0.04)]"
+                style={{ color: '#9B9590' }}
+              >
+                <BackIcon className="w-5 h-5 shrink-0" />
+                Back to Dashboard
+              </Link>
+              <button
+                onClick={handleSignOut}
+                className="w-full flex items-center gap-3 px-3 min-h-[48px] rounded-lg text-sm transition-colors hover:bg-[rgba(255,255,255,0.04)]"
+                style={{ color: '#9B9590' }}
+              >
+                <LogoutIcon className="w-5 h-5 shrink-0" />
+                Sign Out
+              </button>
+            </div>
+          </aside>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// Phone Bottom Nav — 5 tabs with center Overview button
-// ============================================================================
-
-function PhoneBottomNav({ adminRole }: { adminRole: string }) {
-  const pathname = usePathname();
-  const pendingGapCount = usePendingGapCount();
-
-  const isOverviewActive = pathname === '/admin';
-
-  // Filter bottom tabs by role (exclude Overview — it's the center button)
-  const filteredItems = filterNavByRole(allNavItems, adminRole).filter(
-    item => item.href !== '/admin' && item.href !== '/admin/team'
-  );
-  // Split into left (before center) and right (after center)
-  const leftTabs = filteredItems.slice(0, 2);
-  const rightTabs = filteredItems.slice(2);
-
-  return (
-    <nav
-      className="lg:hidden flex items-end justify-around shrink-0 px-2"
-      style={{ backgroundColor: '#18181F', borderTop: '1px solid #2A2A35' }}
-    >
-      {leftTabs.map(item => (
-        <div key={item.href} className="relative">
-          <BottomTab href={item.href} label={item.label} icon={item.icon} />
-          {item.badge && pendingGapCount > 0 && (
-            <span
-              className="absolute -top-0.5 right-1 px-1 min-w-[14px] h-[14px] text-[8px] font-bold rounded-full flex items-center justify-center"
-              style={{ backgroundColor: '#FF7A00', color: '#FFFFFF' }}
-            >
-              {pendingGapCount}
-            </span>
-          )}
-        </div>
-      ))}
-
-      {/* Overview — raised center button */}
-      <div className="flex flex-col items-center justify-end pb-1.5 -mt-3">
-        <Link
-          href="/admin"
-          className="w-12 h-12 rounded-full flex items-center justify-center"
-          style={{
-            backgroundColor: '#FF7A00',
-            boxShadow: '0 4px 14px rgba(255, 122, 0, 0.35)',
-          }}
-          aria-label="Overview"
-        >
-          <OverviewIcon className="w-6 h-6 text-white" />
-        </Link>
-        <span
-          className="text-[9px] font-semibold mt-0.5"
-          style={{ color: isOverviewActive ? '#FF7A00' : '#6B6560' }}
-        >
-          Overview
-        </span>
-      </div>
-
-      {rightTabs.map(item => (
-        <div key={item.href} className="relative">
-          <BottomTab href={item.href} label={item.label} icon={item.icon} />
-          {item.badge && pendingGapCount > 0 && (
-            <span
-              className="absolute -top-0.5 right-1 px-1 min-w-[14px] h-[14px] text-[8px] font-bold rounded-full flex items-center justify-center"
-              style={{ backgroundColor: '#FF7A00', color: '#FFFFFF' }}
-            >
-              {pendingGapCount}
-            </span>
-          )}
-        </div>
-      ))}
-    </nav>
-  );
-}
-
-function BottomTab({
-  href,
-  label,
-  icon: Icon,
-}: {
-  href: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
-}) {
-  const pathname = usePathname();
-  const isActive = href === '/admin' ? pathname === '/admin' : pathname.startsWith(href);
-
-  return (
-    <Link
-      href={href}
-      className="flex flex-col items-center justify-center gap-0.5 py-2 min-h-[48px] min-w-[48px]"
-    >
-      <Icon className="w-5 h-5" style={{ color: isActive ? '#FF7A00' : '#6B6560' }} />
-      <span
-        className="text-[9px] font-semibold"
-        style={{ color: isActive ? '#FF7A00' : '#6B6560' }}
-      >
-        {label}
-      </span>
-    </Link>
+      )}
+    </>
   );
 }
 
@@ -542,6 +491,14 @@ function CostsIcon({ className, style }: { className?: string; style?: React.CSS
   );
 }
 
+function UsageIcon({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+    </svg>
+  );
+}
+
 function SpotlightIcon({ className, style }: { className?: string; style?: React.CSSProperties }) {
   return (
     <svg className={className} style={style} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -554,6 +511,14 @@ function AmbassadorsIcon({ className, style }: { className?: string; style?: Rea
   return (
     <svg className={className} style={style} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.625-9.75h18c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-18c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+    </svg>
+  );
+}
+
+function NotificationsIcon({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
     </svg>
   );
 }
@@ -590,10 +555,18 @@ function AtlasIconSmall({ className }: { className?: string }) {
   );
 }
 
-function MobileMenuIcon({ className, style }: { className?: string; style?: React.CSSProperties }) {
+function HamburgerIcon({ className, style }: { className?: string; style?: React.CSSProperties }) {
   return (
     <svg className={className} style={style} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+    </svg>
+  );
+}
+
+function CloseIcon({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
     </svg>
   );
 }

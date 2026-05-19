@@ -51,7 +51,10 @@ export async function handleAtlasInbound(phone: string, messageBody: string) {
   console.log('[Atlas] STEP 1a: tenants.phone results', { count: tenantByPhone?.length || 0 });
 
   if (tenantByPhone && tenantByPhone.length > 0) {
-    // Find exact match by normalized digits
+    // Find exact match by normalized digits.
+    // Known limitation: if the same phone number is the owner of multiple tenant
+    // accounts, we pick the exact match or fall back to the first result.
+    // This is acceptable — multi-account ownership is rare.
     tenant = tenantByPhone.find((t: any) => {
       if (!t.phone) return false;
       return normalizePhoneDigits(t.phone) === last10;

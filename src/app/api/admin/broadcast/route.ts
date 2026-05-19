@@ -120,7 +120,8 @@ export async function POST(request: NextRequest) {
             status: 'sent',
           });
         } else if (payload.channel === 'sms' && owner.phone) {
-          const sid = await sendSMS({ to: owner.phone, body: resolvedBody });
+          // Send from Atlas number so tenant replies route to Atlas AI
+          const sid = await sendSMS({ to: owner.phone, body: resolvedBody, from: process.env.ATLAS_PHONE_NUMBER || undefined });
           if (!sid) continue;
           sentCount++;
 
