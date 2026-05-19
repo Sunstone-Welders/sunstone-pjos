@@ -26,6 +26,12 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Sunstone Studio uses the camera to scan QR codes for customer check-in.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Sunstone Studio uses Bluetooth to support optional Square card readers when you accept Tap to Pay.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Sunstone Studio uses your location to verify Tap to Pay sales, as required by Square.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Sunstone Studio uses the microphone only when an optional Square magstripe reader is connected.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

@@ -64,6 +64,7 @@ export interface Tenant {
   stripe_account_id: string | null;
   stripe_onboarding_complete: boolean;
   default_payment_processor: string | null;
+  tap_to_pay_enabled: boolean;
   // Branding
   logo_url: string | null;
   brand_color: string;

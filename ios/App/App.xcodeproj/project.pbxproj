@@ -15,6 +15,8 @@
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
+		F349CA3E2FBD1366008C1718 /* MockReaderUI in Frameworks */ = {isa = PBXBuildFile; productRef = F349CA3D2FBD1366008C1718 /* MockReaderUI */; };
+		F349CA402FBD1366008C1718 /* SquareMobilePaymentsSDK in Frameworks */ = {isa = PBXBuildFile; productRef = F349CA3F2FBD1366008C1718 /* SquareMobilePaymentsSDK */; };
 		F3B9FD662F8D658700EC107C /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F3B9FD652F8D658700EC107C /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
@@ -39,6 +41,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+				F349CA402FBD1366008C1718 /* SquareMobilePaymentsSDK in Frameworks */,
+				F349CA3E2FBD1366008C1718 /* MockReaderUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -97,6 +101,8 @@
 			name = App;
 			packageProductDependencies = (
 				4D22ABE82AF431CB00220026 /* CapApp-SPM */,
+				F349CA3D2FBD1366008C1718 /* MockReaderUI */,
+				F349CA3F2FBD1366008C1718 /* SquareMobilePaymentsSDK */,
 			);
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
@@ -129,6 +135,7 @@
 			mainGroup = 504EC2FB1FED79650016851F;
 			packageReferences = (
 				D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
+				F349CA3C2FBD1366008C1718 /* XCRemoteSwiftPackageReference "mobile-payments-sdk-ios" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
@@ -307,7 +314,7 @@
 				DEVELOPMENT_TEAM = 33524TQ582;
 				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -332,7 +339,7 @@
 				DEVELOPMENT_TEAM = 33524TQ582;
 				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -376,11 +383,32 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		F349CA3C2FBD1366008C1718 /* XCRemoteSwiftPackageReference "mobile-payments-sdk-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/square/mobile-payments-sdk-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		4D22ABE82AF431CB00220026 /* CapApp-SPM */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */;
 			productName = "CapApp-SPM";
+		};
+		F349CA3D2FBD1366008C1718 /* MockReaderUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F349CA3C2FBD1366008C1718 /* XCRemoteSwiftPackageReference "mobile-payments-sdk-ios" */;
+			productName = MockReaderUI;
+		};
+		F349CA3F2FBD1366008C1718 /* SquareMobilePaymentsSDK */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F349CA3C2FBD1366008C1718 /* XCRemoteSwiftPackageReference "mobile-payments-sdk-ios" */;
+			productName = SquareMobilePaymentsSDK;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

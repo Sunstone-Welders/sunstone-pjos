@@ -21,7 +21,12 @@
       "Bash(java -version)",
       "Bash(/usr/libexec/java_home -V)",
       "Bash(brew install *)",
-      "Bash(JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_KEYSTORE_PASSWORD=\"Sunstone1\" ./gradlew bundleRelease)"
+      "Bash(JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_KEYSTORE_PASSWORD=\"Sunstone1\" ./gradlew bundleRelease)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos log --oneline --all -20)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos show --stat HEAD)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos show --stat cde684a)",
+      "WebFetch(domain:developer.squareup.com)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos log --oneline -5 -- src/app/api/ambassador/)"
     ]
   }
 }

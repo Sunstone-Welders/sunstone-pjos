@@ -1,5 +1,7 @@
 ext {
-    minSdkVersion = 24
+    // Bumped from 24 → 28 for Square Mobile Payments SDK (Tap to Pay).
+    // Android 9 / API 28 is the minimum Square supports.
+    minSdkVersion = 28
     compileSdkVersion = 36
     targetSdkVersion = 36
     androidxActivityVersion = '1.11.0'

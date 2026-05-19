@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useEffect, useState, useMemo, Suspense } from 'react';
+import { useEffect, useRef, useState, useMemo, Suspense } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useTenant } from '@/hooks/use-tenant';
 import { useCartStore } from '@/hooks/use-cart';
@@ -25,6 +25,7 @@ import CartPanel from '@/components/CartPanel';
 import JumpRingPickerModal from '@/components/JumpRingPickerModal';
 import CashDrawerPanel from '@/components/CashDrawerPanel';
 import { createWarrantyRecords } from '@/lib/warranty';
+import { checkTapToPayAvailability, type TapToPayResult } from '@/lib/tap-to-pay';
 import { ProductSelector, QueueBadge, CheckoutFlow, PendingPayments, GiftCardModal, SalesPanel } from '@/components/pos';
 import type { CompletedSaleData, CheckoutStep, GiftCardData } from '@/components/pos';
 import type { QueueEntry } from '@/components/MiniQueueStrip';
@@ -169,6 +170,18 @@ function EventModePageInner() {
 
   // Variant state
   const [itemVariants, setItemVariants] = useState<Record<string, InventoryItemVariant[]>>({});
+
+  // Tap to Pay — only show in PaymentScreen when (a) the device is native +
+  // contactless-capable AND (b) the tenant has finished setup in Settings AND
+  // (c) Square is connected (Stripe Terminal lands in a follow-up).
+  const [tapToPayDeviceReady, setTapToPayDeviceReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void checkTapToPayAvailability().then((ok) => {
+      if (!cancelled) setTapToPayDeviceReady(ok);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const cart = useCartStore();
   const supabase = createClient();
@@ -505,7 +518,12 @@ function EventModePageInner() {
 
   // ── Sale completion — with jump ring auto-deduction ──
 
-  const handleCompleteSale = () => {
+  // Stash for the Tap to Pay → Jump Ring picker round-trip: when the customer
+  // pays via Tap to Pay AND we have unresolved jump rings, the SDK result must
+  // survive the picker modal until completeSale fires.
+  const pendingTapResultRef = useRef<TapToPayResult | null>(null);
+
+  const handleCompleteSale = (tapToPay?: TapToPayResult) => {
     const resolutions = calculateJumpRingNeeds(cart.items, jumpRingInventory);
     const unresolvedItems = resolutions.filter((r) => !r.resolved);
     const lowStockWarnings = getLowStockWarnings(resolutions, jumpRingInventory);
@@ -515,12 +533,13 @@ function EventModePageInner() {
     }
 
     if (unresolvedItems.length > 0) {
+      pendingTapResultRef.current = tapToPay ?? null;
       setJumpRingResolutions(resolutions);
       setPendingJumpRingLowStockWarnings(lowStockWarnings);
       setShowJumpRingPicker(true);
     } else {
       setJumpRingResolutions(resolutions);
-      completeSale(resolutions);
+      completeSale(resolutions, tapToPay);
     }
   };
 
@@ -531,14 +550,18 @@ function EventModePageInner() {
     });
     setShowJumpRingPicker(false);
     setJumpRingResolutions(allResolutions);
-    completeSale(allResolutions);
+    const stashedTap = pendingTapResultRef.current;
+    pendingTapResultRef.current = null;
+    completeSale(allResolutions, stashedTap ?? undefined);
   };
 
-  const completeSale = async (resolutions: JumpRingResolution[]) => {
+  const completeSale = async (resolutions: JumpRingResolution[], tapToPay?: TapToPayResult) => {
     // Gift card full coverage: force payment method if state hasn't propagated yet
-    const effectivePaymentMethod = (giftCardData && giftCardData.remainingDue <= 0)
-      ? 'gift_card'
-      : cart.payment_method;
+    const effectivePaymentMethod = tapToPay
+      ? 'square_tap'
+      : (giftCardData && giftCardData.remainingDue <= 0)
+        ? 'gift_card'
+        : cart.payment_method;
     if (!tenant || !eventId || !effectivePaymentMethod) return;
     if (cart.items.length === 0) { toast.error('Cart is empty'); return; }
     setProcessing(true);
@@ -615,7 +638,7 @@ function EventModePageInner() {
         p_total: cart.total,
         p_payment_method: effectivePaymentMethod,
         p_payment_status: 'completed',
-        p_payment_provider: null,
+        p_payment_provider: tapToPay ? 'square' : null,
         p_platform_fee_rate: effectivePaymentMethod === 'stripe_link' ? PLATFORM_FEE_RATES[tenant.subscription_tier] : 0,
         p_fee_handling: tenant.fee_handling || null,
         p_status: 'completed',
@@ -629,6 +652,15 @@ function EventModePageInner() {
       });
       if (rpcError) throw rpcError;
       if (!saleId) throw new Error('Failed to create sale');
+
+      // Stamp the Square SDK transaction id onto the sale row so refunds and
+      // reconciliation can reach back to the Square Payments API.
+      if (tapToPay?.transactionId) {
+        await supabase
+          .from('sales')
+          .update({ payment_provider_id: tapToPay.transactionId })
+          .eq('id', saleId);
+      }
 
       // Create warranty records if applicable
       if (cart.warranty_amount > 0) {
@@ -1024,6 +1056,13 @@ function EventModePageInner() {
               receiptPhone={receiptPhone}
               mode="event"
               onGiftCardApplied={(data) => setGiftCardData(data)}
+              tapToPayAvailable={
+                tapToPayDeviceReady &&
+                !!(tenant as any)?.tap_to_pay_enabled &&
+                !!(tenant as any)?.square_merchant_id
+              }
+              tapToPayProcessor="square"
+              onTapToPaySuccess={(result) => handleCompleteSale(result)}
               onContinueToPayment={() => setStep('payment')}
               jumpRingData={pendingJumpRingResolutions.length > 0 ? {
                 saleTotal: completedSale?.total ?? 0,

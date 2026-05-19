@@ -16,6 +16,7 @@ import { ReceiptScreen } from './ReceiptScreen';
 import { JumpRingStep } from './JumpRingStep';
 import type { CompletedSaleData } from './ReceiptScreen';
 import type { PaymentMethod, JumpRingResolution } from '@/types';
+import type { TapToPayProcessor, TapToPayResult } from '@/lib/tap-to-pay';
 
 export type CheckoutStep = 'items' | 'tip' | 'payment' | 'jump_ring' | 'confirmation';
 
@@ -58,6 +59,10 @@ interface CheckoutFlowProps {
   mode?: 'event' | 'store';
   // Gift card
   onGiftCardApplied?: (data: GiftCardData | null) => void;
+  // Tap to Pay (in-app native SDK)
+  tapToPayAvailable?: boolean;
+  tapToPayProcessor?: TapToPayProcessor;
+  onTapToPaySuccess?: (result: TapToPayResult) => Promise<void> | void;
   // Step navigation
   onContinueToPayment: () => void;
   // Jump ring step (Event Mode only)
@@ -109,6 +114,9 @@ export function CheckoutFlow({
   receiptPhone,
   mode,
   onGiftCardApplied,
+  tapToPayAvailable,
+  tapToPayProcessor,
+  onTapToPaySuccess,
   onContinueToPayment,
   jumpRingData,
   onJumpRingConfirm,
@@ -171,6 +179,9 @@ export function CheckoutFlow({
         tenantName={tenantName}
         mode={mode}
         onGiftCardApplied={onGiftCardApplied}
+        tapToPayAvailable={tapToPayAvailable}
+        tapToPayProcessor={tapToPayProcessor}
+        onTapToPaySuccess={onTapToPaySuccess}
       />
     );
   } else if (step === 'jump_ring' && jumpRingData && onJumpRingConfirm && onJumpRingSkip) {

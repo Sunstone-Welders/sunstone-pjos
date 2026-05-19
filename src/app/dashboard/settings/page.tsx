@@ -40,6 +40,8 @@ import SunnyTutorial from '@/components/SunnyTutorial';
 import ProductTypesSection from '@/components/settings/ProductTypesSection';
 import SuppliersSection from '@/components/settings/SuppliersSection';
 import { canShowBillingUI } from '@/lib/billing-gate';
+import { isNativeApp } from '@/lib/native';
+import { checkTapToPayAvailability, initializeTapToPay } from '@/lib/tap-to-pay';
 
 // ============================================================================
 // Constants
@@ -411,6 +413,10 @@ function SettingsPage() {
   const [venmoUsername, setVenmoUsername] = useState('');
   const [savingVenmo, setSavingVenmo] = useState(false);
 
+  // Tap to Pay — Square Mobile Payments SDK on native devices
+  const [tapToPayDeviceReady, setTapToPayDeviceReady] = useState(false);
+  const [settingUpTapToPay, setSettingUpTapToPay] = useState(false);
+
   // ── Suppliers state (for summary count) ──
   const [suppliers, setSuppliers] = useState<{ id: string }[]>([]);
 
@@ -646,6 +652,15 @@ function SettingsPage() {
     } finally {
       setTeamLoading(false);
     }
+  }, []);
+
+  // Probe Tap to Pay availability once — the answer is fixed for the device.
+  useEffect(() => {
+    let cancelled = false;
+    void checkTapToPayAvailability().then((ok) => {
+      if (!cancelled) setTapToPayDeviceReady(ok);
+    });
+    return () => { cancelled = true; };
   }, []);
 
   // Fetch team when team section opens
@@ -926,6 +941,57 @@ function SettingsPage() {
     } finally {
       setSavingReceipts(false);
     }
+  };
+
+  const setupTapToPay = async () => {
+    if (!tenant) return;
+    if (!isNativeApp()) {
+      toast.error('Set up Tap to Pay in the Sunstone Studio app on iPhone or Android.');
+      return;
+    }
+    setSettingUpTapToPay(true);
+    try {
+      // 1. Pull the tenant's Square credentials from the auth-gated route.
+      const credsRes = await fetch('/api/square/mobile-payments-auth', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!credsRes.ok) {
+        const body = await credsRes.json().catch(() => ({}));
+        throw new Error(body.error ?? 'Could not load Square credentials.');
+      }
+      const { accessToken, locationId, applicationId } = await credsRes.json();
+
+      // 2. Authorize the SDK. The native SDK presents Apple's Tap to Pay terms
+      //    on first authorize (iOS only) — once authorize() resolves cleanly
+      //    we can record the artist as enrolled.
+      await initializeTapToPay('square', { accessToken, locationId, applicationId });
+
+      // 3. Persist enrollment.
+      const { error } = await supabase
+        .from('tenants')
+        .update({ tap_to_pay_enabled: true })
+        .eq('id', tenant.id);
+      if (error) throw error;
+
+      toast.success('Tap to Pay is ready. Use it from the POS or Event Mode.');
+      refetch();
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Tap to Pay setup failed.');
+    } finally {
+      setSettingUpTapToPay(false);
+    }
+  };
+
+  const disableTapToPay = async () => {
+    if (!tenant) return;
+    const { error } = await supabase
+      .from('tenants')
+      .update({ tap_to_pay_enabled: false })
+      .eq('id', tenant.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Tap to Pay disabled.');
+    refetch();
   };
 
   const saveVenmoUsername = async () => {
@@ -1554,6 +1620,53 @@ function SettingsPage() {
                     {p === 'stripe' ? 'Stripe' : 'Square'}
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Tap to Pay — only relevant when Square is connected (Stripe Terminal lands in a follow-up) */}
+          {squareConnected && (
+            <div className="rounded-xl border border-[var(--border-default)] p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-base font-semibold text-[var(--text-primary)]">Tap to Pay on this device</span>
+                {(tenant as any)?.tap_to_pay_enabled ? (
+                  <Badge variant="accent" size="sm">Enabled</Badge>
+                ) : (
+                  <Badge variant="default" size="sm">Not set up</Badge>
+                )}
+              </div>
+              <p className="text-sm text-[var(--text-secondary)]">
+                Accept contactless card payments directly on this phone — no extra hardware. Powered by Square&apos;s Mobile Payments SDK.
+              </p>
+
+              {!isNativeApp() && (
+                <p className="text-xs text-[var(--text-tertiary)] bg-[var(--surface-subtle)] rounded-lg p-3">
+                  Open the Sunstone Studio app on iPhone or Android to set up Tap to Pay. The browser version can&apos;t access the device&apos;s NFC reader.
+                </p>
+              )}
+
+              {isNativeApp() && !tapToPayDeviceReady && (
+                <p className="text-xs text-[var(--text-tertiary)] bg-[var(--surface-subtle)] rounded-lg p-3">
+                  This device doesn&apos;t support contactless Tap to Pay. iPhone XS or newer on iOS 16.4+, or Android 9+ with NFC.
+                </p>
+              )}
+
+              <div className="flex gap-2">
+                {(tenant as any)?.tap_to_pay_enabled ? (
+                  <Button variant="danger" size="sm" onClick={disableTapToPay}>
+                    Turn Off
+                  </Button>
+                ) : (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={setupTapToPay}
+                    loading={settingUpTapToPay}
+                    disabled={!isNativeApp() || !tapToPayDeviceReady}
+                  >
+                    Set Up Tap to Pay
+                  </Button>
+                )}
               </div>
             </div>
           )}

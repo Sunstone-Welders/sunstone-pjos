@@ -53,10 +53,14 @@ export async function POST(_req: NextRequest) {
     }
 
     // ── Return credentials for Mobile Payments SDK authorize() ──────────
+    // applicationId is the *platform's* Square developer application ID
+    // (not the tenant's merchant ID). The Android SDK needs it for its
+    // one-time MobilePaymentsSdk.initialize() call; iOS does not require it.
     return NextResponse.json({
       accessToken: tenant.square_access_token,
       locationId: tenant.square_location_id,
       merchantId: tenant.square_merchant_id,
+      applicationId: process.env.SQUARE_APPLICATION_ID ?? null,
     });
   } catch (error: any) {
     console.error('[Square Mobile Auth] Error:', error);

@@ -27,6 +27,7 @@ import { calculateJumpRingNeeds, getLowStockWarnings } from '@/lib/jump-rings';
 import SunnyTutorial from '@/components/SunnyTutorial';
 import CashDrawerPanel from '@/components/CashDrawerPanel';
 import { createWarrantyRecords } from '@/lib/warranty';
+import { checkTapToPayAvailability, type TapToPayResult } from '@/lib/tap-to-pay';
 import type {
   InventoryItem,
   InventoryItemVariant,
@@ -93,6 +94,18 @@ export default function StoreModePage() {
 
   // Variant state
   const [itemVariants, setItemVariants] = useState<Record<string, InventoryItemVariant[]>>({});
+
+  // Tap to Pay — only show in PaymentScreen when (a) the device is native +
+  // contactless-capable AND (b) the tenant has finished setup in Settings AND
+  // (c) Square is connected (Stripe Terminal lands in a follow-up).
+  const [tapToPayDeviceReady, setTapToPayDeviceReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void checkTapToPayAvailability().then((ok) => {
+      if (!cancelled) setTapToPayDeviceReady(ok);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const cart = useCartStore();
   const supabase = createClient();
@@ -434,12 +447,20 @@ export default function StoreModePage() {
   };
 
   // ── Sale completion (external payments: cash, venmo, card_external) ──
+  //
+  // The optional `tapToPay` argument routes an in-app Square Tap to Pay sale:
+  // we force payment_method=square_tap, payment_provider=square, and write the
+  // SDK-provided transaction id onto payment_provider_id once the sale exists.
+  // For everything else (cash, venmo, card_external) call with no arguments —
+  // behavior is unchanged.
 
-  const completeSale = async () => {
+  const completeSale = async (tapToPay?: TapToPayResult) => {
     // Gift card full coverage: force payment method if state hasn't propagated yet
-    const effectivePaymentMethod = (giftCardData && giftCardData.remainingDue <= 0)
-      ? 'gift_card'
-      : cart.payment_method;
+    const effectivePaymentMethod = tapToPay
+      ? 'square_tap'
+      : (giftCardData && giftCardData.remainingDue <= 0)
+        ? 'gift_card'
+        : cart.payment_method;
     if (!tenant || !effectivePaymentMethod) return;
     if (cart.items.length === 0) { toast.error('Cart is empty'); return; }
     setProcessing(true);
@@ -496,7 +517,7 @@ export default function StoreModePage() {
         p_total: cart.total,
         p_payment_method: effectivePaymentMethod,
         p_payment_status: 'completed',
-        p_payment_provider: null,
+        p_payment_provider: tapToPay ? 'square' : null,
         p_platform_fee_rate: effectivePaymentMethod === 'stripe_link' ? PLATFORM_FEE_RATES[tenant.subscription_tier] : 0,
         p_fee_handling: tenant.fee_handling || null,
         p_status: 'completed',
@@ -510,6 +531,15 @@ export default function StoreModePage() {
       });
       if (rpcError) throw rpcError;
       if (!saleId) throw new Error('Failed to create sale');
+
+      // Stamp the Square SDK transaction id onto the sale row so refunds and
+      // reconciliation can reach back to the Square Payments API.
+      if (tapToPay?.transactionId) {
+        await supabase
+          .from('sales')
+          .update({ payment_provider_id: tapToPay.transactionId })
+          .eq('id', saleId);
+      }
 
       // Create warranty records if applicable
       if (cart.warranty_amount > 0) {
@@ -868,6 +898,13 @@ export default function StoreModePage() {
               receiptPhone={receiptPhone}
               mode="store"
               onGiftCardApplied={(data) => setGiftCardData(data)}
+              tapToPayAvailable={
+                tapToPayDeviceReady &&
+                !!(tenant as any).tap_to_pay_enabled &&
+                !!(tenant as any).square_merchant_id
+              }
+              tapToPayProcessor="square"
+              onTapToPaySuccess={(result) => completeSale(result)}
               onContinueToPayment={() => setStep('payment')}
               completedSale={completedSale}
               receiptConfig={receiptConfig}

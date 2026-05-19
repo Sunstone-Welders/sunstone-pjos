@@ -17,6 +17,8 @@ import type { PaymentMethod } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 import { GiftCardRedeemModal } from '@/components/pos/GiftCardRedeemModal';
 import { formatGiftCardCode } from '@/lib/gift-cards';
+import { TapToPayFlow } from '@/components/pos/checkout/TapToPayFlow';
+import type { TapToPayProcessor, TapToPayResult } from '@/lib/tap-to-pay';
 import { toast } from 'sonner';
 
 // ── Types ──
@@ -54,9 +56,17 @@ interface PaymentScreenProps {
   mode?: 'event' | 'store';
   // Gift card callback — tells parent to store gift card data for post-sale redemption
   onGiftCardApplied?: (data: GiftCardData | null) => void;
+  // Tap to Pay — parent decides which processor (square_tap or stripe_tap) to use.
+  // `tapToPayAvailable` should already factor in: native shell + device support +
+  // tap_to_pay_enabled on the tenant + the relevant processor being connected.
+  tapToPayAvailable?: boolean;
+  tapToPayProcessor?: TapToPayProcessor;
+  // Called when an in-app Tap to Pay payment succeeds. Parent records the sale
+  // and stores the SDK-provided transactionId on payment_provider_id.
+  onTapToPaySuccess?: (result: TapToPayResult) => Promise<void> | void;
 }
 
-type PaymentPath = null | 'charge' | 'venmo' | 'external';
+type PaymentPath = null | 'charge' | 'venmo' | 'external' | 'tap_to_pay';
 type ChargeMethod = null | 'qr' | 'text';
 
 // ── SVG Icons ──
@@ -124,6 +134,9 @@ export function PaymentScreen({
   tenantName,
   mode,
   onGiftCardApplied,
+  tapToPayAvailable,
+  tapToPayProcessor,
+  onTapToPaySuccess,
 }: PaymentScreenProps) {
   const [path, setPath] = useState<PaymentPath>(null);
   const [showGiftCardRedeem, setShowGiftCardRedeem] = useState(false);
@@ -421,6 +434,29 @@ export function PaymentScreen({
   };
 
   // ============================================================
+  // TAP TO PAY — full-screen native SDK flow
+  // ============================================================
+
+  if (path === 'tap_to_pay' && tapToPayAvailable) {
+    const proc: TapToPayProcessor = tapToPayProcessor ?? 'square';
+    return (
+      <TapToPayFlow
+        amountDollars={effectiveTotal}
+        processor={proc}
+        note={activeQueueEntry?.name ? `Queue: ${activeQueueEntry.name}` : undefined}
+        onComplete={async (r) => {
+          // Lock the payment method so any downstream readers (receipts, etc.)
+          // see the SDK-collected tap, then hand off to the parent which
+          // records the sale with payment_provider_id = r.transactionId.
+          onSelectMethod(proc === 'square' ? 'square_tap' : 'stripe_tap');
+          await onTapToPaySuccess?.(r);
+        }}
+        onCancel={() => setPath(null)}
+      />
+    );
+  }
+
+  // ============================================================
   // QR CODE WAITING SCREEN
   // ============================================================
 
@@ -715,6 +751,31 @@ export function PaymentScreen({
                   Connect Stripe or Square in Settings to accept card payments directly through Sunstone Studio. Customers pay via QR code or text link with automatic tracking.
                 </p>
               </div>
+            )}
+
+            {/* ── PATH 0: In-app Tap to Pay ── */}
+            {tapToPayAvailable && path === null && (
+              <button
+                onClick={() => setPath('tap_to_pay')}
+                className="w-full rounded-2xl p-5 text-left transition-all min-h-[80px] border-2"
+                style={{
+                  backgroundColor: 'var(--surface-raised)',
+                  borderColor: 'var(--accent-primary)',
+                  color: 'var(--text-primary)',
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="shrink-0 text-[var(--accent-primary)]">
+                    <CardIcon />
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold">Tap to Pay</div>
+                    <p className="text-sm text-[var(--text-tertiary)] mt-0.5">
+                      Accept the card on this device — no extra hardware
+                    </p>
+                  </div>
+                </div>
+              </button>
             )}
 
             {/* ── PATH 1: Charge Customer (Stripe or Square) ── */}
