@@ -18,6 +18,8 @@
 		F349CA3E2FBD1366008C1718 /* MockReaderUI in Frameworks */ = {isa = PBXBuildFile; productRef = F349CA3D2FBD1366008C1718 /* MockReaderUI */; };
 		F349CA402FBD1366008C1718 /* SquareMobilePaymentsSDK in Frameworks */ = {isa = PBXBuildFile; productRef = F349CA3F2FBD1366008C1718 /* SquareMobilePaymentsSDK */; };
 		F3B9FD662F8D658700EC107C /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F3B9FD652F8D658700EC107C /* GoogleService-Info.plist */; };
+		F3D1A0010000000000000005 /* SquareTapToPayPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3D1A0010000000000000003 /* SquareTapToPayPlugin.swift */; };
+		F3D1A0010000000000000006 /* SquareTapToPayPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = F3D1A0010000000000000004 /* SquareTapToPayPlugin.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +35,8 @@
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		F3B9FD642F8D64D500EC107C /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		F3B9FD652F8D658700EC107C /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		F3D1A0010000000000000003 /* SquareTapToPayPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SquareTapToPayPlugin.swift; sourceTree = "<group>"; };
+		F3D1A0010000000000000004 /* SquareTapToPayPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SquareTapToPayPlugin.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -79,8 +83,26 @@
 				504EC3131FED79650016851F /* Info.plist */,
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
+				F3D1A0010000000000000001 /* Plugins */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		F3D1A0010000000000000001 /* Plugins */ = {
+			isa = PBXGroup;
+			children = (
+				F3D1A0010000000000000002 /* SquareTapToPay */,
+			);
+			path = Plugins;
+			sourceTree = "<group>";
+		};
+		F3D1A0010000000000000002 /* SquareTapToPay */ = {
+			isa = PBXGroup;
+			children = (
+				F3D1A0010000000000000003 /* SquareTapToPayPlugin.swift */,
+				F3D1A0010000000000000004 /* SquareTapToPayPlugin.m */,
+			);
+			path = SquareTapToPay;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -169,6 +191,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				F3D1A0010000000000000005 /* SquareTapToPayPlugin.swift in Sources */,
+				F3D1A0010000000000000006 /* SquareTapToPayPlugin.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
