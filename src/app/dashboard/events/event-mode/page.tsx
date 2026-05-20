@@ -25,7 +25,7 @@ import CartPanel from '@/components/CartPanel';
 import JumpRingPickerModal from '@/components/JumpRingPickerModal';
 import CashDrawerPanel from '@/components/CashDrawerPanel';
 import { createWarrantyRecords } from '@/lib/warranty';
-import { checkTapToPayAvailability, type TapToPayResult } from '@/lib/tap-to-pay';
+import { checkTapToPayAvailability, initializeTapToPay, type TapToPayResult } from '@/lib/tap-to-pay';
 import { ProductSelector, QueueBadge, CheckoutFlow, PendingPayments, GiftCardModal, SalesPanel } from '@/components/pos';
 import type { CompletedSaleData, CheckoutStep, GiftCardData } from '@/components/pos';
 import type { QueueEntry } from '@/components/MiniQueueStrip';
@@ -177,8 +177,13 @@ function EventModePageInner() {
   const [tapToPayDeviceReady, setTapToPayDeviceReady] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    void checkTapToPayAvailability().then((ok) => {
-      if (!cancelled) setTapToPayDeviceReady(ok);
+    void checkTapToPayAvailability().then(async (ok) => {
+      if (cancelled) return;
+      setTapToPayDeviceReady(ok);
+      if (!ok) return;
+      // Warm up the Square SDK so the first tap doesn't pay the auth round-trip.
+      // Silenced — TapToPayFlow re-runs initialize defensively and surfaces real errors there.
+      try { await initializeTapToPay('square'); } catch { /* surfaced at payment time */ }
     });
     return () => { cancelled = true; };
   }, []);

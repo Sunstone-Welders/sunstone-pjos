@@ -8,7 +8,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { collectPayment, type TapToPayResult } from '@/lib/tap-to-pay';
+import { collectPayment, initializeTapToPay, type TapToPayResult } from '@/lib/tap-to-pay';
 
 // ── Contactless icon (SF Symbol wave.3.right.circle equivalent) ──
 const ContactlessWaveIcon = ({ className = 'w-20 h-20' }: { className?: string }) => (
@@ -46,12 +46,19 @@ export default function TapToPayFlow({
   const startCollection = useCallback(async () => {
     setStep('processing');
     try {
+      // Defensive init — idempotent. The POS screen warms the SDK at mount
+      // but we re-authorize here so a cold-start (process killed in background)
+      // or a missed warm-up still produces a working payment.
+      await initializeTapToPay('square');
       const res = await collectPayment(amountCents, 'usd');
       setResult(res);
       setStep('result');
       onComplete(res);
-    } catch {
-      setResult({ status: 'error', errorMessage: 'An unexpected error occurred.' });
+    } catch (err: any) {
+      setResult({
+        status: 'error',
+        errorMessage: err?.message ?? 'An unexpected error occurred.',
+      });
       setStep('result');
     }
   }, [amountCents, onComplete]);
