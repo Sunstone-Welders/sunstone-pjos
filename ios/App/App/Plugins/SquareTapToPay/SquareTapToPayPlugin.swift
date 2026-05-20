@@ -18,6 +18,7 @@
 // ============================================================================
 
 import Capacitor
+import CoreLocation
 import Foundation
 import UIKit
 
@@ -38,6 +39,15 @@ public class SquareTapToPayPlugin: CAPPlugin {
     /// Accessing `MobilePaymentsSDK.shared` before this is true is a fatal
     /// error inside the SDK — every public method below must check this flag.
     private var isInitialized = false
+
+    /// Square's Mobile Payments SDK requires CoreLocation authorization before
+    /// processing any Tap to Pay transaction. We hold the manager + delegate
+    /// here so they outlive the async `requestWhenInUseAuthorization` flow.
+    private var locationManager: CLLocationManager?
+    private var locationDelegate: LocationDelegateBridge?
+
+    private static let locationDeniedMessage =
+        "Location access is required for Tap to Pay. Please enable it in Settings > Privacy > Location Services."
 
     // ── initialize ──────────────────────────────────────────────────────────
 
@@ -73,6 +83,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
             // "authorization_already_authorized". Check state first and skip.
             if authState == .authorized {
                 print("SquareTapToPay: already authorized, skipping")
+                self.promptLocationPermissionIfNeeded()
                 call.resolve(["status": "authorized"])
                 return
             }
@@ -104,6 +115,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
                         if alreadyAuthorized {
                             print("SquareTapToPay: treating already_authorized as success")
                             self.isInitialized = true
+                            self.promptLocationPermissionIfNeeded()
                             call.resolve(["status": "authorized"])
                             return
                         }
@@ -121,6 +133,9 @@ public class SquareTapToPayPlugin: CAPPlugin {
                         )
                     }
                     return
+                }
+                DispatchQueue.main.async {
+                    self.promptLocationPermissionIfNeeded()
                 }
                 call.resolve(["status": "authorized"])
             }
@@ -209,48 +224,126 @@ public class SquareTapToPayPlugin: CAPPlugin {
                 return
             }
 
-            // Map ISO 4217 → Square's currency enum. Default to USD; surface a
-            // clear error if the caller passes something unsupported.
-            let currency: Currency
-            switch currencyCode.uppercased() {
-            case "USD": currency = .USD
-            case "CAD": currency = .CAD
-            case "GBP": currency = .GBP
-            case "AUD": currency = .AUD
-            case "JPY": currency = .JPY
-            case "EUR": currency = .EUR
-            default:
-                call.reject("Unsupported currency: \(currencyCode)")
-                return
+            // Square's SDK requires CoreLocation authorization before each
+            // Tap to Pay transaction; otherwise startPayment rejects with
+            // "Location permission has not been granted to your application."
+            self.ensureLocationPermission { [weak self] granted, errorMessage in
+                guard let self = self else { return }
+                if !granted {
+                    call.reject(errorMessage ?? Self.locationDeniedMessage)
+                    return
+                }
+                self.beginPayment(
+                    call: call,
+                    amountCents: amountCents,
+                    currencyCode: currencyCode,
+                    note: note,
+                    presenter: presenter
+                )
             }
+        }
+    }
 
-            let amountMoney = Money(amount: UInt(amountCents), currency: currency)
-            let params = PaymentParameters(
-                paymentAttemptID: UUID().uuidString,
-                amountMoney: amountMoney,
-                processingMode: .onlineOnly
-            )
-            if let note = note { params.note = note }
+    /// Runs after the SDK + location checks pass. Always invoked on the main
+    /// queue (the location helper dispatches its completion to main).
+    private func beginPayment(
+        call: CAPPluginCall,
+        amountCents: Int,
+        currencyCode: String,
+        note: String?,
+        presenter: UIViewController
+    ) {
+        // Map ISO 4217 → Square's currency enum. Default to USD; surface a
+        // clear error if the caller passes something unsupported.
+        let currency: Currency
+        switch currencyCode.uppercased() {
+        case "USD": currency = .USD
+        case "CAD": currency = .CAD
+        case "GBP": currency = .GBP
+        case "AUD": currency = .AUD
+        case "JPY": currency = .JPY
+        case "EUR": currency = .EUR
+        default:
+            call.reject("Unsupported currency: \(currencyCode)")
+            return
+        }
 
-            let promptParams = PromptParameters(
-                mode: .default,
-                additionalMethods: .all
-            )
+        let amountMoney = Money(amount: UInt(amountCents), currency: currency)
+        let params = PaymentParameters(
+            paymentAttemptID: UUID().uuidString,
+            amountMoney: amountMoney,
+            processingMode: .onlineOnly
+        )
+        if let note = note { params.note = note }
 
-            self.pendingPaymentCall = call
-            // Capacitor releases the call after the bridge method returns
-            // unless we keep it alive. The Square delegate resolves it later.
-            call.keepAlive = true
+        let promptParams = PromptParameters(
+            mode: .default,
+            additionalMethods: .all
+        )
 
-            let delegate = PaymentDelegateBridge(owner: self)
-            self.paymentDelegate = delegate
+        self.pendingPaymentCall = call
+        // Capacitor releases the call after the bridge method returns
+        // unless we keep it alive. The Square delegate resolves it later.
+        call.keepAlive = true
 
-            self.paymentHandle = MobilePaymentsSDK.shared.paymentManager.startPayment(
-                params,
-                promptParameters: promptParams,
-                from: presenter,
-                delegate: delegate
-            )
+        let delegate = PaymentDelegateBridge(owner: self)
+        self.paymentDelegate = delegate
+
+        self.paymentHandle = MobilePaymentsSDK.shared.paymentManager.startPayment(
+            params,
+            promptParameters: promptParams,
+            from: presenter,
+            delegate: delegate
+        )
+    }
+
+    // ── Location permission ─────────────────────────────────────────────────
+
+    /// Resolves with `(granted, errorMessage)` after the current
+    /// CLLocationManager authorization status is known. If the status is
+    /// `.notDetermined`, this triggers the system prompt and waits for the
+    /// delegate callback before completing. Must be called on the main queue.
+    private func ensureLocationPermission(completion: @escaping (Bool, String?) -> Void) {
+        if locationManager == nil {
+            locationManager = CLLocationManager()
+        }
+        guard let manager = locationManager else {
+            completion(false, "Unable to create CLLocationManager.")
+            return
+        }
+
+        let status = manager.authorizationStatus
+        switch status {
+        case .authorizedAlways, .authorizedWhenInUse:
+            completion(true, nil)
+        case .denied, .restricted:
+            completion(false, Self.locationDeniedMessage)
+        case .notDetermined:
+            let bridge = LocationDelegateBridge { [weak self] newStatus in
+                guard let self = self else { return }
+                self.locationDelegate = nil
+                switch newStatus {
+                case .authorizedAlways, .authorizedWhenInUse:
+                    completion(true, nil)
+                case .denied, .restricted:
+                    completion(false, Self.locationDeniedMessage)
+                default:
+                    completion(false, Self.locationDeniedMessage)
+                }
+            }
+            self.locationDelegate = bridge
+            manager.delegate = bridge
+            manager.requestWhenInUseAuthorization()
+        @unknown default:
+            completion(false, Self.locationDeniedMessage)
+        }
+    }
+
+    /// Fire-and-forget version used during initialize() so the permission
+    /// prompt appears at setup time rather than during the first payment.
+    private func promptLocationPermissionIfNeeded() {
+        ensureLocationPermission { granted, _ in
+            print("SquareTapToPay: proactive location permission granted=\(granted)")
         }
     }
 
@@ -352,6 +445,28 @@ fileprivate final class PaymentDelegateBridge: NSObject, PaymentManagerDelegate 
 
     func paymentManager(_ paymentManager: PaymentManager, didCancel payment: Payment) {
         owner?.handleDidCancel(payment)
+    }
+}
+
+// ── CLLocationManagerDelegate bridge ──────────────────────────────────────
+// CLLocationManagerDelegate is iOS-14+. We fire `onResolved` once the
+// authorization status leaves `.notDetermined`. The initial delegate-set
+// callback (which can carry `.notDetermined`) is ignored.
+
+fileprivate final class LocationDelegateBridge: NSObject, CLLocationManagerDelegate {
+    private let onResolved: (CLAuthorizationStatus) -> Void
+    private var fired = false
+
+    init(onResolved: @escaping (CLAuthorizationStatus) -> Void) {
+        self.onResolved = onResolved
+        super.init()
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        guard status != .notDetermined, !fired else { return }
+        fired = true
+        onResolved(status)
     }
 }
 
