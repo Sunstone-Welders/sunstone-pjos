@@ -42,6 +42,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
     // ── initialize ──────────────────────────────────────────────────────────
 
     @objc func initialize(_ call: CAPPluginCall) {
+        print("SquareTapToPay: initialize called")
         guard let applicationId = call.getString("squareApplicationID"),
               let accessToken = call.getString("accessToken"),
               let locationId = call.getString("locationId") else {
@@ -57,30 +58,76 @@ public class SquareTapToPayPlugin: CAPPlugin {
                 squareApplicationID: applicationId
             )
             isInitialized = true
+            print("SquareTapToPay: SDK initialized")
         }
+
+        let authState = MobilePaymentsSDK.shared.authorizationManager.state
+        print("SquareTapToPay: auth state = \(authState)")
 
         // Calling authorize() again after a successful auth fails with
         // "authorization_already_authorized". Check state first and skip.
-        if MobilePaymentsSDK.shared.authorizationManager.state == .authorized {
+        if authState == .authorized {
+            print("SquareTapToPay: already authorized, skipping")
             call.resolve()
             return
         }
 
+        print("SquareTapToPay: calling authorize with locationId=\(locationId)")
         MobilePaymentsSDK.shared.authorizationManager.authorize(
             withAccessToken: accessToken,
             locationID: locationId
         ) { error in
+            let nsError = error as NSError?
+            print("SquareTapToPay: authorize result - error: \(error?.localizedDescription ?? "none"), code: \(nsError?.code ?? 0)")
+
             if let error = error {
-                call.reject("Square authorization failed: \(error.localizedDescription)")
+                let ns = error as NSError
+                // "authorization_already_authorized" is not a real failure —
+                // the SDK is already in the authorized state. Treat as success.
+                let alreadyAuthorized =
+                    ns.userInfo["code"] as? String == "authorization_already_authorized" ||
+                    ns.localizedDescription.lowercased().contains("already_authorized") ||
+                    ns.localizedDescription.lowercased().contains("already authorized") ||
+                    MobilePaymentsSDK.shared.authorizationManager.state == .authorized
+
+                if alreadyAuthorized {
+                    print("SquareTapToPay: authorize returned already_authorized — treating as success")
+                    self.isInitialized = true
+                    call.resolve()
+                    return
+                }
+
+                call.reject(
+                    "Square authorization failed: \(ns.localizedDescription)",
+                    "\(ns.code)",
+                    error,
+                    [
+                        "message": ns.localizedDescription,
+                        "code": ns.code,
+                        "domain": ns.domain,
+                        "userInfo": Self.stringifyUserInfo(ns.userInfo)
+                    ]
+                )
                 return
             }
             call.resolve()
         }
     }
 
+    /// NSError userInfo values aren't all JSON-serializable; coerce to strings
+    /// so Capacitor can pass them through to the JS layer intact.
+    private static func stringifyUserInfo(_ info: [String: Any]) -> [String: String] {
+        var out: [String: String] = [:]
+        for (k, v) in info {
+            out[k] = String(describing: v)
+        }
+        return out
+    }
+
     // ── isAvailable ─────────────────────────────────────────────────────────
 
     @objc func isAvailable(_ call: CAPPluginCall) {
+        print("SquareTapToPay: isAvailable called, initialized=\(isInitialized)")
         // Web layer calls this on page load — before initialize() has run —
         // so we must answer without touching `.shared`.
         guard isInitialized else {
@@ -121,9 +168,11 @@ public class SquareTapToPayPlugin: CAPPlugin {
         }
         let currencyCode = call.getString("currencyCode") ?? "USD"
         let note = call.getString("note")
+        print("SquareTapToPay: startPayment called, amount=\(amountCents)")
 
         // Tap to Pay requires authorization first.
         let state = MobilePaymentsSDK.shared.authorizationManager.state
+        print("SquareTapToPay: startPayment auth state = \(state)")
         guard state == .authorized else {
             call.reject("Square SDK is not authorized. Call initialize() first.")
             return
@@ -214,9 +263,14 @@ public class SquareTapToPayPlugin: CAPPlugin {
     fileprivate func handleDidFail(_ payment: Payment?, error: Error) {
         guard let call = pendingPaymentCall else { return }
         defer { resetPaymentState() }
+        let ns = error as NSError
+        print("SquareTapToPay: payment error - \(ns.localizedDescription), code: \(ns.code), userInfo: \(ns.userInfo)")
         call.resolve([
             "status": "error",
-            "errorMessage": error.localizedDescription
+            "errorMessage": ns.localizedDescription,
+            "errorCode": ns.code,
+            "errorDomain": ns.domain,
+            "errorUserInfo": Self.stringifyUserInfo(ns.userInfo)
         ])
     }
 
