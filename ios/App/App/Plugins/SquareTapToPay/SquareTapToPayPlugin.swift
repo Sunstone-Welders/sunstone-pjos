@@ -59,9 +59,13 @@ public class SquareTapToPayPlugin: CAPPlugin {
             isInitialized = true
         }
 
-        // The SDK is idempotent — calling authorize() again with the same
-        // credentials simply succeeds. So we don't try to detect "already
-        // authorized" up here; we just call it.
+        // Calling authorize() again after a successful auth fails with
+        // "authorization_already_authorized". Check state first and skip.
+        if MobilePaymentsSDK.shared.authorizationManager.state == .authorized {
+            call.resolve()
+            return
+        }
+
         MobilePaymentsSDK.shared.authorizationManager.authorize(
             withAccessToken: accessToken,
             locationID: locationId
