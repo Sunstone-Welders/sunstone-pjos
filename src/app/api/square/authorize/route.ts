@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
     const scopes = [
       'MERCHANT_PROFILE_READ',
       'PAYMENTS_WRITE',
+      'PAYMENTS_WRITE_IN_PERSON',
       'PAYMENTS_READ',
       'ORDERS_WRITE',
       'ORDERS_READ',

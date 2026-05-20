@@ -62,7 +62,8 @@
       "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' build)",
       "Read(//Users/meganatwood/Library/Developer/Xcode/DerivedData/**)",
       "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' build)",
-      "Bash(xargs -I {} ls {})"
+      "Bash(xargs -I {} ls {})",
+      "WebSearch"
     ]
   }
 }
