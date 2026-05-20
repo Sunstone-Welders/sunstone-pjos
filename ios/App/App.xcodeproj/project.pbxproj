@@ -152,6 +152,7 @@
 				504EC3021FED79650016851F /* Resources */,
 				F349CA412FBE28D6008C1718 /* Embed Frameworks */,
 				4287C3F7BDB88170156296F6 /* [CP] Embed Pods Frameworks */,
+				F3D1A0010000000000000010 /* Extract Square Nested Frameworks */,
 			);
 			buildRules = (
 			);
@@ -220,6 +221,21 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		F3D1A0010000000000000010 /* Extract Square Nested Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Extract Square Nested Frameworks";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Extract nested frameworks from SquareMobilePaymentsSDK to top-level Frameworks/\nSQUARE_NESTED_FRAMEWORKS=\"${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}/SquareMobilePaymentsSDK.framework/Frameworks\"\n\nif [ -d \"$SQUARE_NESTED_FRAMEWORKS\" ]; then\n    echo \"Extracting Square nested frameworks...\"\n    for framework in \"$SQUARE_NESTED_FRAMEWORKS\"/*.framework; do\n        if [ -d \"$framework\" ]; then\n            framework_name=$(basename \"$framework\")\n            dest=\"${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}/$framework_name\"\n            echo \"Copying $framework_name to top-level Frameworks/\"\n            cp -Rf \"$framework\" \"$dest\"\n            # Re-sign the extracted framework\n            codesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" --preserve-metadata=identifier,entitlements --timestamp=none \"$dest\"\n        fi\n    done\n    # Remove the nested Frameworks dir to avoid App Store rejection for nested frameworks\n    rm -rf \"$SQUARE_NESTED_FRAMEWORKS\"\n    echo \"Square nested frameworks extracted successfully\"\nelse\n    echo \"No Square nested frameworks found (SDK may not be present)\"\nfi\n";
+			showEnvVarsInLog = 0;
+		};
 		4287C3F7BDB88170156296F6 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
