@@ -60,7 +60,7 @@ export async function POST(_req: NextRequest) {
       accessToken: tenant.square_access_token,
       locationId: tenant.square_location_id,
       merchantId: tenant.square_merchant_id,
-      applicationId: process.env.SQUARE_APPLICATION_ID ?? null,
+      applicationId: process.env.SQUARE_APP_ID ?? null,
     });
   } catch (error: any) {
     console.error('[Square Mobile Auth] Error:', error);

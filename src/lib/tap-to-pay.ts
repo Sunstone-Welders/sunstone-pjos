@@ -111,10 +111,13 @@ export async function initializeTapToPay(
     throw new Error(`Tap to Pay for ${processor} is not yet implemented.`);
   }
   const creds = await fetchSquareCredentials();
+  // Android reads `applicationId`; iOS reads `squareApplicationID`. Send both
+  // so the same payload satisfies both native plugins.
   await SquareTapToPay.initialize({
     accessToken: creds.accessToken,
     locationId: creds.locationId,
     applicationId: creds.applicationId,
+    squareApplicationID: creds.applicationId,
   });
 }
 

@@ -14,9 +14,15 @@ export interface SquareInitializeOptions {
   /**
    * Square developer application ID (e.g. "sq0idp-...").
    * Required on Android — the Mobile Payments SDK needs it for its one-time
-   * initialize() call before authorize. iOS ignores this field.
+   * initialize() call before authorize.
    */
   applicationId?: string;
+  /**
+   * Same value as `applicationId`, under the key the iOS Swift plugin reads.
+   * The iOS native bridge uses `squareApplicationID` (matching Square's iOS
+   * SDK naming); Android uses `applicationId`. Callers should set both.
+   */
+  squareApplicationID?: string;
 }
 
 export interface SquareStartPaymentOptions {

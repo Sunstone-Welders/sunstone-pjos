@@ -54,7 +54,15 @@
       "Bash(git -C /Users/meganatwood/sunstone-pjos log --oneline -3)",
       "Bash(plutil *)",
       "Bash(xcodebuild -workspace App.xcworkspace -scheme App -destination 'generic/platform=iOS' -configuration Debug build)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(pod --version)",
+      "Bash(pod install *)",
+      "Bash(open *)",
+      "Bash(xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' build)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' build)",
+      "Read(//Users/meganatwood/Library/Developer/Xcode/DerivedData/**)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' build)",
+      "Bash(xargs -I {} ls {})"
     ]
   }
 }
