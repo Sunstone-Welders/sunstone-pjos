@@ -1,5 +1,5 @@
 {
-  "originHash" : "90251fefc9eea988e6df97ae11ba0ebb16120cecaa2b8f3a8b1e188825f93520",
+  "originHash" : "676328b3700bab3ed28bc05367bdcfd8c40cb7345ec213291a0ba5e7f877a8ca",
   "pins" : [
     {
       "identity" : "capacitor-swift-pm",
@@ -8,15 +8,6 @@
       "state" : {
         "revision" : "6a2a3feb25fda8df2a284d0818bc9c83e57a7d56",
         "version" : "8.3.0"
-      }
-    },
-    {
-      "identity" : "mobile-payments-sdk-ios",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/square/mobile-payments-sdk-ios",
-      "state" : {
-        "revision" : "8d1f9a9b06d3511156391cbf4a71930666c3734c",
-        "version" : "2.5.0"
       }
     }
   ],
