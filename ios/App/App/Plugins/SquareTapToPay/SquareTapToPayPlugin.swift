@@ -42,7 +42,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
         // credentials simply succeeds. So we don't try to detect "already
         // authorized" up here; we just call it.
         MobilePaymentsSDK.shared.authorizationManager.authorize(
-            accessToken: accessToken,
+            withAccessToken: accessToken,
             locationID: locationId
         ) { error in
             if let error = error {

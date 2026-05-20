@@ -47,7 +47,14 @@
       "Bash(git -C /Users/meganatwood/sunstone-pjos add src/lib/tap-to-pay.ts)",
       "Bash(git -C /Users/meganatwood/sunstone-pjos diff --check)",
       "Bash(npx --prefix /Users/meganatwood/sunstone-pjos tsc --noEmit -p /Users/meganatwood/sunstone-pjos)",
-      "Bash(git -C /Users/meganatwood/sunstone-pjos add -u)"
+      "Bash(git -C /Users/meganatwood/sunstone-pjos add -u)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos log --oneline -1)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos commit -m ' *)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos push origin main)",
+      "Bash(git -C /Users/meganatwood/sunstone-pjos log --oneline -3)",
+      "Bash(plutil *)",
+      "Bash(xcodebuild -workspace App.xcworkspace -scheme App -destination 'generic/platform=iOS' -configuration Debug build)",
+      "Bash(git *)"
     ]
   }
 }
