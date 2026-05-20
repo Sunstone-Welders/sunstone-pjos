@@ -34,13 +34,29 @@ public class SquareTapToPayPlugin: CAPPlugin {
     private var paymentHandle: PaymentHandle?
     private var paymentDelegate: PaymentDelegateBridge?
 
+    /// Tracks whether `MobilePaymentsSDK.initialize(...)` has been called.
+    /// Accessing `MobilePaymentsSDK.shared` before this is true is a fatal
+    /// error inside the SDK — every public method below must check this flag.
+    private var isInitialized = false
+
     // ── initialize ──────────────────────────────────────────────────────────
 
     @objc func initialize(_ call: CAPPluginCall) {
-        guard let accessToken = call.getString("accessToken"),
+        guard let applicationId = call.getString("squareApplicationID"),
+              let accessToken = call.getString("accessToken"),
               let locationId = call.getString("locationId") else {
-            call.reject("accessToken and locationId are required")
+            call.reject("squareApplicationID, accessToken, and locationId are required")
             return
+        }
+
+        // Bring the SDK up before touching `.shared` for the first time.
+        // Safe to call once per process; guard with isInitialized.
+        if !isInitialized {
+            MobilePaymentsSDK.initialize(
+                applicationLaunchOptions: nil,
+                squareApplicationID: applicationId
+            )
+            isInitialized = true
         }
 
         // The SDK is idempotent — calling authorize() again with the same
@@ -61,6 +77,13 @@ public class SquareTapToPayPlugin: CAPPlugin {
     // ── isAvailable ─────────────────────────────────────────────────────────
 
     @objc func isAvailable(_ call: CAPPluginCall) {
+        // Web layer calls this on page load — before initialize() has run —
+        // so we must answer without touching `.shared`.
+        guard isInitialized else {
+            call.resolve(["available": false, "reason": "SDK not initialized"])
+            return
+        }
+
         // SDK 2.5.0 moved the device-capability check onto TapToPaySettings,
         // reachable through ReaderManager. isDeviceCapable returns true for
         // iPhone XS+ on iOS 16.7+.
@@ -73,6 +96,10 @@ public class SquareTapToPayPlugin: CAPPlugin {
     // ── getAuthorizationState ───────────────────────────────────────────────
 
     @objc func getAuthorizationState(_ call: CAPPluginCall) {
+        guard isInitialized else {
+            call.resolve(["authorized": false])
+            return
+        }
         let state = MobilePaymentsSDK.shared.authorizationManager.state
         call.resolve(["authorized": state == .authorized])
     }
@@ -80,6 +107,10 @@ public class SquareTapToPayPlugin: CAPPlugin {
     // ── startPayment ────────────────────────────────────────────────────────
 
     @objc func startPayment(_ call: CAPPluginCall) {
+        guard isInitialized else {
+            call.reject("Square SDK is not initialized. Call initialize() first.")
+            return
+        }
         guard let amountCents = call.getInt("amountCents") else {
             call.reject("amountCents is required")
             return
