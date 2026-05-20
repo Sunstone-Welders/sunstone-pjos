@@ -50,67 +50,80 @@ public class SquareTapToPayPlugin: CAPPlugin {
             return
         }
 
-        // Bring the SDK up before touching `.shared` for the first time.
-        // Safe to call once per process; guard with isInitialized.
-        if !isInitialized {
-            MobilePaymentsSDK.initialize(
-                applicationLaunchOptions: nil,
-                squareApplicationID: applicationId
-            )
-            isInitialized = true
-            print("SquareTapToPay: SDK initialized")
-        }
-
-        let authState = MobilePaymentsSDK.shared.authorizationManager.state
-        print("SquareTapToPay: auth state = \(authState)")
-
-        // Calling authorize() again after a successful auth fails with
-        // "authorization_already_authorized". Check state first and skip.
-        if authState == .authorized {
-            print("SquareTapToPay: already authorized, skipping")
-            call.resolve()
-            return
-        }
-
-        print("SquareTapToPay: calling authorize with locationId=\(locationId)")
-        MobilePaymentsSDK.shared.authorizationManager.authorize(
-            withAccessToken: accessToken,
-            locationID: locationId
-        ) { error in
-            let nsError = error as NSError?
-            print("SquareTapToPay: authorize result - error: \(error?.localizedDescription ?? "none"), code: \(nsError?.code ?? 0)")
-
-            if let error = error {
-                let ns = error as NSError
-                // "authorization_already_authorized" is not a real failure —
-                // the SDK is already in the authorized state. Treat as success.
-                let alreadyAuthorized =
-                    ns.userInfo["code"] as? String == "authorization_already_authorized" ||
-                    ns.localizedDescription.lowercased().contains("already_authorized") ||
-                    ns.localizedDescription.lowercased().contains("already authorized") ||
-                    MobilePaymentsSDK.shared.authorizationManager.state == .authorized
-
-                if alreadyAuthorized {
-                    print("SquareTapToPay: authorize returned already_authorized — treating as success")
-                    self.isInitialized = true
-                    call.resolve()
-                    return
-                }
-
-                call.reject(
-                    "Square authorization failed: \(ns.localizedDescription)",
-                    "\(ns.code)",
-                    error,
-                    [
-                        "message": ns.localizedDescription,
-                        "code": ns.code,
-                        "domain": ns.domain,
-                        "userInfo": Self.stringifyUserInfo(ns.userInfo)
-                    ]
+        // Square's SDK touches UIKit (UIApplication.connectedScenes,
+        // UIWindowScene.interfaceOrientation, etc.) during initialize() and
+        // authorize(). Capacitor dispatches plugin methods on a background
+        // "bridge" queue, so every Square SDK call must hop to main.
+        DispatchQueue.main.async {
+            // Bring the SDK up before touching `.shared` for the first time.
+            // Safe to call once per process; guard with isInitialized.
+            if !self.isInitialized {
+                MobilePaymentsSDK.initialize(
+                    applicationLaunchOptions: nil,
+                    squareApplicationID: applicationId
                 )
+                self.isInitialized = true
+                print("SquareTapToPay: SDK initialized")
+            }
+
+            let authState = MobilePaymentsSDK.shared.authorizationManager.state
+            print("SquareTapToPay: auth state = \(authState)")
+
+            // Calling authorize() again after a successful auth fails with
+            // "authorization_already_authorized". Check state first and skip.
+            if authState == .authorized {
+                print("SquareTapToPay: already authorized, skipping")
+                call.resolve(["status": "authorized"])
                 return
             }
-            call.resolve()
+
+            print("SquareTapToPay: calling authorize with locationId=\(locationId)")
+            MobilePaymentsSDK.shared.authorizationManager.authorize(
+                withAccessToken: accessToken,
+                locationID: locationId
+            ) { error in
+                if let error = error {
+                    let ns = error as NSError
+                    print("SquareTapToPay: authorize error domain=\(ns.domain) code=\(ns.code) userInfo=\(ns.userInfo)")
+
+                    // Re-check state on the main thread — the SDK may have
+                    // transitioned to .authorized even when reporting an error
+                    // ("already_authorized" is the canonical case).
+                    DispatchQueue.main.async {
+                        let postState = MobilePaymentsSDK.shared.authorizationManager.state
+                        let errorString = "\(error)"
+                        let userInfoString = "\(ns.userInfo)"
+                        let alreadyAuthorized =
+                            ns.userInfo["code"] as? String == "authorization_already_authorized" ||
+                            errorString.contains("already_authorized") ||
+                            userInfoString.contains("already_authorized") ||
+                            ns.localizedDescription.lowercased().contains("already_authorized") ||
+                            ns.localizedDescription.lowercased().contains("already authorized") ||
+                            postState == .authorized
+
+                        if alreadyAuthorized {
+                            print("SquareTapToPay: treating already_authorized as success")
+                            self.isInitialized = true
+                            call.resolve(["status": "authorized"])
+                            return
+                        }
+
+                        call.reject(
+                            "Square authorization failed: \(ns.localizedDescription)",
+                            "\(ns.code)",
+                            error,
+                            [
+                                "message": ns.localizedDescription,
+                                "code": ns.code,
+                                "domain": ns.domain,
+                                "userInfo": Self.stringifyUserInfo(ns.userInfo)
+                            ]
+                        )
+                    }
+                    return
+                }
+                call.resolve(["status": "authorized"])
+            }
         }
     }
 
@@ -135,13 +148,17 @@ public class SquareTapToPayPlugin: CAPPlugin {
             return
         }
 
-        // SDK 2.5.0 moved the device-capability check onto TapToPaySettings,
-        // reachable through ReaderManager. isDeviceCapable returns true for
-        // iPhone XS+ on iOS 16.7+.
-        let supportsTapToPay = MobilePaymentsSDK.shared.readerManager
-            .tapToPaySettings
-            .isDeviceCapable
-        call.resolve(["available": supportsTapToPay])
+        // Square SDK access must happen on the main thread; the device
+        // capability check reads UIKit state internally.
+        DispatchQueue.main.async {
+            // SDK 2.5.0 moved the device-capability check onto TapToPaySettings,
+            // reachable through ReaderManager. isDeviceCapable returns true for
+            // iPhone XS+ on iOS 16.7+.
+            let supportsTapToPay = MobilePaymentsSDK.shared.readerManager
+                .tapToPaySettings
+                .isDeviceCapable
+            call.resolve(["available": supportsTapToPay])
+        }
     }
 
     // ── getAuthorizationState ───────────────────────────────────────────────
@@ -151,8 +168,12 @@ public class SquareTapToPayPlugin: CAPPlugin {
             call.resolve(["authorized": false])
             return
         }
-        let state = MobilePaymentsSDK.shared.authorizationManager.state
-        call.resolve(["authorized": state == .authorized])
+        // Authorization state reads from shared SDK state that's mutated on
+        // the main thread; query it there to avoid UI API thread violations.
+        DispatchQueue.main.async {
+            let state = MobilePaymentsSDK.shared.authorizationManager.state
+            call.resolve(["authorized": state == .authorized])
+        }
     }
 
     // ── startPayment ────────────────────────────────────────────────────────
@@ -170,21 +191,21 @@ public class SquareTapToPayPlugin: CAPPlugin {
         let note = call.getString("note")
         print("SquareTapToPay: startPayment called, amount=\(amountCents)")
 
-        // Tap to Pay requires authorization first.
-        let state = MobilePaymentsSDK.shared.authorizationManager.state
-        print("SquareTapToPay: startPayment auth state = \(state)")
-        guard state == .authorized else {
-            call.reject("Square SDK is not authorized. Call initialize() first.")
-            return
-        }
-
-        // Square's SDK presents from a UIViewController. Capacitor's
-        // bridge.viewController is the host view controller hosting the
-        // WKWebView, so we present from there on the main thread.
+        // Square's SDK presents from a UIViewController and reads UIKit state
+        // internally — both the auth state check and startPayment must run on
+        // the main thread. Capacitor's bridge.viewController hosts the WKWebView.
         DispatchQueue.main.async { [weak self] in
             guard let self = self,
                   let presenter = self.bridge?.viewController else {
                 call.reject("No host view controller available to present Square UI.")
+                return
+            }
+
+            // Tap to Pay requires authorization first.
+            let state = MobilePaymentsSDK.shared.authorizationManager.state
+            print("SquareTapToPay: startPayment auth state = \(state)")
+            guard state == .authorized else {
+                call.reject("Square SDK is not authorized. Call initialize() first.")
                 return
             }
 
