@@ -28,7 +28,8 @@ Add the dependency to the App target's project itself:
 1. Open `ios/App/App.xcworkspace` in Xcode.
 2. Project navigator → select the **App** project → **Package Dependencies** tab.
 3. Click **+**, paste `https://github.com/square/mobile-payments-sdk-ios` and
-   choose **Exact Version 2.4.0** (or the latest 2.x).
+   choose **Up to Next Major Version, starting from 2.5.0** (or pin to the
+   latest 2.x).
 4. When the package resolves, in the "Add to Target" dialog select the **App**
    target and add the `SquareMobilePaymentsSDK` product.
 5. Project navigator → **App** target → **Build Phases** → **Compile Sources**.
