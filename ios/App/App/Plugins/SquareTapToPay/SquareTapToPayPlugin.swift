@@ -333,14 +333,9 @@ public class SquareTapToPayPlugin: CAPPlugin {
         )
         if let note = note { params.note = note }
 
-        // Use custom prompt mode so the SDK doesn't display its built-in
-        // "connect a reader" chooser. In .default mode the SDK treats Tap to
-        // Pay as an "additional" method behind a physical reader as primary;
-        // in .custom mode it shows no UI until we explicitly trigger a
-        // method via PaymentHandle.additionalPaymentMethods.
         let promptParams = PromptParameters(
-            mode: .custom,
-            additionalMethods: .tapToPay
+            mode: .default,
+            additionalMethods: .all
         )
 
         self.pendingPaymentCall = call
@@ -351,68 +346,13 @@ public class SquareTapToPayPlugin: CAPPlugin {
         let delegate = PaymentDelegateBridge(owner: self)
         self.paymentDelegate = delegate
 
-        let handle = MobilePaymentsSDK.shared.paymentManager.startPayment(
+        self.paymentHandle = MobilePaymentsSDK.shared.paymentManager.startPayment(
             params,
             promptParameters: promptParams,
             from: presenter,
             delegate: delegate
         )
-        self.paymentHandle = handle
-
-        guard let handle = handle else {
-            print("SquareTapToPay: ERROR — startPayment returned nil handle")
-            call.keepAlive = false
-            self.pendingPaymentCall = nil
-            self.paymentDelegate = nil
-            call.reject("Square SDK returned no payment handle.")
-            return
-        }
-
-        // PaymentHandle.additionalPaymentMethods is empty immediately after
-        // startPayment returns — the SDK populates it asynchronously. There is
-        // no observer/delegate for this in SDK 2.5.0 (AvailableCardInputMethodsObserver
-        // covers chip/contactless/swipe, not additional methods). Poll a few
-        // times with short delays until tapToPay shows up, then trigger it.
-        attemptTapToPayTrigger(handle: handle, attempt: 0)
-    }
-
-    /// Polls `handle.additionalPaymentMethods` for a Tap to Pay entry and
-    /// calls `triggerPayment` on it. If the array is empty (population is
-    /// async), schedules a retry. Gives up after a small fixed number of
-    /// tries so we don't loop forever if the SDK never populates.
-    private func attemptTapToPayTrigger(handle: PaymentHandle, attempt: Int) {
-        let methods = handle.additionalPaymentMethods
-        let currentMethods = MobilePaymentsSDK.shared.paymentManager
-            .currentPaymentHandle?.additionalPaymentMethods ?? []
-        print("SquareTapToPay: attempt \(attempt) — additionalPaymentMethods count = \(methods.count) (currentPaymentHandle count = \(currentMethods.count))")
-        for method in methods {
-            print("SquareTapToPay: attempt \(attempt) — method type=\(method.type.rawValue) name=\(method.name)")
-        }
-
-        if let tapToPay = methods.first(where: { $0.type == .tapToPay }) {
-            print("SquareTapToPay: triggering Tap to Pay on attempt \(attempt)")
-            do {
-                try tapToPay.triggerPayment(with: TapToPayPaymentSource())
-            } catch {
-                let ns = error as NSError
-                print("SquareTapToPay: triggerPayment failed — \(ns.localizedDescription), code=\(ns.code), userInfo=\(ns.userInfo)")
-            }
-            return
-        }
-
-        // 500ms then 1000ms (cumulative 1.5s). If additionalPaymentMethods is
-        // still empty after that the SDK will likely never populate it; bail
-        // out so we surface an error rather than hang on the call.
-        let delays: [TimeInterval] = [0.5, 1.0]
-        guard attempt < delays.count else {
-            print("SquareTapToPay: ERROR — additionalPaymentMethods never populated after \(attempt) attempts")
-            return
-        }
-        let delay = delays[attempt]
-        print("SquareTapToPay: scheduling retry in \(delay)s")
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            self?.attemptTapToPayTrigger(handle: handle, attempt: attempt + 1)
-        }
+        print("SquareTapToPay: payment started with default mode, all methods")
     }
 
     // ── Location permission ─────────────────────────────────────────────────
