@@ -368,27 +368,50 @@ public class SquareTapToPayPlugin: CAPPlugin {
             return
         }
 
-        print("SquareTapToPay: custom mode - looking for tapToPay in additionalPaymentMethods")
-        print("SquareTapToPay: additionalPaymentMethods count = \(handle.additionalPaymentMethods.count)")
+        // PaymentHandle.additionalPaymentMethods is empty immediately after
+        // startPayment returns — the SDK populates it asynchronously. There is
+        // no observer/delegate for this in SDK 2.5.0 (AvailableCardInputMethodsObserver
+        // covers chip/contactless/swipe, not additional methods). Poll a few
+        // times with short delays until tapToPay shows up, then trigger it.
+        attemptTapToPayTrigger(handle: handle, attempt: 0)
+    }
 
-        var foundTapToPay = false
-        for method in handle.additionalPaymentMethods {
-            print("SquareTapToPay: method type rawValue = \(method.type.rawValue)")
-            if method.type == .tapToPay {
-                print("SquareTapToPay: triggering Tap to Pay...")
-                do {
-                    try method.triggerPayment(with: TapToPayPaymentSource())
-                    foundTapToPay = true
-                } catch {
-                    let ns = error as NSError
-                    print("SquareTapToPay: triggerPayment failed — \(ns.localizedDescription), code=\(ns.code), userInfo=\(ns.userInfo)")
-                }
-                break
-            }
+    /// Polls `handle.additionalPaymentMethods` for a Tap to Pay entry and
+    /// calls `triggerPayment` on it. If the array is empty (population is
+    /// async), schedules a retry. Gives up after a small fixed number of
+    /// tries so we don't loop forever if the SDK never populates.
+    private func attemptTapToPayTrigger(handle: PaymentHandle, attempt: Int) {
+        let methods = handle.additionalPaymentMethods
+        let currentMethods = MobilePaymentsSDK.shared.paymentManager
+            .currentPaymentHandle?.additionalPaymentMethods ?? []
+        print("SquareTapToPay: attempt \(attempt) — additionalPaymentMethods count = \(methods.count) (currentPaymentHandle count = \(currentMethods.count))")
+        for method in methods {
+            print("SquareTapToPay: attempt \(attempt) — method type=\(method.type.rawValue) name=\(method.name)")
         }
 
-        if !foundTapToPay {
-            print("SquareTapToPay: ERROR — tapToPay method not found or trigger failed")
+        if let tapToPay = methods.first(where: { $0.type == .tapToPay }) {
+            print("SquareTapToPay: triggering Tap to Pay on attempt \(attempt)")
+            do {
+                try tapToPay.triggerPayment(with: TapToPayPaymentSource())
+            } catch {
+                let ns = error as NSError
+                print("SquareTapToPay: triggerPayment failed — \(ns.localizedDescription), code=\(ns.code), userInfo=\(ns.userInfo)")
+            }
+            return
+        }
+
+        // 500ms then 1000ms (cumulative 1.5s). If additionalPaymentMethods is
+        // still empty after that the SDK will likely never populate it; bail
+        // out so we surface an error rather than hang on the call.
+        let delays: [TimeInterval] = [0.5, 1.0]
+        guard attempt < delays.count else {
+            print("SquareTapToPay: ERROR — additionalPaymentMethods never populated after \(attempt) attempts")
+            return
+        }
+        let delay = delays[attempt]
+        print("SquareTapToPay: scheduling retry in \(delay)s")
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            self?.attemptTapToPayTrigger(handle: handle, attempt: attempt + 1)
         }
     }
 
