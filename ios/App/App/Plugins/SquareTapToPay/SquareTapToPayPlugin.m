@@ -15,4 +15,5 @@ CAP_PLUGIN(SquareTapToPayPlugin, "SquareTapToPay",
     CAP_PLUGIN_METHOD(isAvailable, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(startPayment, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(getAuthorizationState, CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(presentSettings, CAPPluginReturnPromise);
 )

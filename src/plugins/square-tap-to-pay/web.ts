@@ -30,4 +30,8 @@ export class SquareTapToPayWeb
   async getAuthorizationState(): Promise<{ authorized: boolean }> {
     return { authorized: false };
   }
+
+  async presentSettings(): Promise<void> {
+    throw this.unavailable(NOT_AVAILABLE);
+  }
 }

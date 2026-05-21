@@ -125,6 +125,15 @@ class SquareTapToPayPlugin : Plugin() {
         call.resolve(res)
     }
 
+    // ── presentSettings ─────────────────────────────────────────────────────
+
+    /// iOS-only — the Square Mobile Payments SDK settings UI is exposed only
+    /// on iOS. Reject so callers can fall back gracefully.
+    @PluginMethod
+    fun presentSettings(call: PluginCall) {
+        call.reject("presentSettings is only available on iOS")
+    }
+
     // ── startPayment ────────────────────────────────────────────────────────
 
     @PluginMethod

@@ -59,4 +59,11 @@ export interface SquareTapToPayPlugin {
   startPayment(options: SquareStartPaymentOptions): Promise<SquarePaymentResult>;
   /** Whether the SDK is currently authorized in the running process. */
   getAuthorizationState(): Promise<{ authorized: boolean }>;
+  /**
+   * Present Square's built-in Mobile Payments SDK settings screen.
+   * Drives the one-time Tap to Pay on iPhone setup flow (Apple Account link,
+   * device pairing). Resolves when the user dismisses the sheet. iOS only —
+   * Android and web reject as unavailable.
+   */
+  presentSettings(): Promise<void>;
 }

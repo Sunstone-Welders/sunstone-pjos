@@ -2,8 +2,9 @@
 // SquareTapToPayPlugin — Capacitor bridge to Square's Mobile Payments SDK
 // ios/App/App/Plugins/SquareTapToPay/SquareTapToPayPlugin.swift
 // ============================================================================
-// Exposes 4 methods to the web layer:
-//   initialize, isAvailable, startPayment, getAuthorizationState
+// Exposes 5 methods to the web layer:
+//   initialize, isAvailable, startPayment, getAuthorizationState,
+//   presentSettings
 //
 // SDK reference:
 //   https://developer.squareup.com/docs/mobile-payments-sdk/ios
@@ -45,6 +46,10 @@ public class SquareTapToPayPlugin: CAPPlugin {
     /// here so they outlive the async `requestWhenInUseAuthorization` flow.
     private var locationManager: CLLocationManager?
     private var locationDelegate: LocationDelegateBridge?
+
+    /// Held strongly so the SDK's weakly-referenced observer stays alive for
+    /// the lifetime of the plugin. Registered once after authorization.
+    private var readerObserver: ReaderObserverBridge?
 
     private static let locationDeniedMessage =
         "Location access is required for Tap to Pay. Please enable it in Settings > Privacy > Location Services."
@@ -174,6 +179,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
             }
             print("SquareTapToPay: === END DIAGNOSTICS ===")
 
+            self.registerReaderObserverIfNeeded()
             self.linkAppleAccountIfNeeded()
             call.resolve([
                 "status": "authorized",
@@ -416,6 +422,55 @@ public class SquareTapToPayPlugin: CAPPlugin {
         }
     }
 
+    // ── presentSettings ─────────────────────────────────────────────────────
+
+    /// Presents Square's built-in Mobile Payments SDK settings screen, which
+    /// drives the one-time Tap to Pay on iPhone setup (Apple Account link,
+    /// device pairing, etc.). After the sheet is dismissed we re-read the
+    /// reader list so the logs show whether Tap to Pay registered itself.
+    @objc func presentSettings(_ call: CAPPluginCall) {
+        print("SquareTapToPay: presentSettings called")
+        guard isInitialized else {
+            call.reject("SDK not initialized")
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self,
+                  let presenter = self.bridge?.viewController else {
+                call.reject("No view controller")
+                return
+            }
+            MobilePaymentsSDK.shared.settingsManager.presentSettings(from: presenter) { error in
+                if let error = error {
+                    print("SquareTapToPay: presentSettings error: \(error.localizedDescription)")
+                    call.reject(error.localizedDescription)
+                    return
+                }
+                print("SquareTapToPay: presentSettings dismissed")
+                let readers = MobilePaymentsSDK.shared.readerManager.readers
+                print("SquareTapToPay: readers after settings: count=\(readers.count)")
+                for reader in readers {
+                    print("SquareTapToPay: reader model=\(reader.model)")
+                }
+                call.resolve()
+            }
+        }
+    }
+
+    // ── Reader observer ────────────────────────────────────────────────────
+
+    /// Attaches our ReaderObserverBridge to the SDK so we get callbacks when
+    /// the embedded Tap to Pay reader pairs / unpairs / changes state. The
+    /// observer is held strongly on `self` (the SDK keeps a weak ref). Safe
+    /// to call multiple times — we only register once.
+    private func registerReaderObserverIfNeeded() {
+        if readerObserver != nil { return }
+        let bridge = ReaderObserverBridge()
+        self.readerObserver = bridge
+        MobilePaymentsSDK.shared.readerManager.add(bridge)
+        print("SquareTapToPay: ReaderObserver registered")
+    }
+
     /// Square requires the merchant to link an Apple Account (accept Apple's
     /// Tap to Pay T&Cs) before Tap to Pay payments will run. Fire-and-forget:
     /// initialize() has already resolved, and if linking fails the first
@@ -546,6 +601,26 @@ fileprivate final class PaymentDelegateBridge: NSObject, PaymentManagerDelegate 
     }
 }
 
+// ── ReaderObserver bridge ─────────────────────────────────────────────────
+// Square's ReaderManager pushes reader lifecycle events to a weakly-held
+// observer. We forward each callback to the console so we can see — during
+// Tap to Pay setup — whether the embedded reader auto-pairs, gets removed,
+// or changes status (firmware update, card insertion, etc.).
+
+fileprivate final class ReaderObserverBridge: NSObject, ReaderObserver {
+    func readerWasAdded(_ readerInfo: ReaderInfo) {
+        print("SquareTapToPay: readerWasAdded — model=\(readerInfo.model) name=\(readerInfo.name) connection=\(readerInfo.connectionType)")
+    }
+
+    func readerWasRemoved(_ readerInfo: ReaderInfo) {
+        print("SquareTapToPay: readerWasRemoved — model=\(readerInfo.model) name=\(readerInfo.name)")
+    }
+
+    func readerDidChange(_ readerInfo: ReaderInfo, change: ReaderChange) {
+        print("SquareTapToPay: readerDidChange — model=\(readerInfo.model) change=\(change)")
+    }
+}
+
 // ── CLLocationManagerDelegate bridge ──────────────────────────────────────
 // CLLocationManagerDelegate is iOS-14+. We fire `onResolved` once the
 // authorization status leaves `.notDetermined`. The initial delegate-set
@@ -593,6 +668,10 @@ public class SquareTapToPayPlugin: CAPPlugin {
     }
 
     @objc func startPayment(_ call: CAPPluginCall) {
+        call.reject(Self.notInstalledMessage)
+    }
+
+    @objc func presentSettings(_ call: CAPPluginCall) {
         call.reject(Self.notInstalledMessage)
     }
 }
