@@ -192,10 +192,82 @@ public class SquareTapToPayPlugin: CAPPlugin {
 
             self.registerReaderObserverIfNeeded()
             self.linkAppleAccountIfNeeded()
-            call.resolve([
-                "status": "authorized",
-                "locationGranted": granted
-            ])
+
+            // The Tap to Pay reader only attaches once Square's settings
+            // screen has run at least once per app session — without this
+            // step ReaderManager.readers stays empty and startPayment falls
+            // back to "connect hardware". Auto-present settings now and
+            // dismiss as soon as readerWasAdded fires for model 3.
+            self.activateTapToPayReaderViaSettings {
+                call.resolve([
+                    "status": "authorized",
+                    "locationGranted": granted
+                ])
+            }
+        }
+    }
+
+    /// Presents Square's settings screen to drive the embedded Tap to Pay
+    /// reader onto `ReaderManager.readers`. Resolves as soon as the reader
+    /// connects (and dismisses the sheet) or after a 45s safety timeout, so
+    /// initialize() can never hang on this step. Must be called on the main
+    /// queue. No-op if a Tap to Pay reader is already attached.
+    private func activateTapToPayReaderViaSettings(completion: @escaping () -> Void) {
+        if isTapToPayReaderConnected() {
+            print("SquareTapToPay: Tap to Pay reader already connected, skipping settings")
+            completion()
+            return
+        }
+        guard let presenter = self.bridge?.viewController else {
+            print("SquareTapToPay: no view controller available, skipping settings activation")
+            completion()
+            return
+        }
+        print("SquareTapToPay: no reader connected, presenting settings to activate Tap to Pay...")
+
+        var resolved = false
+        let resolveOnce: () -> Void = { [weak self] in
+            guard !resolved else { return }
+            resolved = true
+            self?.readerWaitCompletion = nil
+            completion()
+        }
+
+        // handleReaderAdded calls this when a model-3 reader appears. We try
+        // to dismiss the Square sheet programmatically; if there is nothing
+        // to dismiss (or it's already dismissing) we just resolve and let
+        // the user close it themselves.
+        self.readerWaitCompletion = { [weak self] _ in
+            guard let self = self, !resolved else { return }
+            print("SquareTapToPay: reader connected via settings, dismissing...")
+            self.readerWaitCompletion = nil
+            DispatchQueue.main.async {
+                if let presented = presenter.presentedViewController, !presented.isBeingDismissed {
+                    presenter.dismiss(animated: true) {
+                        resolveOnce()
+                    }
+                } else {
+                    resolveOnce()
+                }
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 45.0) {
+            if resolved { return }
+            print("SquareTapToPay: settings timeout, resolving without reader")
+            resolveOnce()
+        }
+
+        MobilePaymentsSDK.shared.settingsManager.presentSettings(with: presenter) { error in
+            if let error = error {
+                print("SquareTapToPay: presentSettings error during init: \(error.localizedDescription)")
+            } else {
+                print("SquareTapToPay: presentSettings dismissed during init")
+            }
+            // User dismissed manually (or the sheet finished) — proceed
+            // regardless. If the reader already connected, resolveOnce has
+            // already fired and this is a no-op.
+            resolveOnce()
         }
     }
 
@@ -306,19 +378,23 @@ public class SquareTapToPayPlugin: CAPPlugin {
                 DispatchQueue.main.async {
                     print("SquareTapToPay: payment additionalMethods = tapToPay")
                     print("SquareTapToPay: tapToPaySettings.isDeviceCapable = \(MobilePaymentsSDK.shared.readerManager.tapToPaySettings.isDeviceCapable)")
-                    // Reader pairing can lag the SDK authorize by ~30s. Wait
-                    // briefly so we don't hand a half-ready SDK to Square's UI;
-                    // if the reader still hasn't shown up after 10s proceed
-                    // anyway — Square's own flow may trigger it.
-                    self.waitForTapToPayReader(timeoutSeconds: 10.0) { _ in
-                        self.beginPayment(
-                            call: call,
-                            amountCents: amountCents,
-                            currencyCode: currencyCode,
-                            note: note,
-                            presenter: presenter
-                        )
+                    // initialize() now activates the reader via the settings
+                    // sheet, so we no longer block startPayment waiting for
+                    // pairing. Log the current state and proceed — Square's
+                    // own UI will surface a "connect hardware" prompt if the
+                    // reader is genuinely missing.
+                    if !self.isTapToPayReaderConnected() {
+                        print("SquareTapToPay: warning - no Tap to Pay reader connected at startPayment; proceeding anyway")
+                    } else {
+                        print("SquareTapToPay: Tap to Pay reader connected, proceeding to startPayment")
                     }
+                    self.beginPayment(
+                        call: call,
+                        amountCents: amountCents,
+                        currencyCode: currencyCode,
+                        note: note,
+                        presenter: presenter
+                    )
                 }
             }
         }
