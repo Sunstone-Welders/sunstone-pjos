@@ -13,6 +13,7 @@
 
 'use client';
 
+import type { PluginListenerHandle } from '@capacitor/core';
 import { isNativeApp } from './native';
 import {
   SquareTapToPay,
@@ -120,7 +121,46 @@ let initPromise: Promise<void> | null = null;
 let hasInitialized = false;
 
 let activationPromise: Promise<ActivationResult> | null = null;
+// Truthy only after the native plugin emits `readerConnected` (i.e. the SDK's
+// `readerWasAdded` callback actually fired for the Tap to Pay model). The
+// listener below is the single writer for `connected` transitions; the
+// `activateTapToPayReader()` promise resolution is treated as advisory, with
+// one exception: `alreadyConnected` short-circuits before any event would
+// fire, so we set the flag synchronously in that branch too.
 let hasActivatedThisProcess = false;
+
+let readerConnectedListenerPromise: Promise<PluginListenerHandle | null> | null = null;
+
+/**
+ * Lazily register a single process-wide listener for the native plugin's
+ * `readerConnected` event. Set as the authoritative writer of
+ * `hasActivatedThisProcess`, so fire-and-forget callers (dashboard mount)
+ * don't need to await `activateTapToPayReader()` to know when the reader
+ * actually attached.
+ *
+ * Idempotent: subsequent calls return the in-flight (or completed) promise
+ * so we never register more than one bridge listener per process.
+ */
+async function ensureReaderConnectedListener(): Promise<void> {
+  if (!isNativeApp()) return;
+  if (readerConnectedListenerPromise) {
+    await readerConnectedListenerPromise;
+    return;
+  }
+  readerConnectedListenerPromise = SquareTapToPay.addListener(
+    'readerConnected',
+    () => {
+      log('readerConnected event — marking process as activated');
+      hasActivatedThisProcess = true;
+    },
+  ).catch((err) => {
+    log('ensureReaderConnectedListener: failed to subscribe', err);
+    // Reset so a retry can attempt to subscribe again.
+    readerConnectedListenerPromise = null;
+    return null;
+  });
+  await readerConnectedListenerPromise;
+}
 
 export type ActivationStatus =
   | SquareActivateReaderStatus
@@ -168,6 +208,10 @@ export async function initializeTapToPay(
         squareApplicationID: creds.applicationId,
       });
       hasInitialized = true;
+      // Subscribe to readerConnected as soon as the SDK is authorized so the
+      // flag flips the moment the native plugin emits the event — even if the
+      // caller never awaits the activation promise.
+      void ensureReaderConnectedListener();
       log('initializeTapToPay: SDK authorized');
     } catch (err) {
       log('initializeTapToPay: failed', err);
@@ -208,7 +252,11 @@ export async function activateTapToPayReader(): Promise<ActivationResult> {
       log('activateTapToPayReader: calling native activateReader');
       const { status } = await SquareTapToPay.activateReader();
       log('activateTapToPayReader: status =', status);
-      if (status === 'connected' || status === 'alreadyConnected') {
+      // `connected` already implies `readerConnected` fired on the native
+      // side, so the listener above has already flipped the flag. The
+      // `alreadyConnected` branch is the exception — the reader was attached
+      // before we subscribed, so we set it here.
+      if (status === 'alreadyConnected') {
         hasActivatedThisProcess = true;
       }
       return { status };
@@ -232,6 +280,17 @@ export async function activateTapToPayReader(): Promise<ActivationResult> {
  * session — the reader is already attached, so there is nothing to show.
  */
 export function hasTapToPayBeenActivatedThisProcess(): boolean {
+  return hasActivatedThisProcess;
+}
+
+/**
+ * Synchronous read of the current reader connection state. Today this maps
+ * 1:1 to `hasTapToPayBeenActivatedThisProcess` — Tap to Pay on iPhone holds
+ * its connection for the process lifetime once attached. Kept as a separate
+ * name so callers reading "is the reader live right now?" don't have to
+ * reason about the historical "did we ever activate?" framing.
+ */
+export function isReaderConnected(): boolean {
   return hasActivatedThisProcess;
 }
 

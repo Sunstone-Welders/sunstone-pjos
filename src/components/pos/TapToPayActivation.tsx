@@ -20,7 +20,9 @@
 // The overlay listens for `readerConnected` and `readerActivationTimedOut`
 // events from the plugin so it auto-dismisses even when the activation
 // resolves outside the awaited promise (e.g. another caller already drove
-// it to completion).
+// it to completion). Listener registration is intentionally split into its
+// own mount-only effect so callback identity changes from the parent don't
+// thrash the Capacitor bridge with addListener/removeListener pairs.
 // ============================================================================
 
 'use client';
@@ -56,13 +58,52 @@ export default function TapToPayActivation({
   const [attemptKey, setAttemptKey] = useState(0);
   const cancelledRef = useRef(false);
 
+  // Mirror the latest callbacks into refs so the mount-only listener effect
+  // below can call them without listing them in its dependency array — that
+  // was the source of the addListener/removeListener thrashing.
+  const onConnectedRef = useRef(onConnected);
+  const onSkipRef = useRef(onSkip);
+  useEffect(() => {
+    onConnectedRef.current = onConnected;
+    onSkipRef.current = onSkip;
+  });
+
+  // Listener subscription — runs exactly once on mount. Empty deps array is
+  // load-bearing: any extra dep would re-subscribe on every render while the
+  // overlay is up, flooding the Capacitor bridge.
+  useEffect(() => {
+    let unmounted = false;
+    const handles: PluginListenerHandle[] = [];
+
+    void SquareTapToPay.addListener('readerConnected', () => {
+      if (cancelledRef.current) return;
+      onConnectedRef.current();
+    }).then((h) => {
+      if (unmounted) void h.remove();
+      else handles.push(h);
+    });
+    void SquareTapToPay.addListener('readerActivationTimedOut', () => {
+      if (cancelledRef.current) return;
+      setStage('timeout');
+    }).then((h) => {
+      if (unmounted) void h.remove();
+      else handles.push(h);
+    });
+
+    return () => {
+      unmounted = true;
+      for (const h of handles) void h.remove();
+    };
+  }, []);
+
+  // Activation lifecycle — runs on mount and on every retry via attemptKey.
+  // `cancelledRef` flips true on cleanup so a stale activation promise from
+  // the previous attempt can't resolve into the new attempt's UI state.
   useEffect(() => {
     cancelledRef.current = false;
     setStage('activating');
     setErrorMessage(null);
 
-    // Track per-attempt timers so a retry cleans up the previous run's
-    // pending nudge/timeout-hint state.
     const nudgeTimer = setTimeout(() => {
       if (!cancelledRef.current) {
         setStage((prev) => (prev === 'activating' ? 'nudging' : prev));
@@ -71,42 +112,24 @@ export default function TapToPayActivation({
 
     const timeoutHintTimer = setTimeout(() => {
       if (!cancelledRef.current) {
-        // We only flip to `timeout` here if the native plugin hasn't already
-        // resolved or fired the event. The promise resolution below takes
-        // precedence whenever it lands first.
         setStage((prev) =>
           prev === 'activating' || prev === 'nudging' ? 'timeout' : prev,
         );
       }
     }, TIMEOUT_HINT_MS);
 
-    // Listen for plugin events so external triggers (e.g. a stale activation
-    // resolving in the background) also dismiss this overlay correctly.
-    let connectedHandle: PluginListenerHandle | null = null;
-    let timeoutHandle: PluginListenerHandle | null = null;
-    void SquareTapToPay.addListener('readerConnected', () => {
-      if (!cancelledRef.current) onConnected();
-    }).then((h) => {
-      connectedHandle = h;
-    });
-    void SquareTapToPay.addListener('readerActivationTimedOut', () => {
-      if (!cancelledRef.current) setStage('timeout');
-    }).then((h) => {
-      timeoutHandle = h;
-    });
-
     void activateTapToPayReader().then((result: ActivationResult) => {
       if (cancelledRef.current) return;
       switch (result.status) {
         case 'connected':
         case 'alreadyConnected':
-          onConnected();
+          onConnectedRef.current();
           return;
         case 'cancelled':
           // User dismissed Square's sheet manually — treat as a skip so the
           // overlay closes and POS loads underneath. They can re-trigger
           // from the inline Tap to Pay CTA later.
-          onSkip();
+          onSkipRef.current();
           return;
         case 'timeout':
           setStage('timeout');
@@ -126,10 +149,8 @@ export default function TapToPayActivation({
       cancelledRef.current = true;
       clearTimeout(nudgeTimer);
       clearTimeout(timeoutHintTimer);
-      void connectedHandle?.remove();
-      void timeoutHandle?.remove();
     };
-  }, [attemptKey, onConnected, onSkip]);
+  }, [attemptKey]);
 
   const handleSkip = async () => {
     cancelledRef.current = true;

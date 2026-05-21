@@ -12,6 +12,7 @@ import {
   collectPayment,
   initializeTapToPay,
   activateTapToPayReader,
+  isReaderConnected,
   type TapToPayResult,
 } from '@/lib/tap-to-pay';
 
@@ -47,6 +48,11 @@ export default function TapToPayFlow({
 }: TapToPayFlowProps) {
   const [step, setStep] = useState<FlowStep>('ready');
   const [result, setResult] = useState<TapToPayResult | null>(null);
+  // True while we're waiting on `activateTapToPayReader()` to resolve — the
+  // processing screen swaps to "Connecting card reader…" so the artist
+  // doesn't see "Processing payment" before the customer's card has even
+  // been tapped.
+  const [isActivatingReader, setIsActivatingReader] = useState(false);
 
   const startCollection = useCallback(async () => {
     setStep('processing');
@@ -60,7 +66,11 @@ export default function TapToPayFlow({
       // Square's payment sheet would fall through to "connect hardware".
       // activateTapToPayReader is process-deduped so this is a no-op when
       // the reader was already activated upstream.
+      if (!isReaderConnected()) {
+        setIsActivatingReader(true);
+      }
       const activation = await activateTapToPayReader();
+      setIsActivatingReader(false);
       if (
         activation.status !== 'connected' &&
         activation.status !== 'alreadyConnected'
@@ -73,8 +83,7 @@ export default function TapToPayFlow({
                 ? 'cancelled'
                 : 'error',
           errorMessage:
-            activation.errorMessage ??
-            'Card reader is not connected. Try again or use another payment method.',
+            'Card reader not available. Use QR Code or Text Link instead.',
         };
         setResult(failureResult);
         setStep('result');
@@ -86,6 +95,7 @@ export default function TapToPayFlow({
       setStep('result');
       onComplete(res);
     } catch (err: any) {
+      setIsActivatingReader(false);
       setResult({
         status: 'error',
         errorMessage: err?.message ?? 'An unexpected error occurred.',
@@ -157,7 +167,7 @@ export default function TapToPayFlow({
           </div>
           <div className="space-y-2">
             <h2 className="text-xl font-bold text-[var(--text-primary)] font-[family-name:var(--font-display)]">
-              Processing payment...
+              {isActivatingReader ? 'Connecting card reader…' : 'Processing payment...'}
             </h2>
             <p className="text-lg font-semibold text-[var(--text-secondary)]">{amountDisplay}</p>
           </div>

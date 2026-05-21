@@ -77,6 +77,20 @@ public class SquareTapToPayPlugin: CAPPlugin {
     /// call so we can cancel it when the reader connects or the user cancels.
     private var activationTimeoutWorkItem: DispatchWorkItem?
 
+    /// Tracks the 5-second auto-dismiss work item for the active activateReader()
+    /// call. We dismiss Square's settings sheet on a short timer so the artist
+    /// isn't staring at it on the dashboard; the reader keeps trying to attach
+    /// in the background via the still-active ReaderObserver. Cancelled if the
+    /// reader connects before 5s elapse.
+    private var activationAutoDismissWorkItem: DispatchWorkItem?
+
+    /// True for the brief window between our auto-dismiss work item calling
+    /// `dismissSettings()` and the `presentSettings` completion handler firing.
+    /// The completion treats user-driven dismissals as `cancelled`; this flag
+    /// lets it tell those apart from our programmatic dismiss so we don't
+    /// abort an activation that's still legitimately in progress.
+    private var activationAutoDismissed = false
+
     /// Square's ReaderModel rawValue for the embedded Tap to Pay on iPhone
     /// reader. Stored as an Int constant so the wait helper can match without
     /// importing the enum case directly (rawValue is stable across SDK minor
@@ -252,6 +266,8 @@ public class SquareTapToPayPlugin: CAPPlugin {
 
             self.pendingActivationCall = call
             call.keepAlive = true
+            self.activationAutoDismissed = false
+            let activationStart = Date()
 
             // Single-shot resolver: only the first reason to resolve wins, the
             // rest are no-ops. Always runs on the main queue so plugin state
@@ -264,22 +280,51 @@ public class SquareTapToPayPlugin: CAPPlugin {
                 self.readerWaitCompletion = nil
                 self.activationTimeoutWorkItem?.cancel()
                 self.activationTimeoutWorkItem = nil
+                self.activationAutoDismissWorkItem?.cancel()
+                self.activationAutoDismissWorkItem = nil
+                self.activationAutoDismissed = false
                 pending.resolve(["status": status])
             }
 
             // Reader-arrived path. Square's docs guarantee the
             // `presentSettings` completion fires after `dismissSettings()` so
             // we lean on that to drop the sheet here instead of touching the
-            // presented view controller stack ourselves.
+            // presented view controller stack ourselves. The "before dismiss"
+            // vs "after dismiss" log split is the diagnostic that tells us
+            // whether the 5-second auto-dismiss approach is viable: if the
+            // reader still connects after we close the sheet, this strategy
+            // is the right call. If it never connects post-dismiss, we'd
+            // need to revert to dismiss-on-connect.
             self.readerWaitCompletion = { [weak self] _ in
                 guard let self = self else { return }
-                sqLog("SquareTapToPay: activateReader - reader connected, dismissing settings")
-                _ = MobilePaymentsSDK.shared.settingsManager.dismissSettings()
+                let elapsedMs = Int(Date().timeIntervalSince(activationStart) * 1000)
+                if self.activationAutoDismissed {
+                    sqLog("SquareTapToPay: activateReader - reader connected after dismiss! (\(elapsedMs)ms elapsed)")
+                } else {
+                    sqLog("SquareTapToPay: activateReader - reader connected before dismiss (\(elapsedMs)ms elapsed)")
+                    _ = MobilePaymentsSDK.shared.settingsManager.dismissSettings()
+                }
                 resolveActivation("connected")
             }
 
-            // Safety timeout. Cancellable so the success path doesn't fire it
-            // after we've already resolved.
+            // 5-second auto-dismiss. Drops Square's settings sheet so the
+            // artist isn't staring at it; the ReaderObserver stays subscribed
+            // so a late-arriving `readerWasAdded` still resolves the call via
+            // `readerWaitCompletion` above. We do NOT clear `pendingActivationCall`
+            // here — the promise stays in flight until either the reader
+            // connects or the 90s safety timeout fires.
+            let autoDismissWork = DispatchWorkItem { [weak self] in
+                guard let self = self else { return }
+                guard self.pendingActivationCall != nil else { return }
+                sqLog("SquareTapToPay: activateReader - auto-dismissing settings sheet (reader still connecting in background)")
+                self.activationAutoDismissed = true
+                _ = MobilePaymentsSDK.shared.settingsManager.dismissSettings()
+            }
+            self.activationAutoDismissWorkItem = autoDismissWork
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0, execute: autoDismissWork)
+
+            // 90-second safety timeout. Cancellable so the success path
+            // doesn't fire it after we've already resolved.
             let timeoutWork = DispatchWorkItem { [weak self] in
                 guard let self = self else { return }
                 guard self.pendingActivationCall != nil else { return }
@@ -291,13 +336,21 @@ public class SquareTapToPayPlugin: CAPPlugin {
             self.activationTimeoutWorkItem = timeoutWork
             DispatchQueue.main.asyncAfter(deadline: .now() + 90.0, execute: timeoutWork)
 
-            sqLog("SquareTapToPay: activateReader - presenting settings sheet")
+            sqLog("SquareTapToPay: activateReader - presenting settings (will auto-dismiss in 5s)")
             MobilePaymentsSDK.shared.settingsManager.presentSettings(with: presenter) { error in
                 DispatchQueue.main.async {
                     if let error = error {
                         sqLog("SquareTapToPay: activateReader presentSettings error: \(error.localizedDescription)")
                     } else {
                         sqLog("SquareTapToPay: activateReader presentSettings dismissed")
+                    }
+                    // Our auto-dismiss closed the sheet — keep waiting silently
+                    // for the reader to finish attaching in the background.
+                    // Don't resolve as cancelled; the reader-arrived path or
+                    // the 90s safety timeout will resolve the call.
+                    if self.activationAutoDismissed {
+                        sqLog("SquareTapToPay: activateReader - settings closed via auto-dismiss, awaiting reader silently")
+                        return
                     }
                     // If a resolution already happened (reader connected, or
                     // timeout fired and called dismissSettings) this no-ops.

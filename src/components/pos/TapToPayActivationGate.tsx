@@ -1,28 +1,34 @@
 // ============================================================================
-// TapToPayActivationGate — Decides when to show TapToPayActivation overlay
+// TapToPayActivationGate — Inline status banner above POS
 // src/components/pos/TapToPayActivationGate.tsx
 // ============================================================================
-// Wraps the POS and Event Mode pages. On mount, checks whether all four
-// capability gates pass (native + device-capable + entitlement + tenant
-// flags). If so, and the reader hasn't been activated this process, and the
-// user hasn't skipped this browser session, mounts TapToPayActivation as a
-// full-screen overlay on top of {children}.
+// Wraps the POS and Event Mode pages. Reader activation is now kicked off at
+// dashboard mount (see DashboardClientLayout), so by the time POS renders the
+// reader is typically already attached. This gate ONLY observes connection
+// state — it never re-triggers activation on mount.
 //
-// {children} (POS UI) always renders — the overlay sits above so a skip just
-// reveals what was already there. This keeps the artist's flow unblocked
-// when activation fails or they choose to dismiss it.
+// States:
+//   hidden       — reader connected, or device isn't Tap to Pay capable
+//   connecting   — reader not yet attached; show a soft inline banner so the
+//                  artist can start building the order while it finishes
+//   unavailable  — 90s elapsed with no readerConnected event; show a final
+//                  banner steering to QR / Text Link, with a Try Again CTA
 // ============================================================================
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  hasTapToPayBeenActivatedThisProcess,
+  activateTapToPayReader,
+  isReaderConnected,
   isTapToPayCapable,
 } from '@/lib/tap-to-pay';
-import TapToPayActivation from './TapToPayActivation';
+import { SquareTapToPay } from '@/plugins/square-tap-to-pay';
+import type { PluginListenerHandle } from '@capacitor/core';
 
-const SKIP_STORAGE_KEY = 'tapToPayActivationSkipped';
+type BannerState = 'hidden' | 'connecting' | 'unavailable';
+
+const UNAVAILABLE_TIMEOUT_MS = 90_000;
 
 interface TapToPayActivationGateProps {
   tapToPayEnabled: boolean;
@@ -35,51 +41,108 @@ export default function TapToPayActivationGate({
   squareConnected,
   children,
 }: TapToPayActivationGateProps) {
-  const [shouldShow, setShouldShow] = useState(false);
+  const [state, setState] = useState<BannerState>('hidden');
+  // Tracks whether this device passed all four capability gates. We only
+  // ever show the banner if capable — otherwise the artist isn't getting a
+  // Tap to Pay button anywhere else either.
+  const [capable, setCapable] = useState(false);
+
+  const listenerRef = useRef<PluginListenerHandle | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const armUnavailableTimer = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      setState((prev) => (prev === 'connecting' ? 'unavailable' : prev));
+      timeoutRef.current = null;
+    }, UNAVAILABLE_TIMEOUT_MS);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
-    // If the user already drove activation to success once this process, or
-    // explicitly skipped during this browser session, skip the overlay
-    // entirely. The Tap to Pay button in PaymentScreen → TapToPayFlow still
-    // has its own recovery path.
-    if (hasTapToPayBeenActivatedThisProcess()) return;
-    if (typeof window !== 'undefined' &&
-        sessionStorage.getItem(SKIP_STORAGE_KEY) === '1') {
-      return;
-    }
-
-    void isTapToPayCapable({ tapToPayEnabled, squareConnected }).then((capable) => {
+    void isTapToPayCapable({ tapToPayEnabled, squareConnected }).then((isCapable) => {
       if (cancelled) return;
-      if (capable) setShouldShow(true);
+      if (!isCapable) return;
+      setCapable(true);
+
+      if (isReaderConnected()) {
+        setState('hidden');
+        return;
+      }
+
+      setState('connecting');
+      armUnavailableTimer();
+
+      void SquareTapToPay.addListener('readerConnected', () => {
+        if (cancelled) return;
+        setState('hidden');
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+      }).then((handle) => {
+        if (cancelled) {
+          void handle.remove();
+          return;
+        }
+        listenerRef.current = handle;
+      });
     });
 
     return () => {
       cancelled = true;
+      void listenerRef.current?.remove();
+      listenerRef.current = null;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
     };
-  }, [tapToPayEnabled, squareConnected]);
+  }, [tapToPayEnabled, squareConnected, armUnavailableTimer]);
 
-  const handleConnected = () => {
-    setShouldShow(false);
-  };
+  const handleRetry = useCallback(() => {
+    setState('connecting');
+    armUnavailableTimer();
+    // Fire-and-forget. The lib's readerConnected listener flips the flag
+    // when the reader actually attaches; the local listener above dismisses
+    // the banner in response.
+    activateTapToPayReader().catch(() => {
+      // Surface as unavailable so the user has an obvious next step.
+      setState('unavailable');
+    });
+  }, [armUnavailableTimer]);
 
-  const handleSkip = () => {
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem(SKIP_STORAGE_KEY, '1');
-    }
-    setShouldShow(false);
-  };
+  if (!capable || state === 'hidden') {
+    return <>{children}</>;
+  }
 
   return (
     <>
-      {children}
-      {shouldShow && (
-        <TapToPayActivation
-          onConnected={handleConnected}
-          onSkip={handleSkip}
-        />
+      {state === 'connecting' && (
+        <div className="w-full bg-[var(--surface-subtle)] border-b border-[var(--border-default)] px-4 py-3 flex items-center gap-3">
+          <div className="w-5 h-5 animate-spin rounded-full border-2 border-[var(--border-default)] border-t-[var(--accent-primary)] flex-shrink-0" />
+          <p className="text-sm text-[var(--text-secondary)]">
+            Card reader still connecting… You can start building orders while
+            it connects.
+          </p>
+        </div>
       )}
+      {state === 'unavailable' && (
+        <div className="w-full bg-[var(--surface-subtle)] border-b border-[var(--border-default)] px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-[var(--text-secondary)]">
+            Card reader unavailable. You can still accept payments via QR Code
+            or Text Link.
+          </p>
+          <button
+            onClick={handleRetry}
+            className="text-sm font-semibold text-[var(--accent-primary)] hover:underline min-h-[44px] px-3 flex-shrink-0"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
+      {children}
     </>
   );
 }
