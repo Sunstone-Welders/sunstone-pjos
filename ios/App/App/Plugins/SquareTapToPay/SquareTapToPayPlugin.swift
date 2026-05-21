@@ -440,7 +440,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
                 call.reject("No view controller")
                 return
             }
-            MobilePaymentsSDK.shared.settingsManager.presentSettings(from: presenter) { error in
+            MobilePaymentsSDK.shared.settingsManager.presentSettings(with: presenter) { error in
                 if let error = error {
                     print("SquareTapToPay: presentSettings error: \(error.localizedDescription)")
                     call.reject(error.localizedDescription)
