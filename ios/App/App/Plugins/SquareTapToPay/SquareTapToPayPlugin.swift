@@ -83,8 +83,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
             // "authorization_already_authorized". Check state first and skip.
             if authState == .authorized {
                 print("SquareTapToPay: already authorized, skipping")
-                self.promptLocationPermissionIfNeeded()
-                call.resolve(["status": "authorized"])
+                self.completeInitialize(call: call)
                 return
             }
 
@@ -115,8 +114,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
                         if alreadyAuthorized {
                             print("SquareTapToPay: treating already_authorized as success")
                             self.isInitialized = true
-                            self.promptLocationPermissionIfNeeded()
-                            call.resolve(["status": "authorized"])
+                            self.completeInitialize(call: call)
                             return
                         }
 
@@ -135,10 +133,27 @@ public class SquareTapToPayPlugin: CAPPlugin {
                     return
                 }
                 DispatchQueue.main.async {
-                    self.promptLocationPermissionIfNeeded()
+                    self.completeInitialize(call: call)
                 }
-                call.resolve(["status": "authorized"])
             }
+        }
+    }
+
+    /// Finishes the initialize() flow after Square authorization succeeds.
+    /// Waits for CoreLocation permission to resolve BEFORE resolving the JS
+    /// promise — by the time the user taps "Tap to Pay" the OS prompt will
+    /// already be dismissed and CLLocationManager.authorizationStatus will be
+    /// stable. Apple Account linking is fire-and-forget after that.
+    private func completeInitialize(call: CAPPluginCall) {
+        print("SquareTapToPay: completeInitialize - awaiting location permission before resolving")
+        ensureLocationPermission { [weak self] granted, _ in
+            guard let self = self else { return }
+            print("SquareTapToPay: completeInitialize - location permission granted=\(granted), resolving initialize()")
+            self.linkAppleAccountIfNeeded()
+            call.resolve([
+                "status": "authorized",
+                "locationGranted": granted
+            ])
         }
     }
 
@@ -234,19 +249,27 @@ public class SquareTapToPayPlugin: CAPPlugin {
             // Square's SDK requires CoreLocation authorization before each
             // Tap to Pay transaction; otherwise startPayment rejects with
             // "Location permission has not been granted to your application."
+            // We block on ensureLocationPermission until the system prompt
+            // fully resolves and the delegate fires — only then is
+            // CLLocationManager.authorizationStatus stable enough for the
+            // SDK's internal synchronous check inside startPayment.
+            print("SquareTapToPay: startPayment - checking location permission before SDK call")
             self.ensureLocationPermission { [weak self] granted, errorMessage in
                 guard let self = self else { return }
+                print("SquareTapToPay: startPayment - location permission resolved, granted=\(granted)")
                 if !granted {
                     call.reject(errorMessage ?? Self.locationDeniedMessage)
                     return
                 }
-                self.beginPayment(
-                    call: call,
-                    amountCents: amountCents,
-                    currencyCode: currencyCode,
-                    note: note,
-                    presenter: presenter
-                )
+                DispatchQueue.main.async {
+                    self.beginPayment(
+                        call: call,
+                        amountCents: amountCents,
+                        currencyCode: currencyCode,
+                        note: note,
+                        presenter: presenter
+                    )
+                }
             }
         }
     }
@@ -319,19 +342,25 @@ public class SquareTapToPayPlugin: CAPPlugin {
             locationManager = CLLocationManager()
         }
         guard let manager = locationManager else {
+            print("SquareTapToPay: ensureLocationPermission - failed to create CLLocationManager")
             completion(false, "Unable to create CLLocationManager.")
             return
         }
 
         let status = manager.authorizationStatus
+        print("SquareTapToPay: ensureLocationPermission - status = \(status.rawValue) (\(describeAuthStatus(status)))")
         switch status {
         case .authorizedAlways, .authorizedWhenInUse:
+            print("SquareTapToPay: ensureLocationPermission - already granted, completing immediately")
             completion(true, nil)
         case .denied, .restricted:
+            print("SquareTapToPay: ensureLocationPermission - denied/restricted, completing with error")
             completion(false, Self.locationDeniedMessage)
         case .notDetermined:
+            print("SquareTapToPay: ensureLocationPermission - notDetermined, wiring delegate and requesting permission")
             let bridge = LocationDelegateBridge { [weak self] newStatus in
                 guard let self = self else { return }
+                print("SquareTapToPay: ensureLocationPermission - delegate fired, newStatus = \(newStatus.rawValue) (\(self.describeAuthStatus(newStatus)))")
                 self.locationDelegate = nil
                 switch newStatus {
                 case .authorizedAlways, .authorizedWhenInUse:
@@ -345,20 +374,21 @@ public class SquareTapToPayPlugin: CAPPlugin {
             self.locationDelegate = bridge
             manager.delegate = bridge
             manager.requestWhenInUseAuthorization()
+            print("SquareTapToPay: ensureLocationPermission - requestWhenInUseAuthorization called, awaiting delegate")
         @unknown default:
+            print("SquareTapToPay: ensureLocationPermission - unknown status, failing")
             completion(false, Self.locationDeniedMessage)
         }
     }
 
-    /// Fire-and-forget bootstrap used during initialize() so the location
-    /// permission prompt and the Square→Apple Account link both happen at
-    /// setup time rather than during the first payment. We chain Apple
-    /// linking *after* the location prompt resolves so the two modal-style
-    /// system sheets don't fight for the screen.
-    private func promptLocationPermissionIfNeeded() {
-        ensureLocationPermission { [weak self] granted, _ in
-            print("SquareTapToPay: proactive location permission granted=\(granted)")
-            self?.linkAppleAccountIfNeeded()
+    private func describeAuthStatus(_ status: CLAuthorizationStatus) -> String {
+        switch status {
+        case .notDetermined: return "notDetermined"
+        case .restricted: return "restricted"
+        case .denied: return "denied"
+        case .authorizedAlways: return "authorizedAlways"
+        case .authorizedWhenInUse: return "authorizedWhenInUse"
+        @unknown default: return "unknown"
         }
     }
 
