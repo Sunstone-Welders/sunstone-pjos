@@ -4,6 +4,42 @@ This doc covers the one-time work needed on the Mac / Apple Developer Console /
 Square Dashboard side after the cross-platform Tap to Pay code lands. The TS
 side is automated; the native side is not.
 
+## Architecture: split init vs. activate
+
+The native plugin exposes two separate entry points so the artist never sees
+Square's settings sheet during normal cold-start:
+
+| Method | When | UI? |
+|---|---|---|
+| `SquareTapToPay.initialize(...)` | Dashboard mount | None — silent |
+| `SquareTapToPay.activateReader()` | POS / Event Mode mount | Sunstone branded overlay, auto-dismisses Square's settings sheet on reader-connect |
+
+`initializeTapToPay()` in `src/lib/tap-to-pay.ts` handles authorization only
+and is deduped per process. `activateTapToPayReader()` is also deduped per
+process — a successful activation short-circuits subsequent calls.
+
+The `TapToPayActivationGate` wrapper on the POS and Event Mode pages decides
+whether to mount the `TapToPayActivation` overlay based on:
+
+1. Capacitor native platform (iOS)
+2. `SquareTapToPay.isAvailable()` (device + OS supports Tap to Pay)
+3. `SquareTapToPay.hasProximityReaderEntitlement()` (Apple's
+   `com.apple.developer.proximity-reader.payment.acceptance` is in the
+   running binary's entitlements)
+4. Tenant has `tap_to_pay_enabled = true` AND `square_merchant_id` set
+
+Production-signed builds without the entitlement hide every Tap to Pay
+surface end-to-end because (3) fails.
+
+Plugin events surfaced to JS:
+
+- `readerConnected` — `{ model: "tapToPay" }` — fires whenever the embedded
+  Tap to Pay reader attaches. Overlay subscribes to this so it dismisses even
+  when activation completes via a different code path.
+- `readerActivationTimedOut` — fires after the 45s safety timeout if the
+  reader never attaches.
+
+
 ## 0. Environment
 
 Server-side env var (already used by `/api/square/mobile-payments-auth`):
@@ -96,10 +132,18 @@ In Square's developer dashboard, on the platform application:
    - iOS: the Square SDK presents Apple's Tap to Pay terms — accept them.
    - Android: no T&C step.
 3. Toast should read "Tap to Pay is ready."
-4. Go to the POS, add an item, hit checkout. The Tap to Pay button is the
-   first option on the payment screen.
-5. Tap it → the SDK presents its sheet → hold a real card to the phone.
-6. After success, the sale row in `sales` should have:
+4. **Cold-launch activation**: force-quit the app, relaunch, land on the
+   dashboard. No reader UI should appear. Navigate to **POS** — the branded
+   "Setting up your card reader" overlay should appear, Square's settings
+   sheet should pop up on top, and as soon as the embedded reader attaches
+   the entire flow auto-dismisses. POS is visible underneath the whole time.
+5. **Within-session re-navigation**: after step 4 succeeds, navigate away
+   from POS and back. No activation overlay should appear — the reader is
+   already attached for this process.
+6. Add an item, hit checkout. The Tap to Pay button is the first option on
+   the payment screen.
+7. Tap it → Square's payment sheet appears → hold a real card to the phone.
+8. After success, the sale row in `sales` should have:
    - `payment_method = 'square_tap'`
    - `payment_provider = 'square'`
    - `payment_provider_id` = Square payment ID

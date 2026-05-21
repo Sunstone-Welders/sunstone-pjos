@@ -8,6 +8,8 @@
 //   src/plugins/square-tap-to-pay/web.ts        (browser fallback)
 // ============================================================================
 
+import type { PluginListenerHandle } from '@capacitor/core';
+
 export interface SquareInitializeOptions {
   accessToken: string;
   locationId: string;
@@ -50,8 +52,40 @@ export interface SquarePaymentResult {
   errorMessage?: string;
 }
 
+/**
+ * Result of an `activateReader()` call. Each case corresponds to a distinct
+ * UX path in the branded activation overlay.
+ */
+export type SquareActivateReaderStatus =
+  | 'alreadyConnected' // Reader was already attached — overlay should skip.
+  | 'connected'        // Reader attached during this activation.
+  | 'cancelled'        // User dismissed Square's settings sheet manually.
+  | 'timeout';         // 45s safety timeout fired without a reader.
+
+export interface SquareActivateReaderResult {
+  status: SquareActivateReaderStatus;
+}
+
+/** Payload of the `readerConnected` plugin event. */
+export interface SquareReaderConnectedEvent {
+  /** Always `"tapToPay"` today — left open for future reader models. */
+  model: string;
+}
+
+/** Plugin events emitted to JS listeners. */
+export type SquareTapToPayPluginEvents = {
+  readerConnected: SquareReaderConnectedEvent;
+  readerActivationTimedOut: Record<string, never>;
+};
+
 export interface SquareTapToPayPlugin {
-  /** Authorize the SDK with the tenant's Square OAuth credentials. Idempotent. */
+  /**
+   * Authorize the SDK with the tenant's Square OAuth credentials. Idempotent.
+   *
+   * This call is intentionally silent — it does not open Square's settings
+   * sheet or wait for the embedded Tap to Pay reader to attach. Reader
+   * activation is a separate just-in-time step (see `activateReader`).
+   */
   initialize(options: SquareInitializeOptions): Promise<void>;
   /** Whether the device + OS supports contactless Tap to Pay. */
   isAvailable(): Promise<{ available: boolean }>;
@@ -60,10 +94,37 @@ export interface SquareTapToPayPlugin {
   /** Whether the SDK is currently authorized in the running process. */
   getAuthorizationState(): Promise<{ authorized: boolean }>;
   /**
-   * Present Square's built-in Mobile Payments SDK settings screen.
-   * Drives the one-time Tap to Pay on iPhone setup flow (Apple Account link,
-   * device pairing). Resolves when the user dismisses the sheet. iOS only —
-   * Android and web reject as unavailable.
+   * Present Square's built-in Mobile Payments SDK settings screen as a manual
+   * recovery escape hatch. Prefer `activateReader()` for the normal flow —
+   * that variant auto-dismisses the sheet on reader connect and emits events
+   * the branded overlay subscribes to.
    */
   presentSettings(): Promise<void>;
+  /**
+   * Drives the embedded Tap to Pay reader onto `ReaderManager.readers` by
+   * presenting Square's settings sheet, then auto-dismissing it via
+   * `SettingsManager.dismissSettings()` as soon as `readerWasAdded` fires.
+   *
+   * Resolves with one of: `alreadyConnected`, `connected`, `cancelled`,
+   * `timeout`. Single-flight per process — concurrent calls reject.
+   */
+  activateReader(): Promise<SquareActivateReaderResult>;
+  /**
+   * Force-dismisses Square's settings sheet if our branded overlay needs to
+   * take it down (overlay cancel button, higher-priority modal, etc.).
+   * Resolves with `{ dismissed: true }` if the sheet was up, `false` otherwise.
+   */
+  dismissActivation(): Promise<{ dismissed: boolean }>;
+  /**
+   * Whether the running binary's entitlements include Apple's
+   * `com.apple.developer.proximity-reader.payment.acceptance`. Used as the
+   * top-level gate for every Tap to Pay surface in production builds.
+   * Android and web always resolve `{ entitled: false }`.
+   */
+  hasProximityReaderEntitlement(): Promise<{ entitled: boolean }>;
+  /** Subscribe to a plugin event; the returned handle removes the listener. */
+  addListener<E extends keyof SquareTapToPayPluginEvents>(
+    eventName: E,
+    listenerFunc: (event: SquareTapToPayPluginEvents[E]) => void,
+  ): Promise<PluginListenerHandle>;
 }

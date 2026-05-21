@@ -4,6 +4,7 @@ import type {
   SquareInitializeOptions,
   SquareStartPaymentOptions,
   SquarePaymentResult,
+  SquareActivateReaderResult,
 } from './definitions';
 
 const NOT_AVAILABLE =
@@ -33,5 +34,17 @@ export class SquareTapToPayWeb
 
   async presentSettings(): Promise<void> {
     throw this.unavailable(NOT_AVAILABLE);
+  }
+
+  async activateReader(): Promise<SquareActivateReaderResult> {
+    throw this.unavailable(NOT_AVAILABLE);
+  }
+
+  async dismissActivation(): Promise<{ dismissed: boolean }> {
+    return { dismissed: false };
+  }
+
+  async hasProximityReaderEntitlement(): Promise<{ entitled: boolean }> {
+    return { entitled: false };
   }
 }

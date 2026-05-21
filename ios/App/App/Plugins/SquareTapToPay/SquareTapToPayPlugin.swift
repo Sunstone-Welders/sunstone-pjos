@@ -21,10 +21,20 @@
 import Capacitor
 import CoreLocation
 import Foundation
+import Security
 import UIKit
 
 #if canImport(SquareMobilePaymentsSDK)
 import SquareMobilePaymentsSDK
+
+/// Debug-only console logger. All previous `sqLog(...)` call sites in this
+/// file route through here so production (TestFlight/App Store) builds don't
+/// leak diagnostics; flip the `#if DEBUG` guard to enable them temporarily.
+fileprivate func sqLog(_ message: String) {
+    #if DEBUG
+    print(message)
+    #endif
+}
 
 @objc(SquareTapToPayPlugin)
 public class SquareTapToPayPlugin: CAPPlugin {
@@ -52,9 +62,20 @@ public class SquareTapToPayPlugin: CAPPlugin {
     private var readerObserver: ReaderObserverBridge?
 
     /// One-shot callback fired the next time a Tap to Pay reader connects.
-    /// Used by startPayment() to wait for reader pairing (up to 10s) before
-    /// handing off to Square's UI.
+    /// Currently used by `activateReader()` (and the legacy `presentSettings`
+    /// helper) to wait for the embedded reader to attach after Square's
+    /// settings sheet has had a chance to run. Held on the main queue.
     private var readerWaitCompletion: ((Bool) -> Void)?
+
+    /// The currently in-flight `activateReader()` call. Held until the reader
+    /// connects, the user dismisses Square's sheet manually, or the safety
+    /// timeout fires. Set to nil between activations so a fresh call can take
+    /// over after the previous one resolved.
+    private var pendingActivationCall: CAPPluginCall?
+
+    /// Tracks the safety-timeout work item for the active activateReader()
+    /// call so we can cancel it when the reader connects or the user cancels.
+    private var activationTimeoutWorkItem: DispatchWorkItem?
 
     /// Square's ReaderModel rawValue for the embedded Tap to Pay on iPhone
     /// reader. Stored as an Int constant so the wait helper can match without
@@ -68,7 +89,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
     // ── initialize ──────────────────────────────────────────────────────────
 
     @objc func initialize(_ call: CAPPluginCall) {
-        print("SquareTapToPay: initialize called")
+        sqLog("SquareTapToPay: initialize called")
         guard let applicationId = call.getString("squareApplicationID"),
               let accessToken = call.getString("accessToken"),
               let locationId = call.getString("locationId") else {
@@ -89,28 +110,28 @@ public class SquareTapToPayPlugin: CAPPlugin {
                     squareApplicationID: applicationId
                 )
                 self.isInitialized = true
-                print("SquareTapToPay: SDK initialized")
+                sqLog("SquareTapToPay: SDK initialized")
             }
 
             let authState = MobilePaymentsSDK.shared.authorizationManager.state
-            print("SquareTapToPay: auth state = \(authState)")
+            sqLog("SquareTapToPay: auth state = \(authState)")
 
             // Calling authorize() again after a successful auth fails with
             // "authorization_already_authorized". Check state first and skip.
             if authState == .authorized {
-                print("SquareTapToPay: already authorized, skipping")
+                sqLog("SquareTapToPay: already authorized, skipping")
                 self.completeInitialize(call: call)
                 return
             }
 
-            print("SquareTapToPay: calling authorize with locationId=\(locationId)")
+            sqLog("SquareTapToPay: calling authorize with locationId=\(locationId)")
             MobilePaymentsSDK.shared.authorizationManager.authorize(
                 withAccessToken: accessToken,
                 locationID: locationId
             ) { error in
                 if let error = error {
                     let ns = error as NSError
-                    print("SquareTapToPay: authorize error domain=\(ns.domain) code=\(ns.code) userInfo=\(ns.userInfo)")
+                    sqLog("SquareTapToPay: authorize error domain=\(ns.domain) code=\(ns.code) userInfo=\(ns.userInfo)")
 
                     // Re-check state on the main thread — the SDK may have
                     // transitioned to .authorized even when reporting an error
@@ -128,7 +149,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
                             postState == .authorized
 
                         if alreadyAuthorized {
-                            print("SquareTapToPay: treating already_authorized as success")
+                            sqLog("SquareTapToPay: treating already_authorized as success")
                             self.isInitialized = true
                             self.completeInitialize(call: call)
                             return
@@ -156,119 +177,184 @@ public class SquareTapToPayPlugin: CAPPlugin {
     }
 
     /// Finishes the initialize() flow after Square authorization succeeds.
-    /// Waits for CoreLocation permission to resolve BEFORE resolving the JS
-    /// promise — by the time the user taps "Tap to Pay" the OS prompt will
-    /// already be dismissed and CLLocationManager.authorizationStatus will be
-    /// stable. Apple Account linking is fire-and-forget after that.
+    /// Resolves the JS promise as soon as authorization + CoreLocation
+    /// permission are settled. This path is intentionally silent: it does NOT
+    /// open Square's settings sheet (which is what kicks the embedded Tap to
+    /// Pay reader into the connected state). Reader activation is now a
+    /// separate, just-in-time step driven by `activateReader()` so the artist
+    /// only sees the branded activation overlay when they navigate to POS or
+    /// Event Mode, not on every dashboard cold-start.
     private func completeInitialize(call: CAPPluginCall) {
-        print("SquareTapToPay: completeInitialize - awaiting location permission before resolving")
+        sqLog("SquareTapToPay: completeInitialize - awaiting location permission before resolving")
         ensureLocationPermission { [weak self] granted, _ in
             guard let self = self else { return }
-            print("SquareTapToPay: completeInitialize - location permission granted=\(granted), resolving initialize()")
+            sqLog("SquareTapToPay: completeInitialize - location permission granted=\(granted)")
 
-            let tapSettings = MobilePaymentsSDK.shared.readerManager.tapToPaySettings
-            print("SquareTapToPay: === TAP TO PAY DIAGNOSTICS ===")
-            print("SquareTapToPay: isDeviceCapable = \(tapSettings.isDeviceCapable)")
-            tapSettings.isAppleAccountLinked { linked, _ in
-                print("SquareTapToPay: isAppleAccountLinked = \(linked)")
-                if !linked {
-                    print("SquareTapToPay: Apple account NOT linked — calling linkAppleAccount()...")
-                    tapSettings.linkAppleAccount { linkError in
-                        if let linkError = linkError {
-                            print("SquareTapToPay: linkAppleAccount failed — \(linkError.localizedDescription), code=\((linkError as NSError).code), userInfo=\((linkError as NSError).userInfo)")
-                        } else {
-                            print("SquareTapToPay: linkAppleAccount succeeded!")
-                        }
-                    }
-                }
-            }
-
-            let readers = MobilePaymentsSDK.shared.readerManager.readers
-            print("SquareTapToPay: connected readers count = \(readers.count)")
-            for reader in readers {
-                print("SquareTapToPay: reader — model=\(reader.model)")
-            }
-            print("SquareTapToPay: === END DIAGNOSTICS ===")
-
+            // Register the observer so `readerConnected` notifyListeners can
+            // fire later regardless of whether activateReader is in flight.
             self.registerReaderObserverIfNeeded()
+            // Apple T&C linking is fire-and-forget; if it fails, the first
+            // activateReader() call will surface the underlying error.
             self.linkAppleAccountIfNeeded()
 
-            // The Tap to Pay reader only attaches once Square's settings
-            // screen has run at least once per app session — without this
-            // step ReaderManager.readers stays empty and startPayment falls
-            // back to "connect hardware". Auto-present settings now and
-            // dismiss as soon as readerWasAdded fires for model 3.
-            self.activateTapToPayReaderViaSettings {
-                call.resolve([
-                    "status": "authorized",
-                    "locationGranted": granted
-                ])
+            call.resolve([
+                "status": "authorized",
+                "locationGranted": granted
+            ])
+        }
+    }
+
+    // ── activateReader ──────────────────────────────────────────────────────
+
+    /// Just-in-time activation entry point — drives the embedded Tap to Pay
+    /// reader onto `ReaderManager.readers` by presenting Square's settings
+    /// sheet, then dismissing it programmatically via
+    /// `SettingsManager.dismissSettings()` as soon as `readerWasAdded` fires
+    /// for `ReaderModel.tapToPay`. Surfaced to JS so the branded activation
+    /// overlay can call this at POS/Event Mode mount time instead of cold
+    /// dashboard load.
+    ///
+    /// Resolves with one of:
+    ///   - `{ status: "alreadyConnected" }` — reader already attached
+    ///   - `{ status: "connected" }` — reader attached via this call
+    ///   - `{ status: "cancelled" }` — user dismissed Square's sheet
+    ///   - `{ status: "timeout" }` — 45s safety timeout fired
+    ///
+    /// Single-flight: a second `activateReader()` while one is already in
+    /// progress rejects with a clear message so JS-side dedup catches the
+    /// race instead of double-presenting the sheet.
+    @objc func activateReader(_ call: CAPPluginCall) {
+        sqLog("SquareTapToPay: activateReader called")
+        guard isInitialized else {
+            call.reject("Square SDK is not initialized. Call initialize() first.")
+            return
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            if self.pendingActivationCall != nil {
+                sqLog("SquareTapToPay: activateReader already in flight, rejecting duplicate")
+                call.reject("Reader activation already in progress.")
+                return
+            }
+
+            if self.isTapToPayReaderConnected() {
+                sqLog("SquareTapToPay: activateReader - reader already connected")
+                call.resolve(["status": "alreadyConnected"])
+                return
+            }
+
+            guard let presenter = self.bridge?.viewController else {
+                call.reject("No host view controller available to present Square UI.")
+                return
+            }
+
+            self.pendingActivationCall = call
+            call.keepAlive = true
+
+            // Single-shot resolver: only the first reason to resolve wins, the
+            // rest are no-ops. Always runs on the main queue so plugin state
+            // mutations stay serialized.
+            let resolveActivation: (String) -> Void = { [weak self] status in
+                guard let self = self else { return }
+                guard let pending = self.pendingActivationCall else { return }
+                sqLog("SquareTapToPay: activateReader resolving with status=\(status)")
+                self.pendingActivationCall = nil
+                self.readerWaitCompletion = nil
+                self.activationTimeoutWorkItem?.cancel()
+                self.activationTimeoutWorkItem = nil
+                pending.resolve(["status": status])
+            }
+
+            // Reader-arrived path. Square's docs guarantee the
+            // `presentSettings` completion fires after `dismissSettings()` so
+            // we lean on that to drop the sheet here instead of touching the
+            // presented view controller stack ourselves.
+            self.readerWaitCompletion = { [weak self] _ in
+                guard let self = self else { return }
+                sqLog("SquareTapToPay: activateReader - reader connected, dismissing settings")
+                _ = MobilePaymentsSDK.shared.settingsManager.dismissSettings()
+                resolveActivation("connected")
+            }
+
+            // Safety timeout. Cancellable so the success path doesn't fire it
+            // after we've already resolved.
+            let timeoutWork = DispatchWorkItem { [weak self] in
+                guard let self = self else { return }
+                guard self.pendingActivationCall != nil else { return }
+                sqLog("SquareTapToPay: activateReader timeout — dismissing settings")
+                self.notifyListeners("readerActivationTimedOut", data: [:])
+                _ = MobilePaymentsSDK.shared.settingsManager.dismissSettings()
+                resolveActivation("timeout")
+            }
+            self.activationTimeoutWorkItem = timeoutWork
+            DispatchQueue.main.asyncAfter(deadline: .now() + 45.0, execute: timeoutWork)
+
+            sqLog("SquareTapToPay: activateReader - presenting settings sheet")
+            MobilePaymentsSDK.shared.settingsManager.presentSettings(with: presenter) { error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        sqLog("SquareTapToPay: activateReader presentSettings error: \(error.localizedDescription)")
+                    } else {
+                        sqLog("SquareTapToPay: activateReader presentSettings dismissed")
+                    }
+                    // If a resolution already happened (reader connected, or
+                    // timeout fired and called dismissSettings) this no-ops.
+                    // Otherwise the user closed the sheet manually.
+                    if self.pendingActivationCall != nil {
+                        resolveActivation("cancelled")
+                    }
+                }
             }
         }
     }
 
-    /// Presents Square's settings screen to drive the embedded Tap to Pay
-    /// reader onto `ReaderManager.readers`. Resolves as soon as the reader
-    /// connects (and dismisses the sheet) or after a 45s safety timeout, so
-    /// initialize() can never hang on this step. Must be called on the main
-    /// queue. No-op if a Tap to Pay reader is already attached.
-    private func activateTapToPayReaderViaSettings(completion: @escaping () -> Void) {
-        if isTapToPayReaderConnected() {
-            print("SquareTapToPay: Tap to Pay reader already connected, skipping settings")
-            completion()
+    // ── dismissActivation ───────────────────────────────────────────────────
+
+    /// Force-dismisses Square's settings sheet if our branded overlay needs
+    /// to take it down (e.g., user tapped Cancel on the overlay, or a higher-
+    /// priority flow takes over the screen). Safe to call when the sheet
+    /// isn't presented — returns `dismissed: false` in that case.
+    @objc func dismissActivation(_ call: CAPPluginCall) {
+        sqLog("SquareTapToPay: dismissActivation called")
+        guard isInitialized else {
+            call.resolve(["dismissed": false])
             return
         }
-        guard let presenter = self.bridge?.viewController else {
-            print("SquareTapToPay: no view controller available, skipping settings activation")
-            completion()
-            return
+        DispatchQueue.main.async {
+            let dismissed = MobilePaymentsSDK.shared.settingsManager.dismissSettings()
+            sqLog("SquareTapToPay: dismissActivation - dismissed=\(dismissed)")
+            call.resolve(["dismissed": dismissed])
         }
-        print("SquareTapToPay: no reader connected, presenting settings to activate Tap to Pay...")
+    }
 
-        var resolved = false
-        let resolveOnce: () -> Void = { [weak self] in
-            guard !resolved else { return }
-            resolved = true
-            self?.readerWaitCompletion = nil
-            completion()
-        }
+    // ── hasProximityReaderEntitlement ───────────────────────────────────────
 
-        // handleReaderAdded calls this when a model-3 reader appears. We try
-        // to dismiss the Square sheet programmatically; if there is nothing
-        // to dismiss (or it's already dismissing) we just resolve and let
-        // the user close it themselves.
-        self.readerWaitCompletion = { [weak self] _ in
-            guard let self = self, !resolved else { return }
-            print("SquareTapToPay: reader connected via settings, dismissing...")
-            self.readerWaitCompletion = nil
-            DispatchQueue.main.async {
-                if let presented = presenter.presentedViewController, !presented.isBeingDismissed {
-                    presenter.dismiss(animated: true) {
-                        resolveOnce()
-                    }
-                } else {
-                    resolveOnce()
-                }
-            }
-        }
+    /// Reads the running binary's own entitlements via the Security framework
+    /// to confirm Apple's `com.apple.developer.proximity-reader.payment.acceptance`
+    /// capability is present. JS uses this to hide every Tap to Pay surface in
+    /// builds where Apple hasn't granted the entitlement yet, defense-in-depth
+    /// on top of `tap_to_pay_enabled` in the tenant record. Always resolves —
+    /// false on simulator / debug builds where SecTask returns nothing useful.
+    @objc func hasProximityReaderEntitlement(_ call: CAPPluginCall) {
+        let entitled = Self.readProximityReaderEntitlement()
+        sqLog("SquareTapToPay: hasProximityReaderEntitlement = \(entitled)")
+        call.resolve(["entitled": entitled])
+    }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 45.0) {
-            if resolved { return }
-            print("SquareTapToPay: settings timeout, resolving without reader")
-            resolveOnce()
+    private static func readProximityReaderEntitlement() -> Bool {
+        let key = "com.apple.developer.proximity-reader.payment.acceptance"
+        guard let task = SecTaskCreateFromSelf(nil) else { return false }
+        var error: Unmanaged<CFError>?
+        let value = SecTaskCopyValueForEntitlement(task, key as CFString, &error)
+        // The entitlement value can be Bool or Array (when listing capabilities)
+        // — its presence is what matters. A `nil` return with no error means
+        // the key isn't in the embedded provisioning profile.
+        if let bool = value as? Bool {
+            return bool
         }
-
-        MobilePaymentsSDK.shared.settingsManager.presentSettings(with: presenter) { error in
-            if let error = error {
-                print("SquareTapToPay: presentSettings error during init: \(error.localizedDescription)")
-            } else {
-                print("SquareTapToPay: presentSettings dismissed during init")
-            }
-            // User dismissed manually (or the sheet finished) — proceed
-            // regardless. If the reader already connected, resolveOnce has
-            // already fired and this is a no-op.
-            resolveOnce()
-        }
+        return value != nil
     }
 
     /// NSError userInfo values aren't all JSON-serializable; coerce to strings
@@ -284,7 +370,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
     // ── isAvailable ─────────────────────────────────────────────────────────
 
     @objc func isAvailable(_ call: CAPPluginCall) {
-        print("SquareTapToPay: isAvailable called, initialized=\(isInitialized)")
+        sqLog("SquareTapToPay: isAvailable called, initialized=\(isInitialized)")
         // Web layer calls this on page load — before initialize() has run —
         // so we must answer without touching `.shared`.
         guard isInitialized else {
@@ -340,7 +426,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
         }
         let currencyCode = call.getString("currencyCode") ?? "USD"
         let note = call.getString("note")
-        print("SquareTapToPay: startPayment called, amount=\(amountCents)")
+        sqLog("SquareTapToPay: startPayment called, amount=\(amountCents)")
 
         // Square's SDK presents from a UIViewController and reads UIKit state
         // internally — both the auth state check and startPayment must run on
@@ -354,7 +440,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
 
             // Tap to Pay requires authorization first.
             let state = MobilePaymentsSDK.shared.authorizationManager.state
-            print("SquareTapToPay: startPayment auth state = \(state)")
+            sqLog("SquareTapToPay: startPayment auth state = \(state)")
             guard state == .authorized else {
                 call.reject("Square SDK is not authorized. Call initialize() first.")
                 return
@@ -367,26 +453,26 @@ public class SquareTapToPayPlugin: CAPPlugin {
             // fully resolves and the delegate fires — only then is
             // CLLocationManager.authorizationStatus stable enough for the
             // SDK's internal synchronous check inside startPayment.
-            print("SquareTapToPay: startPayment - checking location permission before SDK call")
+            sqLog("SquareTapToPay: startPayment - checking location permission before SDK call")
             self.ensureLocationPermission { [weak self] granted, errorMessage in
                 guard let self = self else { return }
-                print("SquareTapToPay: startPayment - location permission resolved, granted=\(granted)")
+                sqLog("SquareTapToPay: startPayment - location permission resolved, granted=\(granted)")
                 if !granted {
                     call.reject(errorMessage ?? Self.locationDeniedMessage)
                     return
                 }
                 DispatchQueue.main.async {
-                    print("SquareTapToPay: payment additionalMethods = tapToPay")
-                    print("SquareTapToPay: tapToPaySettings.isDeviceCapable = \(MobilePaymentsSDK.shared.readerManager.tapToPaySettings.isDeviceCapable)")
+                    sqLog("SquareTapToPay: payment additionalMethods = tapToPay")
+                    sqLog("SquareTapToPay: tapToPaySettings.isDeviceCapable = \(MobilePaymentsSDK.shared.readerManager.tapToPaySettings.isDeviceCapable)")
                     // initialize() now activates the reader via the settings
                     // sheet, so we no longer block startPayment waiting for
                     // pairing. Log the current state and proceed — Square's
                     // own UI will surface a "connect hardware" prompt if the
                     // reader is genuinely missing.
                     if !self.isTapToPayReaderConnected() {
-                        print("SquareTapToPay: warning - no Tap to Pay reader connected at startPayment; proceeding anyway")
+                        sqLog("SquareTapToPay: warning - no Tap to Pay reader connected at startPayment; proceeding anyway")
                     } else {
-                        print("SquareTapToPay: Tap to Pay reader connected, proceeding to startPayment")
+                        sqLog("SquareTapToPay: Tap to Pay reader connected, proceeding to startPayment")
                     }
                     self.beginPayment(
                         call: call,
@@ -451,7 +537,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
             from: presenter,
             delegate: delegate
         )
-        print("SquareTapToPay: payment started with default mode, all methods")
+        sqLog("SquareTapToPay: payment started with default mode, all methods")
     }
 
     // ── Location permission ─────────────────────────────────────────────────
@@ -465,25 +551,25 @@ public class SquareTapToPayPlugin: CAPPlugin {
             locationManager = CLLocationManager()
         }
         guard let manager = locationManager else {
-            print("SquareTapToPay: ensureLocationPermission - failed to create CLLocationManager")
+            sqLog("SquareTapToPay: ensureLocationPermission - failed to create CLLocationManager")
             completion(false, "Unable to create CLLocationManager.")
             return
         }
 
         let status = manager.authorizationStatus
-        print("SquareTapToPay: ensureLocationPermission - status = \(status.rawValue) (\(describeAuthStatus(status)))")
+        sqLog("SquareTapToPay: ensureLocationPermission - status = \(status.rawValue) (\(describeAuthStatus(status)))")
         switch status {
         case .authorizedAlways, .authorizedWhenInUse:
-            print("SquareTapToPay: ensureLocationPermission - already granted, completing immediately")
+            sqLog("SquareTapToPay: ensureLocationPermission - already granted, completing immediately")
             completion(true, nil)
         case .denied, .restricted:
-            print("SquareTapToPay: ensureLocationPermission - denied/restricted, completing with error")
+            sqLog("SquareTapToPay: ensureLocationPermission - denied/restricted, completing with error")
             completion(false, Self.locationDeniedMessage)
         case .notDetermined:
-            print("SquareTapToPay: ensureLocationPermission - notDetermined, wiring delegate and requesting permission")
+            sqLog("SquareTapToPay: ensureLocationPermission - notDetermined, wiring delegate and requesting permission")
             let bridge = LocationDelegateBridge { [weak self] newStatus in
                 guard let self = self else { return }
-                print("SquareTapToPay: ensureLocationPermission - delegate fired, newStatus = \(newStatus.rawValue) (\(self.describeAuthStatus(newStatus)))")
+                sqLog("SquareTapToPay: ensureLocationPermission - delegate fired, newStatus = \(newStatus.rawValue) (\(self.describeAuthStatus(newStatus)))")
                 self.locationDelegate = nil
                 switch newStatus {
                 case .authorizedAlways, .authorizedWhenInUse:
@@ -497,9 +583,9 @@ public class SquareTapToPayPlugin: CAPPlugin {
             self.locationDelegate = bridge
             manager.delegate = bridge
             manager.requestWhenInUseAuthorization()
-            print("SquareTapToPay: ensureLocationPermission - requestWhenInUseAuthorization called, awaiting delegate")
+            sqLog("SquareTapToPay: ensureLocationPermission - requestWhenInUseAuthorization called, awaiting delegate")
         @unknown default:
-            print("SquareTapToPay: ensureLocationPermission - unknown status, failing")
+            sqLog("SquareTapToPay: ensureLocationPermission - unknown status, failing")
             completion(false, Self.locationDeniedMessage)
         }
     }
@@ -522,7 +608,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
     /// device pairing, etc.). After the sheet is dismissed we re-read the
     /// reader list so the logs show whether Tap to Pay registered itself.
     @objc func presentSettings(_ call: CAPPluginCall) {
-        print("SquareTapToPay: presentSettings called")
+        sqLog("SquareTapToPay: presentSettings called")
         guard isInitialized else {
             call.reject("SDK not initialized")
             return
@@ -535,15 +621,15 @@ public class SquareTapToPayPlugin: CAPPlugin {
             }
             MobilePaymentsSDK.shared.settingsManager.presentSettings(with: presenter) { error in
                 if let error = error {
-                    print("SquareTapToPay: presentSettings error: \(error.localizedDescription)")
+                    sqLog("SquareTapToPay: presentSettings error: \(error.localizedDescription)")
                     call.reject(error.localizedDescription)
                     return
                 }
-                print("SquareTapToPay: presentSettings dismissed")
+                sqLog("SquareTapToPay: presentSettings dismissed")
                 let readers = MobilePaymentsSDK.shared.readerManager.readers
-                print("SquareTapToPay: readers after settings: count=\(readers.count)")
+                sqLog("SquareTapToPay: readers after settings: count=\(readers.count)")
                 for reader in readers {
-                    print("SquareTapToPay: reader model=\(reader.model)")
+                    sqLog("SquareTapToPay: reader model=\(reader.model)")
                 }
                 call.resolve()
             }
@@ -561,7 +647,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
         let bridge = ReaderObserverBridge(owner: self)
         self.readerObserver = bridge
         MobilePaymentsSDK.shared.readerManager.add(bridge)
-        print("SquareTapToPay: ReaderObserver registered")
+        sqLog("SquareTapToPay: ReaderObserver registered")
     }
 
     // ── Tap to Pay reader wait helper ──────────────────────────────────────
@@ -573,42 +659,16 @@ public class SquareTapToPayPlugin: CAPPlugin {
         return readers.contains { $0.model.rawValue == Self.tapToPayReaderModelRawValue }
     }
 
-    /// Waits up to `timeoutSeconds` for a Tap to Pay reader to pair via the
-    /// ReaderObserver. Resolves immediately if one is already connected, and
-    /// resolves with `false` on timeout so the caller can proceed anyway —
-    /// Square's UI sometimes triggers reader connection on its own.
-    /// Must be called on the main queue.
-    private func waitForTapToPayReader(
-        timeoutSeconds: TimeInterval,
-        completion: @escaping (Bool) -> Void
-    ) {
-        if isTapToPayReaderConnected() {
-            print("SquareTapToPay: Tap to Pay reader already connected")
-            completion(true)
-            return
-        }
-        print("SquareTapToPay: waiting up to \(timeoutSeconds)s for Tap to Pay reader to connect")
-        var resolved = false
-        self.readerWaitCompletion = { [weak self] connected in
-            guard !resolved else { return }
-            resolved = true
-            self?.readerWaitCompletion = nil
-            print("SquareTapToPay: reader wait resolved, connected=\(connected)")
-            completion(connected)
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + timeoutSeconds) { [weak self] in
-            if resolved { return }
-            resolved = true
-            self?.readerWaitCompletion = nil
-            print("SquareTapToPay: reader wait timed out; proceeding anyway")
-            completion(false)
-        }
-    }
-
-    /// Called by ReaderObserverBridge when readerWasAdded fires. Fulfills the
-    /// pending startPayment() wait if the new reader is the Tap to Pay reader.
+    /// Called by ReaderObserverBridge when readerWasAdded fires. Fulfills any
+    /// pending activateReader() wait AND emits a `readerConnected` event so
+    /// the JS-side overlay can react regardless of whether activateReader was
+    /// the trigger (e.g., legacy `presentSettings` flow, manual reset). Only
+    /// reacts to model 3 (Tap to Pay on iPhone) — Bluetooth/USB readers go
+    /// through their own paths.
     fileprivate func handleReaderAdded(_ readerInfo: ReaderInfo) {
         guard readerInfo.model.rawValue == Self.tapToPayReaderModelRawValue else { return }
+        sqLog("SquareTapToPay: handleReaderAdded - tapToPay model attached, firing listeners")
+        self.notifyListeners("readerConnected", data: ["model": "tapToPay"])
         if let waiter = self.readerWaitCompletion {
             waiter(true)
         }
@@ -622,20 +682,20 @@ public class SquareTapToPayPlugin: CAPPlugin {
         DispatchQueue.main.async {
             let settings = MobilePaymentsSDK.shared.readerManager.tapToPaySettings
             settings.isAppleAccountLinked { linked, error in
-                print("SquareTapToPay: Apple account linked = \(linked)")
+                sqLog("SquareTapToPay: Apple account linked = \(linked)")
                 if let error = error {
                     let ns = error as NSError
-                    print("SquareTapToPay: isAppleAccountLinked error domain=\(ns.domain) code=\(ns.code) message=\(ns.localizedDescription)")
+                    sqLog("SquareTapToPay: isAppleAccountLinked error domain=\(ns.domain) code=\(ns.code) message=\(ns.localizedDescription)")
                 }
                 if linked { return }
                 DispatchQueue.main.async {
-                    print("SquareTapToPay: linking Apple account...")
+                    sqLog("SquareTapToPay: linking Apple account...")
                     settings.linkAppleAccount { linkError in
                         if let linkError = linkError {
                             let ns = linkError as NSError
-                            print("SquareTapToPay: linkAppleAccount error domain=\(ns.domain) code=\(ns.code) message=\(ns.localizedDescription)")
+                            sqLog("SquareTapToPay: linkAppleAccount error domain=\(ns.domain) code=\(ns.code) message=\(ns.localizedDescription)")
                         } else {
-                            print("SquareTapToPay: Apple account linked successfully")
+                            sqLog("SquareTapToPay: Apple account linked successfully")
                         }
                     }
                 }
@@ -674,7 +734,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
         guard let call = pendingPaymentCall else { return }
         defer { resetPaymentState() }
         let ns = error as NSError
-        print("SquareTapToPay: payment error - \(ns.localizedDescription), code: \(ns.code), userInfo: \(ns.userInfo)")
+        sqLog("SquareTapToPay: payment error - \(ns.localizedDescription), code: \(ns.code), userInfo: \(ns.userInfo)")
         call.resolve([
             "status": "error",
             "errorMessage": ns.localizedDescription,
@@ -759,16 +819,16 @@ fileprivate final class ReaderObserverBridge: NSObject, ReaderObserver {
     }
 
     func readerWasAdded(_ readerInfo: ReaderInfo) {
-        print("SquareTapToPay: readerWasAdded — model=\(readerInfo.model) (rawValue=\(readerInfo.model.rawValue)) name=\(readerInfo.name) connection=\(readerInfo.connectionType)")
+        sqLog("SquareTapToPay: readerWasAdded — model=\(readerInfo.model) (rawValue=\(readerInfo.model.rawValue)) name=\(readerInfo.name) connection=\(readerInfo.connectionType)")
         owner?.handleReaderAdded(readerInfo)
     }
 
     func readerWasRemoved(_ readerInfo: ReaderInfo) {
-        print("SquareTapToPay: readerWasRemoved — model=\(readerInfo.model) name=\(readerInfo.name)")
+        sqLog("SquareTapToPay: readerWasRemoved — model=\(readerInfo.model) name=\(readerInfo.name)")
     }
 
     func readerDidChange(_ readerInfo: ReaderInfo, change: ReaderChange) {
-        print("SquareTapToPay: readerDidChange — model=\(readerInfo.model) change=\(change)")
+        sqLog("SquareTapToPay: readerDidChange — model=\(readerInfo.model) change=\(change)")
     }
 }
 
@@ -824,6 +884,18 @@ public class SquareTapToPayPlugin: CAPPlugin {
 
     @objc func presentSettings(_ call: CAPPluginCall) {
         call.reject(Self.notInstalledMessage)
+    }
+
+    @objc func activateReader(_ call: CAPPluginCall) {
+        call.reject(Self.notInstalledMessage)
+    }
+
+    @objc func dismissActivation(_ call: CAPPluginCall) {
+        call.reject(Self.notInstalledMessage)
+    }
+
+    @objc func hasProximityReaderEntitlement(_ call: CAPPluginCall) {
+        call.resolve(["entitled": false])
     }
 }
 

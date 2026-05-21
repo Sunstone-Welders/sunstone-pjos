@@ -16,4 +16,7 @@ CAP_PLUGIN(SquareTapToPayPlugin, "SquareTapToPay",
     CAP_PLUGIN_METHOD(startPayment, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(getAuthorizationState, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(presentSettings, CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(activateReader, CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(dismissActivation, CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(hasProximityReaderEntitlement, CAPPluginReturnPromise);
 )

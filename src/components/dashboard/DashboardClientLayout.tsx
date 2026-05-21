@@ -175,9 +175,11 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('open-notification-inbox', handler);
   }, [openNotif]);
 
-  // Initialize Square Tap to Pay SDK early so the reader is ready by checkout time.
-  // Reader pairing can take ~30s after authorize — getting a head start at app launch
-  // means it's already connected before the artist hits POS or Event Mode.
+  // Silent SDK authorization at dashboard mount. This authorizes the Square
+  // Mobile Payments SDK against the tenant's OAuth credentials but does NOT
+  // open Square's settings sheet or wait for the embedded reader to attach —
+  // those happen later, just-in-time, when the artist enters POS or Event
+  // Mode and TapToPayActivationGate fires the branded activation overlay.
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform()) {
       initializeTapToPay('square').catch(err => {

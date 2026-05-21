@@ -8,7 +8,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { collectPayment, initializeTapToPay, type TapToPayResult } from '@/lib/tap-to-pay';
+import {
+  collectPayment,
+  initializeTapToPay,
+  activateTapToPayReader,
+  type TapToPayResult,
+} from '@/lib/tap-to-pay';
 
 // ── Contactless icon (SF Symbol wave.3.right.circle equivalent) ──
 const ContactlessWaveIcon = ({ className = 'w-20 h-20' }: { className?: string }) => (
@@ -50,6 +55,32 @@ export default function TapToPayFlow({
       // but we re-authorize here so a cold-start (process killed in background)
       // or a missed warm-up still produces a working payment.
       await initializeTapToPay('square');
+      // Recovery path: if the user skipped the activation overlay (or it
+      // failed) the embedded Tap to Pay reader isn't attached yet, and
+      // Square's payment sheet would fall through to "connect hardware".
+      // activateTapToPayReader is process-deduped so this is a no-op when
+      // the reader was already activated upstream.
+      const activation = await activateTapToPayReader();
+      if (
+        activation.status !== 'connected' &&
+        activation.status !== 'alreadyConnected'
+      ) {
+        const failureResult: TapToPayResult = {
+          status:
+            activation.status === 'timeout'
+              ? 'timed_out'
+              : activation.status === 'cancelled'
+                ? 'cancelled'
+                : 'error',
+          errorMessage:
+            activation.errorMessage ??
+            'Card reader is not connected. Try again or use another payment method.',
+        };
+        setResult(failureResult);
+        setStep('result');
+        onComplete(failureResult);
+        return;
+      }
       const res = await collectPayment(amountCents, 'usd');
       setResult(res);
       setStep('result');

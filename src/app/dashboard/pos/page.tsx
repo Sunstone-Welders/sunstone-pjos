@@ -30,6 +30,7 @@ import CashDrawerPanel from '@/components/CashDrawerPanel';
 import MiniQueueStrip from '@/components/MiniQueueStrip';
 import { createWarrantyRecords } from '@/lib/warranty';
 import { checkTapToPayAvailability, type TapToPayResult } from '@/lib/tap-to-pay';
+import TapToPayActivationGate from '@/components/pos/TapToPayActivationGate';
 import type {
   InventoryItem,
   InventoryItemVariant,
@@ -710,6 +711,10 @@ export default function StoreModePage() {
   const qrUrl = generateQRData(tenant.slug);
 
   return (
+    <TapToPayActivationGate
+      tapToPayEnabled={!!(tenant as any).tap_to_pay_enabled}
+      squareConnected={!!(tenant as any).square_merchant_id}
+    >
     <div className="fixed inset-0 bg-[var(--surface-base)] flex flex-col">
 
       {/* ── Header ── */}
@@ -1077,5 +1082,6 @@ export default function StoreModePage() {
         />
       )}
     </div>
+    </TapToPayActivationGate>
   );
 }

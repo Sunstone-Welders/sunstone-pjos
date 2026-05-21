@@ -26,6 +26,7 @@ import JumpRingPickerModal from '@/components/JumpRingPickerModal';
 import CashDrawerPanel from '@/components/CashDrawerPanel';
 import { createWarrantyRecords } from '@/lib/warranty';
 import { checkTapToPayAvailability, type TapToPayResult } from '@/lib/tap-to-pay';
+import TapToPayActivationGate from '@/components/pos/TapToPayActivationGate';
 import { ProductSelector, QueueBadge, CheckoutFlow, PendingPayments, GiftCardModal, SalesPanel } from '@/components/pos';
 import type { CompletedSaleData, CheckoutStep, GiftCardData } from '@/components/pos';
 import type { QueueEntry } from '@/components/MiniQueueStrip';
@@ -832,6 +833,10 @@ function EventModePageInner() {
   }
 
   return (
+    <TapToPayActivationGate
+      tapToPayEnabled={!!(tenant as any)?.tap_to_pay_enabled}
+      squareConnected={!!(tenant as any)?.square_merchant_id}
+    >
     <div className="fixed inset-0 bg-[var(--surface-base)] flex flex-col">
 
       {/* ── Header ── */}
@@ -1176,6 +1181,7 @@ function EventModePageInner() {
         />
       )}
     </div>
+    </TapToPayActivationGate>
   );
 }
 

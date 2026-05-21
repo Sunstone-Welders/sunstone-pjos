@@ -14,7 +14,20 @@
 'use client';
 
 import { isNativeApp } from './native';
-import { SquareTapToPay } from '@/plugins/square-tap-to-pay';
+import {
+  SquareTapToPay,
+  type SquareActivateReaderStatus,
+} from '@/plugins/square-tap-to-pay';
+
+/**
+ * Flip to `true` to surface the diagnostic console logs from this module in
+ * production builds. Off by default so TestFlight/App Store builds stay quiet;
+ * the Swift plugin has an equivalent `#if DEBUG` guard on its `print` calls.
+ */
+const DEBUG = false;
+const log = (...args: unknown[]) => {
+  if (DEBUG) console.log('[TapToPay]', ...args);
+};
 
 export type TapToPayProcessor = 'stripe' | 'square';
 
@@ -92,15 +105,44 @@ export async function checkTapToPayAvailability(): Promise<boolean> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Process-lifetime guards
+// ---------------------------------------------------------------------------
+// `initializeTapToPay()` and `activateTapToPayReader()` both have side effects
+// that must NOT race: init authorizes the SDK once per process; activate
+// presents Square's settings sheet exactly once per cold-start. Without these
+// dedup slots, a dashboard-mount call and a POS-mount call landing in the
+// same frame would both fetch credentials, both call the native plugin, and
+// the second activation would reject with "already in progress" on the Swift
+// side. The guards collapse that into a single in-flight promise.
+
+let initPromise: Promise<void> | null = null;
+let hasInitialized = false;
+
+let activationPromise: Promise<ActivationResult> | null = null;
+let hasActivatedThisProcess = false;
+
+export type ActivationStatus =
+  | SquareActivateReaderStatus
+  | 'error'
+  | 'unavailable';
+
+export interface ActivationResult {
+  status: ActivationStatus;
+  errorMessage?: string;
+}
+
 /**
- * Warm up the reader at app launch (Apple requirement 5.1.4).
- * Should be called early in the app lifecycle when Tap to Pay is enabled.
+ * Warm up the SDK at app launch — silent, no UI. Called from the dashboard
+ * client layout on mount when running natively.
  *
  * For Square: lazily fetches the tenant's OAuth credentials and authorizes
- * the Mobile Payments SDK. The SDK presents Apple's Tap to Pay terms on
- * first authorize (iOS); on Android no in-app T&C step is required.
+ * the Mobile Payments SDK. The SDK does NOT present Apple's Tap to Pay
+ * settings sheet here — that happens later in `activateTapToPayReader()`.
  *
- * Idempotent — safe to call repeatedly.
+ * Idempotent per process: subsequent calls return the in-flight promise (or
+ * resolve immediately if already initialized). Both guards reset on failure
+ * so the retry path still works.
  */
 export async function initializeTapToPay(
   processor: TapToPayProcessor
@@ -110,15 +152,119 @@ export async function initializeTapToPay(
     // Stripe Terminal will be wired up in a follow-up.
     throw new Error(`Tap to Pay for ${processor} is not yet implemented.`);
   }
-  const creds = await fetchSquareCredentials();
-  // Android reads `applicationId`; iOS reads `squareApplicationID`. Send both
-  // so the same payload satisfies both native plugins.
-  await SquareTapToPay.initialize({
-    accessToken: creds.accessToken,
-    locationId: creds.locationId,
-    applicationId: creds.applicationId,
-    squareApplicationID: creds.applicationId,
-  });
+  if (hasInitialized) return;
+  if (initPromise) return initPromise;
+
+  initPromise = (async () => {
+    try {
+      log('initializeTapToPay: fetching credentials');
+      const creds = await fetchSquareCredentials();
+      // Android reads `applicationId`; iOS reads `squareApplicationID`. Send
+      // both so the same payload satisfies both native plugins.
+      await SquareTapToPay.initialize({
+        accessToken: creds.accessToken,
+        locationId: creds.locationId,
+        applicationId: creds.applicationId,
+        squareApplicationID: creds.applicationId,
+      });
+      hasInitialized = true;
+      log('initializeTapToPay: SDK authorized');
+    } catch (err) {
+      log('initializeTapToPay: failed', err);
+      hasInitialized = false;
+      throw err;
+    } finally {
+      initPromise = null;
+    }
+  })();
+
+  return initPromise;
+}
+
+/**
+ * Just-in-time reader activation — call this when the artist navigates to
+ * POS or Event Mode. Presents Square's settings sheet (auto-dismisses on
+ * reader connect), driven by the branded activation overlay.
+ *
+ * Idempotent per process: a successful `connected` or `alreadyConnected`
+ * result short-circuits subsequent calls. On `timeout`, `cancelled`, or
+ * `error`, the flag resets so the artist can retry from the overlay.
+ */
+export async function activateTapToPayReader(): Promise<ActivationResult> {
+  if (!isNativeApp()) {
+    return { status: 'unavailable', errorMessage: 'Native app only.' };
+  }
+  if (hasActivatedThisProcess) {
+    return { status: 'alreadyConnected' };
+  }
+  if (activationPromise) return activationPromise;
+
+  activationPromise = (async () => {
+    try {
+      // The SDK has to be authorized before we can drive the settings sheet.
+      // The dashboard-mount init usually wins this race, but if the artist
+      // jumps straight to POS we run it on demand.
+      await initializeTapToPay('square');
+      log('activateTapToPayReader: calling native activateReader');
+      const { status } = await SquareTapToPay.activateReader();
+      log('activateTapToPayReader: status =', status);
+      if (status === 'connected' || status === 'alreadyConnected') {
+        hasActivatedThisProcess = true;
+      }
+      return { status };
+    } catch (err: any) {
+      log('activateTapToPayReader: error', err);
+      return {
+        status: 'error',
+        errorMessage: err?.message ?? 'Tap to Pay activation failed.',
+      };
+    } finally {
+      activationPromise = null;
+    }
+  })();
+
+  return activationPromise;
+}
+
+/**
+ * Synchronous read of the in-process activation flag. Used by the activation
+ * gate to skip its overlay entirely on POS re-mounts within the same app
+ * session — the reader is already attached, so there is nothing to show.
+ */
+export function hasTapToPayBeenActivatedThisProcess(): boolean {
+  return hasActivatedThisProcess;
+}
+
+/**
+ * Single source of truth for whether to show any Tap to Pay UI. All four
+ * must be true:
+ *   1. Running natively (iOS app, not browser)
+ *   2. Device + OS supports contactless (iPhone XS+, iOS 16.7+)
+ *   3. Apple's `com.apple.developer.proximity-reader.payment.acceptance`
+ *      entitlement is present in the running binary
+ *   4. Tenant has Tap to Pay enabled AND Square is connected (passed in by
+ *      caller — this function only handles the device-side gates)
+ *
+ * Returns false on any failure so a broken native check never accidentally
+ * surfaces a Tap to Pay button that won't work.
+ */
+export async function isTapToPayCapable(opts: {
+  tapToPayEnabled: boolean;
+  squareConnected: boolean;
+}): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  if (!opts.tapToPayEnabled || !opts.squareConnected) return false;
+  try {
+    const [{ available }, { entitled }] = await Promise.all([
+      SquareTapToPay.isAvailable(),
+      SquareTapToPay.hasProximityReaderEntitlement(),
+    ]);
+    log('isTapToPayCapable: available=', available, 'entitled=', entitled);
+    return available && entitled;
+  } catch (err) {
+    log('isTapToPayCapable: error', err);
+    return false;
+  }
 }
 
 /**
