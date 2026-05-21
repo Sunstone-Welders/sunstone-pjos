@@ -119,6 +119,17 @@ export async function initializeTapToPay(
     applicationId: creds.applicationId,
     squareApplicationID: creds.applicationId,
   });
+
+  // TEMPORARY: drive Square's Mobile Payments SDK settings screen to inspect
+  // the Tap to Pay on iPhone setup state. Remove once we understand why the
+  // embedded reader isn't auto-pairing.
+  try {
+    console.log('[TapToPay] Opening Square settings...');
+    await SquareTapToPay.presentSettings();
+    console.log('[TapToPay] Square settings dismissed');
+  } catch (e) {
+    console.log('[TapToPay] presentSettings error:', e);
+  }
 }
 
 /**
