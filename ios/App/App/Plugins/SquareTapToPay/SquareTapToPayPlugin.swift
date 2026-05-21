@@ -51,6 +51,17 @@ public class SquareTapToPayPlugin: CAPPlugin {
     /// the lifetime of the plugin. Registered once after authorization.
     private var readerObserver: ReaderObserverBridge?
 
+    /// One-shot callback fired the next time a Tap to Pay reader connects.
+    /// Used by startPayment() to wait for reader pairing (up to 10s) before
+    /// handing off to Square's UI.
+    private var readerWaitCompletion: ((Bool) -> Void)?
+
+    /// Square's ReaderModel rawValue for the embedded Tap to Pay on iPhone
+    /// reader. Stored as an Int constant so the wait helper can match without
+    /// importing the enum case directly (rawValue is stable across SDK minor
+    /// versions; the enum case name has shifted).
+    private static let tapToPayReaderModelRawValue = 3
+
     private static let locationDeniedMessage =
         "Location access is required for Tap to Pay. Please enable it in Settings > Privacy > Location Services."
 
@@ -295,13 +306,19 @@ public class SquareTapToPayPlugin: CAPPlugin {
                 DispatchQueue.main.async {
                     print("SquareTapToPay: payment additionalMethods = tapToPay")
                     print("SquareTapToPay: tapToPaySettings.isDeviceCapable = \(MobilePaymentsSDK.shared.readerManager.tapToPaySettings.isDeviceCapable)")
-                    self.beginPayment(
-                        call: call,
-                        amountCents: amountCents,
-                        currencyCode: currencyCode,
-                        note: note,
-                        presenter: presenter
-                    )
+                    // Reader pairing can lag the SDK authorize by ~30s. Wait
+                    // briefly so we don't hand a half-ready SDK to Square's UI;
+                    // if the reader still hasn't shown up after 10s proceed
+                    // anyway — Square's own flow may trigger it.
+                    self.waitForTapToPayReader(timeoutSeconds: 10.0) { _ in
+                        self.beginPayment(
+                            call: call,
+                            amountCents: amountCents,
+                            currencyCode: currencyCode,
+                            note: note,
+                            presenter: presenter
+                        )
+                    }
                 }
             }
         }
@@ -465,10 +482,60 @@ public class SquareTapToPayPlugin: CAPPlugin {
     /// to call multiple times — we only register once.
     private func registerReaderObserverIfNeeded() {
         if readerObserver != nil { return }
-        let bridge = ReaderObserverBridge()
+        let bridge = ReaderObserverBridge(owner: self)
         self.readerObserver = bridge
         MobilePaymentsSDK.shared.readerManager.add(bridge)
         print("SquareTapToPay: ReaderObserver registered")
+    }
+
+    // ── Tap to Pay reader wait helper ──────────────────────────────────────
+
+    /// Returns true if a Tap to Pay on iPhone reader (model rawValue 3) is
+    /// currently present in the SDK's reader list.
+    private func isTapToPayReaderConnected() -> Bool {
+        let readers = MobilePaymentsSDK.shared.readerManager.readers
+        return readers.contains { $0.model.rawValue == Self.tapToPayReaderModelRawValue }
+    }
+
+    /// Waits up to `timeoutSeconds` for a Tap to Pay reader to pair via the
+    /// ReaderObserver. Resolves immediately if one is already connected, and
+    /// resolves with `false` on timeout so the caller can proceed anyway —
+    /// Square's UI sometimes triggers reader connection on its own.
+    /// Must be called on the main queue.
+    private func waitForTapToPayReader(
+        timeoutSeconds: TimeInterval,
+        completion: @escaping (Bool) -> Void
+    ) {
+        if isTapToPayReaderConnected() {
+            print("SquareTapToPay: Tap to Pay reader already connected")
+            completion(true)
+            return
+        }
+        print("SquareTapToPay: waiting up to \(timeoutSeconds)s for Tap to Pay reader to connect")
+        var resolved = false
+        self.readerWaitCompletion = { [weak self] connected in
+            guard !resolved else { return }
+            resolved = true
+            self?.readerWaitCompletion = nil
+            print("SquareTapToPay: reader wait resolved, connected=\(connected)")
+            completion(connected)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeoutSeconds) { [weak self] in
+            if resolved { return }
+            resolved = true
+            self?.readerWaitCompletion = nil
+            print("SquareTapToPay: reader wait timed out; proceeding anyway")
+            completion(false)
+        }
+    }
+
+    /// Called by ReaderObserverBridge when readerWasAdded fires. Fulfills the
+    /// pending startPayment() wait if the new reader is the Tap to Pay reader.
+    fileprivate func handleReaderAdded(_ readerInfo: ReaderInfo) {
+        guard readerInfo.model.rawValue == Self.tapToPayReaderModelRawValue else { return }
+        if let waiter = self.readerWaitCompletion {
+            waiter(true)
+        }
     }
 
     /// Square requires the merchant to link an Apple Account (accept Apple's
@@ -608,8 +675,16 @@ fileprivate final class PaymentDelegateBridge: NSObject, PaymentManagerDelegate 
 // or changes status (firmware update, card insertion, etc.).
 
 fileprivate final class ReaderObserverBridge: NSObject, ReaderObserver {
+    weak var owner: SquareTapToPayPlugin?
+
+    init(owner: SquareTapToPayPlugin) {
+        self.owner = owner
+        super.init()
+    }
+
     func readerWasAdded(_ readerInfo: ReaderInfo) {
-        print("SquareTapToPay: readerWasAdded — model=\(readerInfo.model) name=\(readerInfo.name) connection=\(readerInfo.connectionType)")
+        print("SquareTapToPay: readerWasAdded — model=\(readerInfo.model) (rawValue=\(readerInfo.model.rawValue)) name=\(readerInfo.name) connection=\(readerInfo.connectionType)")
+        owner?.handleReaderAdded(readerInfo)
     }
 
     func readerWasRemoved(_ readerInfo: ReaderInfo) {

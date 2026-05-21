@@ -29,7 +29,7 @@ import SunnyTutorial from '@/components/SunnyTutorial';
 import CashDrawerPanel from '@/components/CashDrawerPanel';
 import MiniQueueStrip from '@/components/MiniQueueStrip';
 import { createWarrantyRecords } from '@/lib/warranty';
-import { checkTapToPayAvailability, initializeTapToPay, type TapToPayResult } from '@/lib/tap-to-pay';
+import { checkTapToPayAvailability, type TapToPayResult } from '@/lib/tap-to-pay';
 import type {
   InventoryItem,
   InventoryItemVariant,
@@ -103,13 +103,9 @@ export default function StoreModePage() {
   const [tapToPayDeviceReady, setTapToPayDeviceReady] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    void checkTapToPayAvailability().then(async (ok) => {
+    void checkTapToPayAvailability().then((ok) => {
       if (cancelled) return;
       setTapToPayDeviceReady(ok);
-      if (!ok) return;
-      // Warm up the Square SDK so the first tap doesn't pay the auth round-trip.
-      // Silenced — TapToPayFlow re-runs initialize defensively and surfaces real errors there.
-      try { await initializeTapToPay('square'); } catch { /* surfaced at payment time */ }
     });
     return () => { cancelled = true; };
   }, []);

@@ -25,6 +25,7 @@ import { getSubscriptionTier, isTrialActive } from '@/lib/subscription';
 import { getCrmStatus } from '@/lib/crm-status';
 import { canShowBillingUI } from '@/lib/billing-gate';
 import TapToPaySplashTrigger from '@/components/TapToPaySplashTrigger';
+import { initializeTapToPay } from '@/lib/tap-to-pay';
 
 // ============================================================================
 // Unread message count hook (polls every 30s)
@@ -173,6 +174,17 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
     window.addEventListener('open-notification-inbox', handler);
     return () => window.removeEventListener('open-notification-inbox', handler);
   }, [openNotif]);
+
+  // Initialize Square Tap to Pay SDK early so the reader is ready by checkout time.
+  // Reader pairing can take ~30s after authorize — getting a head start at app launch
+  // means it's already connected before the artist hits POS or Event Mode.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform()) {
+      initializeTapToPay('square').catch(err => {
+        console.log('[TapToPay] Background init error (non-blocking):', err);
+      });
+    }
+  }, []);
 
   // Onboarding redirect is now handled server-side in dashboard layout.tsx
 
