@@ -218,7 +218,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
     ///   - `{ status: "alreadyConnected" }` — reader already attached
     ///   - `{ status: "connected" }` — reader attached via this call
     ///   - `{ status: "cancelled" }` — user dismissed Square's sheet
-    ///   - `{ status: "timeout" }` — 45s safety timeout fired
+    ///   - `{ status: "timeout" }` — 90s safety timeout fired
     ///
     /// Single-flight: a second `activateReader()` while one is already in
     /// progress rejects with a clear message so JS-side dedup catches the
@@ -289,7 +289,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
                 resolveActivation("timeout")
             }
             self.activationTimeoutWorkItem = timeoutWork
-            DispatchQueue.main.asyncAfter(deadline: .now() + 45.0, execute: timeoutWork)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 90.0, execute: timeoutWork)
 
             sqLog("SquareTapToPay: activateReader - presenting settings sheet")
             MobilePaymentsSDK.shared.settingsManager.presentSettings(with: presenter) { error in
@@ -344,10 +344,18 @@ public class SquareTapToPayPlugin: CAPPlugin {
     }
 
     private static func readProximityReaderEntitlement() -> Bool {
+        #if DEBUG
+        // Xcode debug-signed builds don't reliably bundle embedded.mobileprovision,
+        // and dev devices are already provisioned with a profile that includes
+        // the entitlement. Trust the build configuration here so the activation
+        // gate mounts the branded overlay during on-device testing.
+        sqLog("SquareTapToPay: DEBUG build — assuming entitlement is present")
+        return true
+        #else
         let key = "com.apple.developer.proximity-reader.payment.acceptance"
 
         // Read the embedded provisioning profile from the app bundle.
-        // Dev, TestFlight, ad-hoc, and App Store builds all contain this file
+        // TestFlight, ad-hoc, and App Store builds all contain this file
         // when the app is signed with a profile that declares entitlements.
         guard let profileURL = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
               let profileData = try? Data(contentsOf: profileURL),
@@ -363,6 +371,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
         let entitled = profileString.contains(key)
         sqLog("SquareTapToPay: embedded profile entitlement check = \(entitled)")
         return entitled
+        #endif
     }
 
     /// NSError userInfo values aren't all JSON-serializable; coerce to strings

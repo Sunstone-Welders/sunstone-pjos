@@ -10,9 +10,11 @@
 //
 // States:
 //   activating  — fresh call, spinner + "Setting up your card reader…"
-//   nudging     — after 10s, hints that the user may need to confirm in
+//   nudging     — after 15s, hints that the user may need to confirm in
 //                 the system sheet sitting on top
-//   timeout     — after 45s without reader, shows error + retry CTA
+//   timeout     — after 75s without reader, shows error + retry CTA
+//                 (fires before the Swift-side 90s hard timeout so the
+//                 user sees branded feedback first)
 //   error       — explicit error from the native plugin
 //
 // The overlay listens for `readerConnected` and `readerActivationTimedOut`
@@ -40,8 +42,8 @@ interface TapToPayActivationProps {
   onSkip: () => void;
 }
 
-const NUDGE_DELAY_MS = 10_000;
-const TIMEOUT_HINT_MS = 30_000;
+const NUDGE_DELAY_MS = 15_000;
+const TIMEOUT_HINT_MS = 75_000;
 
 export default function TapToPayActivation({
   onConnected,
