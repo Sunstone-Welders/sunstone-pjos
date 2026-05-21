@@ -63,7 +63,12 @@
       "Read(//Users/meganatwood/Library/Developer/Xcode/DerivedData/**)",
       "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' build)",
       "Bash(xargs -I {} ls {})",
-      "WebSearch"
+      "WebSearch",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -workspace /Users/meganatwood/sunstone-pjos/ios/App/App.xcworkspace -scheme App -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' build)",
+      "Bash(xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -destination 'generic/platform=iOS' -quiet CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -version)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -destination 'generic/platform=iOS' -quiet CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -workspace /Users/meganatwood/sunstone-pjos/ios/App/App.xcworkspace -scheme App -configuration Debug -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build)"
     ]
   }
 }

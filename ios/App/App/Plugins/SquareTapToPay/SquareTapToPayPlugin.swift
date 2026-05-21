@@ -159,7 +159,11 @@ public class SquareTapToPayPlugin: CAPPlugin {
         // Web layer calls this on page load — before initialize() has run —
         // so we must answer without touching `.shared`.
         guard isInitialized else {
-            call.resolve(["available": false, "reason": "SDK not initialized"])
+            call.resolve([
+                "available": false,
+                "isDeviceCapable": false,
+                "reason": "SDK not initialized"
+            ])
             return
         }
 
@@ -172,7 +176,10 @@ public class SquareTapToPayPlugin: CAPPlugin {
             let supportsTapToPay = MobilePaymentsSDK.shared.readerManager
                 .tapToPaySettings
                 .isDeviceCapable
-            call.resolve(["available": supportsTapToPay])
+            call.resolve([
+                "available": supportsTapToPay,
+                "isDeviceCapable": supportsTapToPay
+            ])
         }
     }
 
@@ -276,9 +283,13 @@ public class SquareTapToPayPlugin: CAPPlugin {
         )
         if let note = note { params.note = note }
 
+        // Restrict the prompt to Tap to Pay only — without this, Square's
+        // default chooser shows keyed-entry/cash alongside Tap to Pay and
+        // defaults to manual card entry. With a single allowed method the
+        // SDK skips the chooser and goes straight into Tap to Pay.
         let promptParams = PromptParameters(
             mode: .default,
-            additionalMethods: .all
+            additionalMethods: .tapToPay
         )
 
         self.pendingPaymentCall = call
@@ -339,11 +350,44 @@ public class SquareTapToPayPlugin: CAPPlugin {
         }
     }
 
-    /// Fire-and-forget version used during initialize() so the permission
-    /// prompt appears at setup time rather than during the first payment.
+    /// Fire-and-forget bootstrap used during initialize() so the location
+    /// permission prompt and the Square→Apple Account link both happen at
+    /// setup time rather than during the first payment. We chain Apple
+    /// linking *after* the location prompt resolves so the two modal-style
+    /// system sheets don't fight for the screen.
     private func promptLocationPermissionIfNeeded() {
-        ensureLocationPermission { granted, _ in
+        ensureLocationPermission { [weak self] granted, _ in
             print("SquareTapToPay: proactive location permission granted=\(granted)")
+            self?.linkAppleAccountIfNeeded()
+        }
+    }
+
+    /// Square requires the merchant to link an Apple Account (accept Apple's
+    /// Tap to Pay T&Cs) before Tap to Pay payments will run. Fire-and-forget:
+    /// initialize() has already resolved, and if linking fails the first
+    /// startPayment() will surface the underlying SDK error.
+    private func linkAppleAccountIfNeeded() {
+        DispatchQueue.main.async {
+            let settings = MobilePaymentsSDK.shared.readerManager.tapToPaySettings
+            settings.isAppleAccountLinked { linked, error in
+                print("SquareTapToPay: Apple account linked = \(linked)")
+                if let error = error {
+                    let ns = error as NSError
+                    print("SquareTapToPay: isAppleAccountLinked error domain=\(ns.domain) code=\(ns.code) message=\(ns.localizedDescription)")
+                }
+                if linked { return }
+                DispatchQueue.main.async {
+                    print("SquareTapToPay: linking Apple account...")
+                    settings.linkAppleAccount { linkError in
+                        if let linkError = linkError {
+                            let ns = linkError as NSError
+                            print("SquareTapToPay: linkAppleAccount error domain=\(ns.domain) code=\(ns.code) message=\(ns.localizedDescription)")
+                        } else {
+                            print("SquareTapToPay: Apple account linked successfully")
+                        }
+                    }
+                }
+            }
         }
     }
 
