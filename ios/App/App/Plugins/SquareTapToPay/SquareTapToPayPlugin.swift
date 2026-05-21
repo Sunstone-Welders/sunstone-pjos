@@ -170,7 +170,7 @@ public class SquareTapToPayPlugin: CAPPlugin {
             let readers = MobilePaymentsSDK.shared.readerManager.readers
             print("SquareTapToPay: connected readers count = \(readers.count)")
             for reader in readers {
-                print("SquareTapToPay: reader — model=\(reader.model), state=\(reader.state)")
+                print("SquareTapToPay: reader — model=\(reader.model)")
             }
             print("SquareTapToPay: === END DIAGNOSTICS ===")
 
