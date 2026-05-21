@@ -345,16 +345,24 @@ public class SquareTapToPayPlugin: CAPPlugin {
 
     private static func readProximityReaderEntitlement() -> Bool {
         let key = "com.apple.developer.proximity-reader.payment.acceptance"
-        guard let task = SecTaskCreateFromSelf(nil) else { return false }
-        var error: Unmanaged<CFError>?
-        let value = SecTaskCopyValueForEntitlement(task, key as CFString, &error)
-        // The entitlement value can be Bool or Array (when listing capabilities)
-        // — its presence is what matters. A `nil` return with no error means
-        // the key isn't in the embedded provisioning profile.
-        if let bool = value as? Bool {
-            return bool
+
+        // Read the embedded provisioning profile from the app bundle.
+        // Dev, TestFlight, ad-hoc, and App Store builds all contain this file
+        // when the app is signed with a profile that declares entitlements.
+        guard let profileURL = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let profileData = try? Data(contentsOf: profileURL),
+              let profileString = String(data: profileData, encoding: .ascii) else {
+            sqLog("SquareTapToPay: no embedded.mobileprovision found — assuming no entitlement")
+            return false
         }
-        return value != nil
+
+        // The profile is a CMS-wrapped binary blob with an embedded XML plist.
+        // We don't need to parse the plist — just check whether the entitlement
+        // key appears in the profile text. False positives are not possible
+        // because the key is unique and only appears in profiles that include it.
+        let entitled = profileString.contains(key)
+        sqLog("SquareTapToPay: embedded profile entitlement check = \(entitled)")
+        return entitled
     }
 
     /// NSError userInfo values aren't all JSON-serializable; coerce to strings
