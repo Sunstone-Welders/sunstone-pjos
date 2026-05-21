@@ -149,6 +149,31 @@ public class SquareTapToPayPlugin: CAPPlugin {
         ensureLocationPermission { [weak self] granted, _ in
             guard let self = self else { return }
             print("SquareTapToPay: completeInitialize - location permission granted=\(granted), resolving initialize()")
+
+            let tapSettings = MobilePaymentsSDK.shared.readerManager.tapToPaySettings
+            print("SquareTapToPay: === TAP TO PAY DIAGNOSTICS ===")
+            print("SquareTapToPay: isDeviceCapable = \(tapSettings.isDeviceCapable)")
+            tapSettings.isAppleAccountLinked { linked, _ in
+                print("SquareTapToPay: isAppleAccountLinked = \(linked)")
+                if !linked {
+                    print("SquareTapToPay: Apple account NOT linked — calling linkAppleAccount()...")
+                    tapSettings.linkAppleAccount { linkError in
+                        if let linkError = linkError {
+                            print("SquareTapToPay: linkAppleAccount failed — \(linkError.localizedDescription), code=\((linkError as NSError).code), userInfo=\((linkError as NSError).userInfo)")
+                        } else {
+                            print("SquareTapToPay: linkAppleAccount succeeded!")
+                        }
+                    }
+                }
+            }
+
+            let readers = MobilePaymentsSDK.shared.readerManager.readers
+            print("SquareTapToPay: connected readers count = \(readers.count)")
+            for reader in readers {
+                print("SquareTapToPay: reader — model=\(reader.model), state=\(reader.state)")
+            }
+            print("SquareTapToPay: === END DIAGNOSTICS ===")
+
             self.linkAppleAccountIfNeeded()
             call.resolve([
                 "status": "authorized",
@@ -262,6 +287,8 @@ public class SquareTapToPayPlugin: CAPPlugin {
                     return
                 }
                 DispatchQueue.main.async {
+                    print("SquareTapToPay: payment additionalMethods = tapToPay")
+                    print("SquareTapToPay: tapToPaySettings.isDeviceCapable = \(MobilePaymentsSDK.shared.readerManager.tapToPaySettings.isDeviceCapable)")
                     self.beginPayment(
                         call: call,
                         amountCents: amountCents,
