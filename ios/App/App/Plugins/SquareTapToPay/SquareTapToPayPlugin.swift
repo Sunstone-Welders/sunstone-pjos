@@ -333,12 +333,13 @@ public class SquareTapToPayPlugin: CAPPlugin {
         )
         if let note = note { params.note = note }
 
-        // Restrict the prompt to Tap to Pay only — without this, Square's
-        // default chooser shows keyed-entry/cash alongside Tap to Pay and
-        // defaults to manual card entry. With a single allowed method the
-        // SDK skips the chooser and goes straight into Tap to Pay.
+        // Use custom prompt mode so the SDK doesn't display its built-in
+        // "connect a reader" chooser. In .default mode the SDK treats Tap to
+        // Pay as an "additional" method behind a physical reader as primary;
+        // in .custom mode it shows no UI until we explicitly trigger a
+        // method via PaymentHandle.additionalPaymentMethods.
         let promptParams = PromptParameters(
-            mode: .default,
+            mode: .custom,
             additionalMethods: .tapToPay
         )
 
@@ -350,12 +351,45 @@ public class SquareTapToPayPlugin: CAPPlugin {
         let delegate = PaymentDelegateBridge(owner: self)
         self.paymentDelegate = delegate
 
-        self.paymentHandle = MobilePaymentsSDK.shared.paymentManager.startPayment(
+        let handle = MobilePaymentsSDK.shared.paymentManager.startPayment(
             params,
             promptParameters: promptParams,
             from: presenter,
             delegate: delegate
         )
+        self.paymentHandle = handle
+
+        guard let handle = handle else {
+            print("SquareTapToPay: ERROR — startPayment returned nil handle")
+            call.keepAlive = false
+            self.pendingPaymentCall = nil
+            self.paymentDelegate = nil
+            call.reject("Square SDK returned no payment handle.")
+            return
+        }
+
+        print("SquareTapToPay: custom mode - looking for tapToPay in additionalPaymentMethods")
+        print("SquareTapToPay: additionalPaymentMethods count = \(handle.additionalPaymentMethods.count)")
+
+        var foundTapToPay = false
+        for method in handle.additionalPaymentMethods {
+            print("SquareTapToPay: method type rawValue = \(method.type.rawValue)")
+            if method.type == .tapToPay {
+                print("SquareTapToPay: triggering Tap to Pay...")
+                do {
+                    try method.triggerPayment(with: TapToPayPaymentSource())
+                    foundTapToPay = true
+                } catch {
+                    let ns = error as NSError
+                    print("SquareTapToPay: triggerPayment failed — \(ns.localizedDescription), code=\(ns.code), userInfo=\(ns.userInfo)")
+                }
+                break
+            }
+        }
+
+        if !foundTapToPay {
+            print("SquareTapToPay: ERROR — tapToPay method not found or trigger failed")
+        }
     }
 
     // ── Location permission ─────────────────────────────────────────────────
