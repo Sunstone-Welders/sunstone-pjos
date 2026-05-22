@@ -17,8 +17,20 @@ interface TapToPaySplashProps {
 
 export default function TapToPaySplash({ onSetUpNow, onDismiss }: TapToPaySplashProps) {
   return (
-    <div className="fixed inset-0 z-[80] bg-[var(--surface-base)]/95 backdrop-blur-sm flex items-center justify-center p-6">
-      <div className="w-full max-w-sm text-center space-y-6">
+    <>
+      {/* Backdrop — semi-transparent overlay over the dashboard. Tapping it
+          dismisses the splash, same as "Maybe Later". */}
+      <div
+        className="fixed inset-0 z-[60] bg-black/50"
+        onClick={onDismiss}
+        aria-hidden="true"
+      />
+      {/* Modal */}
+      <div className="fixed inset-0 z-[61] flex items-center justify-center p-6 pointer-events-none">
+        <div
+          className="w-full max-w-sm text-center space-y-6 bg-[var(--surface-raised)] rounded-3xl p-8 shadow-[var(--shadow-card)] pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Contactless icon */}
         <div className="flex justify-center">
           <div className="w-28 h-28 rounded-full bg-[color-mix(in_srgb,var(--accent-primary)_12%,transparent)] flex items-center justify-center">
@@ -71,7 +83,8 @@ export default function TapToPaySplash({ onSetUpNow, onDismiss }: TapToPaySplash
             Maybe Later
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

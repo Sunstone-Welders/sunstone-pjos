@@ -1,13 +1,15 @@
 // ============================================================================
 // TapToPayFlow — Payment collection flow screens
 // ============================================================================
-// Shows: Ready to Tap → Processing → Result (success/declined/timeout/error)
-// Full-screen overlay rendered on top of PaymentScreen.
+// Bridges to Square's native payment sheet, then renders our branded result.
+// We deliberately do NOT show a "ready to tap" screen — Square's native UI is
+// where the customer actually taps their card. Showing our own first would
+// mislead the artist into thinking the tap goes against the wrong surface.
 // ============================================================================
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   collectPayment,
   initializeTapToPay,
@@ -16,18 +18,7 @@ import {
   type TapToPayResult,
 } from '@/lib/tap-to-pay';
 
-// ── Contactless icon (SF Symbol wave.3.right.circle equivalent) ──
-const ContactlessWaveIcon = ({ className = 'w-20 h-20' }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 80 80" fill="none">
-    <circle cx="40" cy="40" r="38" stroke="currentColor" strokeWidth="2" opacity="0.15" />
-    <path d="M32 40c0-4.4 3.6-8 8-8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-    <path d="M32 40c0-8.8 7.2-16 16-16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-    <path d="M32 40c0-13.3 10.7-24 24-24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-    <circle cx="32" cy="40" r="3" fill="currentColor" />
-  </svg>
-);
-
-type FlowStep = 'ready' | 'processing' | 'result';
+type FlowStep = 'starting' | 'result';
 
 interface TapToPayFlowProps {
   amountCents: number;
@@ -46,56 +37,46 @@ export default function TapToPayFlow({
   onRetry,
   onUseAnotherMethod,
 }: TapToPayFlowProps) {
-  const [step, setStep] = useState<FlowStep>('ready');
+  const [step, setStep] = useState<FlowStep>('starting');
   const [result, setResult] = useState<TapToPayResult | null>(null);
-  // True while we're waiting on `activateTapToPayReader()` to resolve — the
-  // processing screen swaps to "Connecting card reader…" so the artist
-  // doesn't see "Processing payment" before the customer's card has even
-  // been tapped.
-  const [isActivatingReader, setIsActivatingReader] = useState(false);
+  const startedRef = useRef(false);
 
   const startCollection = useCallback(async () => {
-    setStep('processing');
     try {
-      // Defensive init — idempotent. The POS screen warms the SDK at mount
-      // but we re-authorize here so a cold-start (process killed in background)
-      // or a missed warm-up still produces a working payment.
+      // Defensive init — idempotent. The dashboard mount warms the SDK but we
+      // re-authorize here so a cold-start (process killed in background) or a
+      // missed warm-up still produces a working payment.
       await initializeTapToPay('square');
-      // Recovery path: if the user skipped the activation overlay (or it
-      // failed) the embedded Tap to Pay reader isn't attached yet, and
-      // Square's payment sheet would fall through to "connect hardware".
-      // activateTapToPayReader is process-deduped so this is a no-op when
-      // the reader was already activated upstream.
+      // Fallback activation: if the reader didn't auto-attach during init,
+      // present Square's settings sheet as a recovery path. On clean installs
+      // this is a no-op because the reader is already connected.
       if (!isReaderConnected()) {
-        setIsActivatingReader(true);
-      }
-      const activation = await activateTapToPayReader();
-      setIsActivatingReader(false);
-      if (
-        activation.status !== 'connected' &&
-        activation.status !== 'alreadyConnected'
-      ) {
-        const failureResult: TapToPayResult = {
-          status:
-            activation.status === 'timeout'
-              ? 'timed_out'
-              : activation.status === 'cancelled'
-                ? 'cancelled'
-                : 'error',
-          errorMessage:
-            'Card reader not available. Use QR Code or Text Link instead.',
-        };
-        setResult(failureResult);
-        setStep('result');
-        onComplete(failureResult);
-        return;
+        const activation = await activateTapToPayReader();
+        if (
+          activation.status !== 'connected' &&
+          activation.status !== 'alreadyConnected'
+        ) {
+          const failureResult: TapToPayResult = {
+            status:
+              activation.status === 'timeout'
+                ? 'timed_out'
+                : activation.status === 'cancelled'
+                  ? 'cancelled'
+                  : 'error',
+            errorMessage:
+              'Card reader not available. Use QR Code or Text Link instead.',
+          };
+          setResult(failureResult);
+          setStep('result');
+          onComplete(failureResult);
+          return;
+        }
       }
       const res = await collectPayment(amountCents, 'usd');
       setResult(res);
       setStep('result');
       onComplete(res);
     } catch (err: any) {
-      setIsActivatingReader(false);
       setResult({
         status: 'error',
         errorMessage: err?.message ?? 'An unexpected error occurred.',
@@ -104,73 +85,41 @@ export default function TapToPayFlow({
     }
   }, [amountCents, onComplete]);
 
-  // Auto-start collection when mounted (simulate tap detected)
+  // Start collection immediately on mount. Square's native sheet takes over
+  // the screen within a fraction of a second, so the "Starting payment..."
+  // state is just a brief honest indicator that we're handing off.
   useEffect(() => {
-    // In production, the "ready" screen waits for the native SDK to detect a card.
-    // For the UX shell, we show the ready screen for 2 seconds then move to processing.
-    const timer = setTimeout(() => {
-      startCollection();
-    }, 2000);
-    return () => clearTimeout(timer);
+    if (startedRef.current) return;
+    startedRef.current = true;
+    void startCollection();
   }, [startCollection]);
 
   const handleRetry = () => {
     setResult(null);
-    setStep('ready');
+    setStep('starting');
     onRetry();
-    // Restart collection
-    setTimeout(() => startCollection(), 1500);
+    startedRef.current = false;
+    void startCollection();
   };
 
   return (
     <div className="fixed inset-0 z-[60] bg-[var(--surface-base)] flex flex-col items-center justify-center px-8">
 
-      {/* ── Ready to Tap ── */}
-      {step === 'ready' && (
-        <div className="w-full max-w-sm text-center space-y-8">
-          {/* Pulsing contactless icon */}
+      {/* ── Starting (handing off to Square's native sheet) ── */}
+      {step === 'starting' && (
+        <div className="w-full max-w-sm text-center space-y-6">
           <div className="flex justify-center">
-            <div className="relative">
-              <div className="absolute inset-0 animate-ping opacity-20 rounded-full"
-                style={{ backgroundColor: 'var(--accent-primary)' }}
-              />
-              <div className="relative text-[var(--accent-primary)]">
-                <ContactlessWaveIcon className="w-28 h-28" />
-              </div>
-            </div>
+            <div className="w-12 h-12 animate-spin rounded-full border-4 border-[var(--border-default)] border-t-[var(--accent-primary)]" />
           </div>
-
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold text-[var(--text-primary)] font-[family-name:var(--font-display)]">
-              Ready to Tap
-            </h2>
-            <p className="text-base text-[var(--text-secondary)]">
-              Hold customer&apos;s card or phone near the top of your device
-            </p>
-            <p className="text-2xl font-bold text-[var(--text-primary)] mt-4">{amountDisplay}</p>
-          </div>
-
+          <p className="text-base text-[var(--text-secondary)]">
+            Starting payment&hellip;
+          </p>
           <button
             onClick={onCancel}
             className="w-full h-12 rounded-xl font-medium text-base border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] transition-colors min-h-[48px]"
           >
             Cancel
           </button>
-        </div>
-      )}
-
-      {/* ── Processing ── */}
-      {step === 'processing' && (
-        <div className="w-full max-w-sm text-center space-y-6">
-          <div className="flex justify-center">
-            <div className="w-16 h-16 animate-spin rounded-full border-4 border-[var(--border-default)] border-t-[var(--accent-primary)]" />
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-xl font-bold text-[var(--text-primary)] font-[family-name:var(--font-display)]">
-              {isActivatingReader ? 'Connecting card reader…' : 'Processing payment...'}
-            </h2>
-            <p className="text-lg font-semibold text-[var(--text-secondary)]">{amountDisplay}</p>
-          </div>
         </div>
       )}
 
@@ -316,7 +265,7 @@ export default function TapToPayFlow({
             </>
           )}
 
-          {/* Cancelled (user cancelled from ready screen) */}
+          {/* Cancelled (user cancelled from Square's sheet) */}
           {result.status === 'cancelled' && (
             <>
               <div className="space-y-1">

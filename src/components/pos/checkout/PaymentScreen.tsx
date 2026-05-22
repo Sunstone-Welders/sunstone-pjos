@@ -814,7 +814,7 @@ export function PaymentScreen({
                   <div className="min-w-0 flex-1">
                     <div className="text-lg font-bold text-[var(--text-primary)]">Tap to Pay</div>
                     <p className="text-sm text-[var(--text-secondary)] mt-0.5">
-                      Hold customer&apos;s card or phone near your device
+                      Accept card and contactless payments
                     </p>
                   </div>
                   <div className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
@@ -844,15 +844,15 @@ export function PaymentScreen({
                   <div className="min-w-0 flex-1">
                     <div className="text-base font-semibold text-[var(--text-primary)]">
                       {tapToPayActivating
-                        ? 'Setting up card reader…'
+                        ? 'Activating card reader…'
                         : tapToPaySetupTimedOut
-                          ? 'Setup timed out — try again'
-                          : 'Set up Tap to Pay'}
+                          ? 'Activation timed out — try again'
+                          : 'Activate Card Reader'}
                     </div>
                     <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
                       {tapToPayActivating
                         ? "Follow the prompts in Square's setup sheet"
-                        : 'Connect the card reader before taking a payment'}
+                        : 'Tap to connect — takes about 30 seconds'}
                     </p>
                   </div>
                 </div>

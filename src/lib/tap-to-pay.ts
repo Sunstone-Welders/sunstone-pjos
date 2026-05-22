@@ -162,6 +162,23 @@ async function ensureReaderConnectedListener(): Promise<void> {
   await readerConnectedListenerPromise;
 }
 
+/**
+ * Resolves once `hasActivatedThisProcess` is true (i.e. the native plugin has
+ * emitted `readerConnected`) or once `timeoutMs` elapses — whichever happens
+ * first. Used post-authorize to give the embedded reader a brief window to
+ * auto-attach before the POS payment screen renders.
+ */
+async function waitForReaderConnected(timeoutMs: number): Promise<boolean> {
+  if (hasActivatedThisProcess) return true;
+  const start = Date.now();
+  const interval = 150;
+  while (Date.now() - start < timeoutMs) {
+    if (hasActivatedThisProcess) return true;
+    await new Promise((r) => setTimeout(r, interval));
+  }
+  return hasActivatedThisProcess;
+}
+
 export type ActivationStatus =
   | SquareActivateReaderStatus
   | 'error'
@@ -199,6 +216,9 @@ export async function initializeTapToPay(
     try {
       log('initializeTapToPay: fetching credentials');
       const creds = await fetchSquareCredentials();
+      // Subscribe BEFORE authorize so we don't miss a `readerConnected` event
+      // that fires synchronously during the auto-attach.
+      await ensureReaderConnectedListener();
       // Android reads `applicationId`; iOS reads `squareApplicationID`. Send
       // both so the same payload satisfies both native plugins.
       await SquareTapToPay.initialize({
@@ -208,11 +228,18 @@ export async function initializeTapToPay(
         squareApplicationID: creds.applicationId,
       });
       hasInitialized = true;
-      // Subscribe to readerConnected as soon as the SDK is authorized so the
-      // flag flips the moment the native plugin emits the event — even if the
-      // caller never awaits the activation promise.
-      void ensureReaderConnectedListener();
       log('initializeTapToPay: SDK authorized');
+      // Optimistic auto-connect: on clean installs the embedded Tap to Pay
+      // reader attaches silently once the SDK is authorized, and the
+      // `readerConnected` listener flips `hasActivatedThisProcess`. Poll for
+      // up to 5 seconds so the POS screen sees the reader as live by the
+      // time the artist navigates to it. If it doesn't attach, the
+      // "Activate Card Reader" button on PaymentScreen becomes the fallback.
+      await waitForReaderConnected(5000);
+      log(
+        'initializeTapToPay: post-auth reader connected =',
+        hasActivatedThisProcess,
+      );
     } catch (err) {
       log('initializeTapToPay: failed', err);
       hasInitialized = false;
