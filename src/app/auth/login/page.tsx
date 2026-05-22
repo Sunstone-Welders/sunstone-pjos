@@ -54,36 +54,30 @@ function LoginPageInner() {
         refresh_token: data.refresh_token,
       });
 
-      // Persist tokens to native storage (UserDefaults / SharedPreferences)
-      // so the session survives WKWebView / WebView cookie clearing on relaunch
-      if (isNative) {
-        await persistNativeSession(data.access_token, data.refresh_token);
-
-        // WKWebView's JS cookie store syncs asynchronously into its HTTP
-        // cookie store, so the sb-* cookies written by supabase.auth.setSession
-        // above may not be visible to the next server request. Have the server
-        // re-issue them via Set-Cookie response headers — WKWebView applies
-        // those synchronously to the HTTP cookie store, so the next
-        // navigation/RSC fetch is guaranteed to be authenticated.
-        await fetch('/api/auth/set-session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            access_token: data.access_token,
-            refresh_token: data.refresh_token,
-          }),
-        });
-      }
-
       const redirectTo = searchParams.get('redirect');
       const dest = redirectTo && redirectTo.startsWith('/') ? redirectTo : '/';
 
-      // Client-side navigation on both native and web. window.location.href in
-      // WKWebView triggers a fresh top-level request that can race ahead of
-      // WKHTTPCookieStore's async write of the sb-* cookies, bouncing the user
-      // back to /auth/login. router.push stays inside the existing page
-      // context and doesn't hit the middleware.
+      if (isNative) {
+        // Persist tokens to native storage (UserDefaults / SharedPreferences)
+        // so the session survives WKWebView cookie clearing on relaunch.
+        await persistNativeSession(data.access_token, data.refresh_token);
+
+        // Top-level navigation to /api/auth/set-session. The endpoint returns
+        // a 302 to `dest` with Set-Cookie headers — WKWebView applies the
+        // cookies before following the redirect, so the dashboard load is
+        // authenticated. Set-Cookie headers from fetch() responses do not
+        // reliably reach WKWebView's navigation cookie jar, which is why
+        // earlier attempts (router.push / fetch-then-push) bounced back to
+        // /auth/login on the first nav.
+        const params = new URLSearchParams({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          redirect: dest,
+        });
+        window.location.href = `/api/auth/set-session?${params.toString()}`;
+        return;
+      }
+
       router.push(dest);
       router.refresh();
     } catch (err: any) {

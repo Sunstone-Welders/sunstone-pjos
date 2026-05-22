@@ -1,15 +1,19 @@
 // ============================================================================
-// Auth Set-Session API — POST /api/auth/set-session
+// Auth Set-Session API — /api/auth/set-session
 // ============================================================================
 // Server-side cookie establishment for the native (Capacitor / WKWebView) shell.
 //
 // WKWebView's JS cookie store (document.cookie writes) syncs asynchronously
-// into the HTTP cookie store, so the first navigation after login can race
-// ahead of that sync and bounce the user back to /auth/login. Cookies set via
-// HTTP Set-Cookie response headers, however, are available to subsequent
-// requests immediately. This endpoint takes a (already-issued) access /
-// refresh token pair and writes the Supabase session cookies via Set-Cookie
-// so the next request — including RSC fetches — sees an authenticated user.
+// into the HTTP cookie store, and Set-Cookie headers on fetch() responses do
+// not reliably propagate into WKWebView's navigation cookie jar. The only
+// reliable path to get session cookies in place before the next page load is
+// a top-level navigation to an endpoint that returns a 302 with Set-Cookie
+// headers — WKWebView applies those cookies before following the redirect.
+//
+// Two surfaces:
+//   GET  — top-level navigation. Tokens come in via query string; the response
+//          is a 302 to `redirect` (or /dashboard) with sb-* cookies attached.
+//   POST — fetch()-friendly version, kept for parity / potential web callers.
 //
 // Tokens are validated against the Supabase auth server before any cookies
 // are written, so this endpoint cannot be used to mint a session out of
@@ -20,6 +24,71 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+
+function safeRedirectPath(raw: string | null | undefined): string {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/dashboard';
+  return raw;
+}
+
+async function establishSession(
+  request: NextRequest,
+  access_token: string,
+  refresh_token: string,
+  successResponse: NextResponse,
+): Promise<{ ok: true; response: NextResponse } | { ok: false }> {
+  let response = successResponse;
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+
+  const { error: setError } = await supabase.auth.setSession({
+    access_token,
+    refresh_token,
+  });
+  if (setError) return { ok: false };
+
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) return { ok: false };
+
+  return { ok: true, response };
+}
+
+export async function GET(request: NextRequest) {
+  const url = new URL(request.url);
+  const access_token = url.searchParams.get('access_token');
+  const refresh_token = url.searchParams.get('refresh_token');
+  const dest = safeRedirectPath(url.searchParams.get('redirect'));
+
+  if (!access_token || !refresh_token) {
+    return NextResponse.redirect(new URL('/auth/login', request.url));
+  }
+
+  const result = await establishSession(
+    request,
+    access_token,
+    refresh_token,
+    NextResponse.redirect(new URL(dest, request.url)),
+  );
+
+  if (!result.ok) {
+    return NextResponse.redirect(new URL('/auth/login', request.url));
+  }
+  return result.response;
+}
 
 export async function POST(request: NextRequest) {
   let access_token: string;
@@ -39,43 +108,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Build a response we can attach Set-Cookie headers to.
-  let response = NextResponse.json({ success: true });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
-
-  // Hand the tokens to Supabase. This populates the in-memory session and,
-  // via the setAll() callback above, writes the sb-* cookies onto `response`.
-  const { error: setError } = await supabase.auth.setSession({
+  const result = await establishSession(
+    request,
     access_token,
     refresh_token,
-  });
+    NextResponse.json({ success: true }),
+  );
 
-  if (setError) {
+  if (!result.ok) {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
   }
-
-  // Verify the access token resolves to a real user (round-trips to the
-  // Supabase auth server). This prevents accepting forged or expired JWTs.
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  if (userError || !user) {
-    return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-  }
-
-  return response;
+  return result.response;
 }
