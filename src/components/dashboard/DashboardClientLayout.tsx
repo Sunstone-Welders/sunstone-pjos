@@ -25,7 +25,7 @@ import { getSubscriptionTier, isTrialActive } from '@/lib/subscription';
 import { getCrmStatus } from '@/lib/crm-status';
 import { canShowBillingUI } from '@/lib/billing-gate';
 import TapToPaySplashTrigger from '@/components/TapToPaySplashTrigger';
-import { initializeTapToPay, activateTapToPayReader } from '@/lib/tap-to-pay';
+import { initializeTapToPay } from '@/lib/tap-to-pay';
 
 // ============================================================================
 // Unread message count hook (polls every 30s)
@@ -175,29 +175,17 @@ function DashboardInnerLayout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('open-notification-inbox', handler);
   }, [openNotif]);
 
-  // Silent SDK authorization + fire-and-forget reader activation at dashboard
-  // mount. The native plugin presents Square's settings sheet briefly and
-  // auto-dismisses it after ~5s; the embedded Tap to Pay reader keeps trying
-  // to attach in the background via the SDK's ReaderObserver. By the time
-  // the artist reaches POS or Event Mode, the reader is typically already
-  // connected and `TapToPayActivationGate` skips its banner entirely.
+  // Silent SDK authorization at dashboard mount. No UI, no settings sheet —
+  // just authorize so Square's ReaderObserver can fire `readerConnected` if
+  // the embedded reader auto-attaches. Explicit reader activation happens
+  // only when the artist taps "Set up Tap to Pay" on the POS payment screen.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!(window as any).Capacitor?.isNativePlatform()) return;
 
-    void (async () => {
-      try {
-        await initializeTapToPay('square');
-        // Fire-and-forget. The promise resolves only when the reader actually
-        // attaches (or the 90s safety timeout fires); we don't block the
-        // dashboard render on that.
-        activateTapToPayReader().catch((err) => {
-          console.log('[TapToPay] Background reader activation error (non-blocking):', err);
-        });
-      } catch (err) {
-        console.log('[TapToPay] Background init error (non-blocking):', err);
-      }
-    })();
+    void initializeTapToPay('square').catch((err) => {
+      console.log('[TapToPay] Background init error (non-blocking):', err);
+    });
   }, []);
 
   // Onboarding redirect is now handled server-side in dashboard layout.tsx

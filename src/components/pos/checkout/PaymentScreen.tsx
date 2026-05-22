@@ -22,7 +22,12 @@ import { isNativeApp } from '@/lib/native';
 import { useTenant } from '@/hooks/use-tenant';
 import TapToPayFlow from '@/components/pos/checkout/TapToPayFlow';
 import TapToPaySetup from '@/components/TapToPaySetup';
-import type { TapToPayResult } from '@/lib/tap-to-pay';
+import {
+  activateTapToPayReader,
+  isReaderConnected,
+  isTapToPayCapable,
+  type TapToPayResult,
+} from '@/lib/tap-to-pay';
 
 // ── Types ──
 
@@ -163,10 +168,53 @@ export function PaymentScreen({
   // Tap to Pay state
   const [tapToPayFlowOpen, setTapToPayFlowOpen] = useState(false);
   const [tapToPaySetupOpen, setTapToPaySetupOpen] = useState(false);
+  const [tapToPayCapable, setTapToPayCapable] = useState(false);
+  const [tapToPayReaderConnected, setTapToPayReaderConnected] = useState(false);
+  const [tapToPayActivating, setTapToPayActivating] = useState(false);
+  const [tapToPaySetupTimedOut, setTapToPaySetupTimedOut] = useState(false);
   const { tenant: tenantCtx, isOwner: isTTPOwner, can: ttpCan, membership: ttpMembership } = useTenant();
   const isNative = isNativeApp();
   const tapToPayEnabled = !!(tenantCtx as any)?.tap_to_pay_enabled;
+  const tenantSquareConnected = !!(tenantCtx as any)?.square_merchant_id;
   const canSetupTapToPay = isTTPOwner || ttpCan('settings:manage');
+
+  // Capability check + initial reader-connection snapshot. The native plugin's
+  // readerConnected event flips `hasActivatedThisProcess` in tap-to-pay.ts, so
+  // the synchronous `isReaderConnected()` read is authoritative for "is the
+  // reader live right now?" at first render. The "Set up Tap to Pay" handler
+  // refreshes this state itself after a successful activation.
+  useEffect(() => {
+    if (!isNative) return;
+    let cancelled = false;
+    void isTapToPayCapable({
+      tapToPayEnabled,
+      squareConnected: tenantSquareConnected,
+    }).then((capable) => {
+      if (cancelled) return;
+      setTapToPayCapable(capable);
+      if (capable) setTapToPayReaderConnected(isReaderConnected());
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isNative, tapToPayEnabled, tenantSquareConnected]);
+
+  const handleSetupTapToPay = useCallback(async () => {
+    setTapToPaySetupTimedOut(false);
+    setTapToPayActivating(true);
+    try {
+      const result = await activateTapToPayReader();
+      if (result.status === 'connected' || result.status === 'alreadyConnected') {
+        setTapToPayReaderConnected(true);
+      } else if (result.status === 'timeout') {
+        setTapToPaySetupTimedOut(true);
+      }
+      // 'cancelled' / 'error' / 'unavailable' fall through — button reverts
+      // to its "Set up Tap to Pay" label so the artist can retry.
+    } finally {
+      setTapToPayActivating(false);
+    }
+  }, []);
 
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const pollCountRef = useRef(0);
@@ -741,24 +789,20 @@ export function PaymentScreen({
             )}
 
             {/* ── TAP TO PAY — First & most prominent option (native app only) ── */}
-            {isNative && path === null && (
+            {/*
+              Three render states:
+                1. Reader connected → primary "Tap to Pay" CTA, opens TapToPayFlow
+                2. Reader not connected (but capable + enabled) → secondary
+                   outline "Set up Tap to Pay" CTA, calls activateTapToPayReader
+                3. Tap to Pay not enabled on the tenant → existing setup CTA
+                   (admin → TapToPaySetup, non-admin → toast)
+            */}
+            {isNative && path === null && tapToPayEnabled && tapToPayCapable && tapToPayReaderConnected && (
               <button
-                onClick={() => {
-                  if (tapToPayEnabled) {
-                    // Ready — start payment collection
-                    setTapToPayFlowOpen(true);
-                  } else if (canSetupTapToPay) {
-                    // Not enabled — admin/owner can set up
-                    setTapToPaySetupOpen(true);
-                  } else {
-                    // Not enabled, not admin — show message
-                    toast.info("Tap to Pay hasn't been set up yet. Ask your account owner to enable it in Settings.");
-                  }
-                }}
+                onClick={() => setTapToPayFlowOpen(true)}
                 className="w-full rounded-2xl p-5 text-left transition-all min-h-[80px] border-2 border-[var(--accent-primary)] bg-[color-mix(in_srgb,var(--accent-primary)_6%,var(--surface-raised))] hover:shadow-md active:scale-[0.98]"
               >
                 <div className="flex items-center gap-4">
-                  {/* Contactless wave icon */}
                   <div className="w-12 h-12 rounded-xl bg-[var(--accent-primary)] flex items-center justify-center shrink-0">
                     <svg className="w-7 h-7 text-white" viewBox="0 0 28 28" fill="none">
                       <circle cx="8" cy="14" r="2" fill="currentColor" />
@@ -770,14 +814,77 @@ export function PaymentScreen({
                   <div className="min-w-0 flex-1">
                     <div className="text-lg font-bold text-[var(--text-primary)]">Tap to Pay</div>
                     <p className="text-sm text-[var(--text-secondary)] mt-0.5">
-                      {tapToPayEnabled
-                        ? "Hold customer's card or phone near your device"
-                        : 'Set up contactless payments on your phone'}
+                      Hold customer&apos;s card or phone near your device
                     </p>
                   </div>
-                  {tapToPayEnabled && (
-                    <div className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
-                  )}
+                  <div className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
+                </div>
+              </button>
+            )}
+
+            {isNative && path === null && tapToPayEnabled && tapToPayCapable && !tapToPayReaderConnected && (
+              <button
+                onClick={handleSetupTapToPay}
+                disabled={tapToPayActivating}
+                className="w-full rounded-2xl p-5 text-left transition-all min-h-[80px] border border-[var(--border-default)] bg-[var(--surface-raised)] hover:border-[var(--accent-primary)] hover:shadow-sm active:scale-[0.98] disabled:opacity-70"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl border border-[var(--border-default)] bg-[var(--surface-subtle)] flex items-center justify-center shrink-0 text-[var(--accent-primary)]">
+                    {tapToPayActivating ? (
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--border-default)] border-t-[var(--accent-primary)]" />
+                    ) : (
+                      <svg className="w-7 h-7" viewBox="0 0 28 28" fill="none">
+                        <circle cx="8" cy="14" r="2" fill="currentColor" />
+                        <path d="M12 14c0-2.2 1.8-4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                        <path d="M12 14c0-4.4 3.6-8 8-8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                        <path d="M12 14c0-6.6 5.4-12 12-12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-base font-semibold text-[var(--text-primary)]">
+                      {tapToPayActivating
+                        ? 'Setting up card reader…'
+                        : tapToPaySetupTimedOut
+                          ? 'Setup timed out — try again'
+                          : 'Set up Tap to Pay'}
+                    </div>
+                    <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                      {tapToPayActivating
+                        ? "Follow the prompts in Square's setup sheet"
+                        : 'Connect the card reader before taking a payment'}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            )}
+
+            {isNative && path === null && !tapToPayEnabled && (
+              <button
+                onClick={() => {
+                  if (canSetupTapToPay) {
+                    setTapToPaySetupOpen(true);
+                  } else {
+                    toast.info("Tap to Pay hasn't been set up yet. Ask your account owner to enable it in Settings.");
+                  }
+                }}
+                className="w-full rounded-2xl p-5 text-left transition-all min-h-[80px] border-2 border-[var(--accent-primary)] bg-[color-mix(in_srgb,var(--accent-primary)_6%,var(--surface-raised))] hover:shadow-md active:scale-[0.98]"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-[var(--accent-primary)] flex items-center justify-center shrink-0">
+                    <svg className="w-7 h-7 text-white" viewBox="0 0 28 28" fill="none">
+                      <circle cx="8" cy="14" r="2" fill="currentColor" />
+                      <path d="M12 14c0-2.2 1.8-4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      <path d="M12 14c0-4.4 3.6-8 8-8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      <path d="M12 14c0-6.6 5.4-12 12-12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-lg font-bold text-[var(--text-primary)]">Tap to Pay</div>
+                    <p className="text-sm text-[var(--text-secondary)] mt-0.5">
+                      Set up contactless payments on your phone
+                    </p>
+                  </div>
                 </div>
               </button>
             )}

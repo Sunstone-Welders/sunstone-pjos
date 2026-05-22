@@ -226,13 +226,15 @@ export async function initializeTapToPay(
 }
 
 /**
- * Just-in-time reader activation — call this when the artist navigates to
- * POS or Event Mode. Presents Square's settings sheet (auto-dismisses on
- * reader connect), driven by the branded activation overlay.
+ * Manual reader activation — call this only when the artist explicitly taps
+ * "Set up Tap to Pay" on the POS payment screen (or as a safety-net retry in
+ * TapToPayFlow). Presents Square's settings sheet and resolves when the
+ * embedded reader attaches, when the artist dismisses the sheet manually, or
+ * after a 5-minute safety timeout fires natively.
  *
  * Idempotent per process: a successful `connected` or `alreadyConnected`
  * result short-circuits subsequent calls. On `timeout`, `cancelled`, or
- * `error`, the flag resets so the artist can retry from the overlay.
+ * `error`, the flag resets so the artist can retry.
  */
 export async function activateTapToPayReader(): Promise<ActivationResult> {
   if (!isNativeApp()) {
