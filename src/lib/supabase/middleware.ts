@@ -138,7 +138,12 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/join') ||
     request.nextUrl.pathname === '/';
 
-  if (!user && !isPublicRoute) {
+  // Native shell: WKWebView's fetch() doesn't reliably send cookies on RSC
+  // navigations, so middleware sees no user even when the client holds a
+  // valid Supabase session in localStorage. Skipping the redirect here lets
+  // the page render; client-side Supabase + RLS handle anything sensitive.
+  // Web browsers still get the redirect.
+  if (!user && !isPublicRoute && !isNative) {
     const url = request.nextUrl.clone();
     url.pathname = '/auth/login';
     return NextResponse.redirect(url);
