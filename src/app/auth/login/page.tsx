@@ -12,33 +12,6 @@ import { persistNativeSession } from '@/lib/supabase/native-session';
 import { toast } from 'sonner';
 import { Suspense } from 'react';
 
-// Poll /api/auth/me until the server confirms it can read the session cookie,
-// or the timeout elapses. Native-only workaround for WKWebView's async cookie
-// sync after login. Returns even on timeout — caller still navigates so the
-// user is never stuck on the spinner.
-async function waitForServerSession(
-  timeoutMs = 3000,
-  intervalMs = 100
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch('/api/auth/me', {
-        method: 'GET',
-        credentials: 'include',
-        cache: 'no-store',
-      });
-      if (res.ok) {
-        const body = await res.json();
-        if (body?.authenticated) return;
-      }
-    } catch {
-      // Network blip — fall through to retry
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-}
-
 export default function LoginPage() {
   return (
     <Suspense>
@@ -90,18 +63,13 @@ function LoginPageInner() {
       const redirectTo = searchParams.get('redirect');
       const dest = redirectTo && redirectTo.startsWith('/') ? redirectTo : '/';
 
-      if (isNative) {
-        // WKWebView writes Set-Cookie (from /api/auth/login) and document.cookie
-        // (from supabase.auth.setSession) to WKHTTPCookieStore asynchronously.
-        // The first post-login navigation can race ahead of that sync and hit
-        // the middleware with no sb-* cookie → bounce back to /auth/login.
-        // Confirm the server can see our session before navigating.
-        await waitForServerSession();
-        window.location.href = dest;
-      } else {
-        router.push(dest);
-        router.refresh();
-      }
+      // Client-side navigation on both native and web. window.location.href in
+      // WKWebView triggers a fresh top-level request that can race ahead of
+      // WKHTTPCookieStore's async write of the sb-* cookies, bouncing the user
+      // back to /auth/login. router.push stays inside the existing page
+      // context and doesn't hit the middleware.
+      router.push(dest);
+      router.refresh();
     } catch (err: any) {
       toast.error('An unexpected error occurred');
     } finally {
