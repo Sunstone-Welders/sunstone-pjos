@@ -72,9 +72,16 @@ export async function GET(request: NextRequest) {
   const access_token = url.searchParams.get('access_token');
   const refresh_token = url.searchParams.get('refresh_token');
   const dest = safeRedirectPath(url.searchParams.get('redirect'));
+  const isRecovery = url.searchParams.get('recovery') === '1';
+
+  // When the login page calls us as a silent recovery attempt, signal failure
+  // back via ?recovery=failed so the page can clear the stale tokens and
+  // surface the login form instead of looping.
+  const failureUrl = new URL('/auth/login', request.url);
+  if (isRecovery) failureUrl.searchParams.set('recovery', 'failed');
 
   if (!access_token || !refresh_token) {
-    return NextResponse.redirect(new URL('/auth/login', request.url));
+    return NextResponse.redirect(failureUrl);
   }
 
   const result = await establishSession(
@@ -85,7 +92,7 @@ export async function GET(request: NextRequest) {
   );
 
   if (!result.ok) {
-    return NextResponse.redirect(new URL('/auth/login', request.url));
+    return NextResponse.redirect(failureUrl);
   }
   return result.response;
 }

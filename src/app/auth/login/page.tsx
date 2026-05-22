@@ -8,7 +8,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { isNativeApp } from '@/lib/native';
-import { persistNativeSession } from '@/lib/supabase/native-session';
+import {
+  persistNativeSession,
+  getPersistedNativeSession,
+  clearPersistedNativeSession,
+} from '@/lib/supabase/native-session';
 import { toast } from 'sonner';
 import { Suspense } from 'react';
 
@@ -25,11 +29,60 @@ function LoginPageInner() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [isNative, setIsNative] = useState(false);
+  const [recovering, setRecovering] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
 
-  useEffect(() => { setIsNative(isNativeApp()); }, []);
+  // Silent re-authentication for native shell.
+  //
+  // WKWebView's fetch cookie handling is unreliable across RSC navigations, so
+  // middleware can redirect a freshly-authenticated user back here on the
+  // first protected route they tap. If we still hold the access/refresh tokens
+  // in Capacitor Preferences from the prior login, bounce through
+  // /api/auth/set-session (top-level nav → 302 with Set-Cookie) to re-establish
+  // server cookies and land on the originally-requested page — the login form
+  // never renders.
+  //
+  // Loop guard: if set-session can't validate the tokens it redirects here
+  // with ?recovery=failed; we drop the stale tokens and show the form.
+  useEffect(() => {
+    const native = isNativeApp();
+    setIsNative(native);
+    if (!native) return;
+
+    const recoveryFailed = searchParams.get('recovery') === 'failed';
+    if (recoveryFailed) {
+      void clearPersistedNativeSession();
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const persisted = await getPersistedNativeSession();
+      if (cancelled || !persisted) return;
+
+      const redirectParam =
+        searchParams.get('redirect') || searchParams.get('next');
+      const dest =
+        redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//')
+          ? redirectParam
+          : '/dashboard';
+
+      setRecovering(true);
+      const params = new URLSearchParams({
+        access_token: persisted.access_token,
+        refresh_token: persisted.refresh_token,
+        redirect: dest,
+        recovery: '1',
+      });
+      window.location.href = `/api/auth/set-session?${params.toString()}`;
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,6 +139,17 @@ function LoginPageInner() {
       setLoading(false);
     }
   };
+
+  if (recovering) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 bg-surface-base">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 rounded-full border-2 border-border-default border-t-accent-600 animate-spin" />
+          <p className="text-sm text-text-secondary">Signing you in...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-surface-base">
