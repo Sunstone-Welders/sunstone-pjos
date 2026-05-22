@@ -25,13 +25,22 @@ export default function LoginPage() {
 }
 
 function LoginPageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [isNative, setIsNative] = useState(false);
   const [recovering, setRecovering] = useState(false);
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  // Initialize synchronously: on native, hide the form from the first render
+  // so the spinner shows immediately while we check Preferences for a recoverable
+  // session. The useEffect below flips this to false if there is nothing to
+  // recover (or if recovery has already failed). Web users start with `false`
+  // because Capacitor.isNativePlatform() returns false off-device, so they go
+  // straight to the form with no spinner.
+  const [nativeChecking, setNativeChecking] = useState(
+    () => isNativeApp() && !searchParams.get('recovery')
+  );
   const supabase = createClient();
 
   // Silent re-authentication for native shell.
@@ -60,7 +69,11 @@ function LoginPageInner() {
     let cancelled = false;
     (async () => {
       const persisted = await getPersistedNativeSession();
-      if (cancelled || !persisted) return;
+      if (cancelled) return;
+      if (!persisted) {
+        setNativeChecking(false);
+        return;
+      }
 
       const redirectParam =
         searchParams.get('redirect') || searchParams.get('next');
@@ -140,7 +153,7 @@ function LoginPageInner() {
     }
   };
 
-  if (recovering) {
+  if (nativeChecking || recovering) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 bg-surface-base">
         <div className="flex flex-col items-center gap-4">
