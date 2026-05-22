@@ -84,11 +84,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(failureUrl);
   }
 
+  // Append ?session_ready=1 so the landing page can trigger a hard reload.
+  // WKWebView's fetch() cookie jar isn't populated by the Set-Cookie on this
+  // 302 — only the navigation cookie jar is. A subsequent top-level reload
+  // forces the jar to fully sync, after which RSC fetches include cookies.
+  const destUrl = new URL(dest, request.url);
+  destUrl.searchParams.set('session_ready', '1');
+
   const result = await establishSession(
     request,
     access_token,
     refresh_token,
-    NextResponse.redirect(new URL(dest, request.url)),
+    NextResponse.redirect(destUrl),
   );
 
   if (!result.ok) {

@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from 'next';
+import { Suspense } from 'react';
 import { Analytics } from '@vercel/analytics/next';
 import { Toaster } from 'sonner';
 import NativeBoot from '@/components/NativeBoot';
+import NativeSessionSync from '@/components/NativeSessionSync';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -24,6 +26,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <NativeBoot />
+        <Suspense fallback={null}>
+          <NativeSessionSync />
+        </Suspense>
         {children}
         <Analytics />
         <Toaster
