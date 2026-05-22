@@ -58,6 +58,22 @@ function LoginPageInner() {
       // so the session survives WKWebView / WebView cookie clearing on relaunch
       if (isNative) {
         await persistNativeSession(data.access_token, data.refresh_token);
+
+        // WKWebView's JS cookie store syncs asynchronously into its HTTP
+        // cookie store, so the sb-* cookies written by supabase.auth.setSession
+        // above may not be visible to the next server request. Have the server
+        // re-issue them via Set-Cookie response headers — WKWebView applies
+        // those synchronously to the HTTP cookie store, so the next
+        // navigation/RSC fetch is guaranteed to be authenticated.
+        await fetch('/api/auth/set-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+          }),
+        });
       }
 
       const redirectTo = searchParams.get('redirect');
