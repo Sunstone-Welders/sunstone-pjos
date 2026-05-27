@@ -119,8 +119,7 @@ function exportCSV(report: EventPL, expenses: ExpenseTotals, cashDrawer?: { open
   if (expenses.total > 0) {
     lines.push(`Other Expenses,${expenses.total.toFixed(2)}`);
   }
-  lines.push(`Platform Fees (Absorbed),${report.totalPlatformFees.toFixed(2)}`);
-  lines.push(`Total Costs,${(report.costOfGoods + report.boothFee + report.totalPlatformFees + expenses.total).toFixed(2)}`);
+  lines.push(`Total Costs,${(report.costOfGoods + report.boothFee + expenses.total).toFixed(2)}`);
   lines.push('');
 
   // Profit
@@ -163,10 +162,9 @@ function exportCSV(report: EventPL, expenses: ExpenseTotals, cashDrawer?: { open
 
   // Individual sales — FIXED: include chain_material_cost and jump_ring_cost
   lines.push('INDIVIDUAL SALES');
-  lines.push('Sale #,Time,Items,Payment Method,Subtotal,Tax,Tip,Platform Fee,Fee Type,Chain Cost,JR Cost,Total');
+  lines.push('Sale #,Time,Items,Payment Method,Subtotal,Tax,Tip,Chain Cost,JR Cost,Total');
   report.sales.forEach((sale, idx) => {
     const items = (sale.sale_items || []).map((i) => i.name).join('; ') || '–';
-    const feeHandling = (sale as any).fee_handling || 'absorb';
     const saleChainCost = (sale.sale_items || []).reduce((s, i) => s + (Number((i as any).chain_material_cost) || 0), 0);
     const saleJRCost = (sale.sale_items || []).reduce((s, i) => s + (Number((i as any).jump_ring_cost) || 0), 0);
     lines.push([
@@ -177,8 +175,6 @@ function exportCSV(report: EventPL, expenses: ExpenseTotals, cashDrawer?: { open
       Number(sale.subtotal).toFixed(2),
       Number(sale.tax_amount).toFixed(2),
       Number(sale.tip_amount).toFixed(2),
-      Number(sale.platform_fee_amount).toFixed(2),
-      feeHandling,
       saleChainCost.toFixed(2),
       saleJRCost.toFixed(2),
       Number(sale.total).toFixed(2),
@@ -343,8 +339,8 @@ function EventPLReportPage() {
     const costOfGoods = chainMaterialCost + jumpRingCost;
     const netRevenue = totalRevenue - totalRefunds;
 
-    // Net Profit = subtotal - refunds - COGS - booth fee - absorbed platform fees - expenses
-    const netProfit = totalSubtotal - totalRefunds - costOfGoods - boothFee - totalPlatformFees - expenseTotals.total;
+    // Net Profit = subtotal - refunds - COGS - booth fee - expenses (platform fees excluded — removed May 2026)
+    const netProfit = totalSubtotal - totalRefunds - costOfGoods - boothFee - expenseTotals.total;
     const salesCount = sales.length;
     const avgSaleValue = salesCount > 0 ? totalRevenue / salesCount : 0;
 
@@ -547,11 +543,10 @@ function EventPLReportPage() {
                 {expenseTotals.total > 0 && (
                   <ReportRow label="Other Expenses" value={money(expenseTotals.total)} negative />
                 )}
-                <ReportRow label="Platform Fees" value={money(report.totalPlatformFees)} negative />
                 <div className="border-t border-[var(--border-default)] mt-1 pt-3">
                   <ReportRow
                     label="Total Costs"
-                    value={money(report.costOfGoods + report.boothFee + report.totalPlatformFees + expenseTotals.total)}
+                    value={money(report.costOfGoods + report.boothFee + expenseTotals.total)}
                     bold
                     negative
                   />
@@ -669,8 +664,6 @@ function EventPLReportPage() {
               <CardContent className="space-y-0">
                 {report.sales.map((sale, idx) => {
                   const items = (sale.sale_items || []).map((i) => i.name).join(', ') || '–';
-                  const feeHandling = (sale as any).fee_handling;
-                  const feeAmount = Number(sale.platform_fee_amount) || 0;
 
                   return (
                     <div key={sale.id} className="flex items-start gap-3 py-3 border-b border-[var(--border-subtle)] last:border-b-0">
@@ -683,11 +676,6 @@ function EventPLReportPage() {
                           <span className="text-xs text-text-tertiary">
                             {paymentMethodLabels[sale.payment_method] || sale.payment_method}
                           </span>
-                          {feeAmount > 0 && (
-                            <span className={`text-xs ${feeHandling === 'pass_to_customer' ? 'text-text-tertiary' : 'text-red-400'}`}>
-                              · ${feeAmount.toFixed(2)} fee{feeHandling === 'pass_to_customer' ? ' (customer)' : ''}
-                            </span>
-                          )}
                         </div>
                       </div>
                       <span className="text-sm font-medium text-text-primary shrink-0">

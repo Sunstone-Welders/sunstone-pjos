@@ -211,12 +211,6 @@ export default function TransactionList({ sales, loading, compact }: Transaction
                               <span className="text-[var(--text-primary)]">{money(Number(sale.warranty_amount))}</span>
                             </div>
                           )}
-                          {Number(sale.platform_fee_amount) > 0 && sale.fee_handling === 'absorb' && (
-                            <div className="flex justify-between text-sm">
-                              <span className="text-[var(--text-secondary)]">Platform Fee</span>
-                              <span className="text-error-500">-{money(Number(sale.platform_fee_amount))}</span>
-                            </div>
-                          )}
                           <div className="flex justify-between text-sm font-semibold border-t border-[var(--border-default)] pt-2 mt-2">
                             <span className="text-[var(--text-primary)]">Total</span>
                             <span className="text-[var(--text-primary)]">{money(Number(sale.total))}</span>

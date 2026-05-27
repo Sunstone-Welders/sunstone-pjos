@@ -26,7 +26,6 @@ import {
   Input,
 } from '@/components/ui';
 import type { Event, Sale, SaleItem, Refund } from '@/types';
-import { PLATFORM_FEE_RATES } from '@/types';
 import UpgradePrompt from '@/components/ui/UpgradePrompt';
 import SunnyTutorial from '@/components/SunnyTutorial';
 import ExpensesSection from '@/components/reports/ExpensesSection';
@@ -186,8 +185,7 @@ function exportOverviewCSV(data: AggregatedData, dateLabel: string, sourceLabel:
     lines.push(`Total Expenses,${expenses.total.toFixed(2)}`);
   }
   lines.push('');
-  lines.push(`Platform Fees (Absorbed),${data.totalPlatformFees.toFixed(2)}`);
-  lines.push(`Total Costs,${(data.totalCOGS + data.totalPlatformFees + expenses.total).toFixed(2)}`);
+  lines.push(`Total Costs,${(data.totalCOGS + expenses.total).toFixed(2)}`);
   lines.push('');
 
   lines.push('PROFIT');
@@ -228,7 +226,7 @@ function exportTransactionsCSV(sales: TransactionSale[], dateLabel: string) {
   const filename = `Transactions - ${dateLabel}.csv`;
   const lines: string[] = [];
 
-  lines.push('Date,Time,Client,Items,Subtotal,Discount,Tax,Tip,Warranty,Platform Fee,Total,Payment Method,Status,Notes');
+  lines.push('Date,Time,Client,Items,Subtotal,Discount,Tax,Tip,Warranty,Total,Payment Method,Status,Notes');
   for (const sale of sales) {
     const dt = new Date(sale.created_at);
     const date = format(dt, 'yyyy-MM-dd');
@@ -241,7 +239,7 @@ function exportTransactionsCSV(sales: TransactionSale[], dateLabel: string) {
       date, time, `"${client}"`, `"${items}"`,
       Number(sale.subtotal).toFixed(2), Number(sale.discount_amount).toFixed(2),
       Number(sale.tax_amount).toFixed(2), Number(sale.tip_amount).toFixed(2),
-      Number(sale.warranty_amount).toFixed(2), Number(sale.platform_fee_amount).toFixed(2),
+      Number(sale.warranty_amount).toFixed(2),
       Number(sale.total).toFixed(2), `"${method}"`, sale.payment_status, `"${notes}"`,
     ].join(','));
   }
@@ -483,11 +481,10 @@ export default function ReportsPage() {
       paymentBreakdown[pm].count++;
       paymentBreakdown[pm].total += saleRevenue;
 
-      // Monthly breakdown — only absorbed fees in costs
+      // Monthly breakdown
       const monthKey = format(new Date(sale.created_at), 'yyyy-MM');
-      const absorbedFee = (feeHandling === 'absorb' || feeHandling === null) ? feeAmount : 0;
-      const saleCosts = saleCOGS + absorbedFee;
-      const saleProfit = sub - saleCOGS - absorbedFee;
+      const saleCosts = saleCOGS;
+      const saleProfit = sub - saleCOGS;
       const existing = monthBuckets.get(monthKey);
       if (existing) {
         existing.revenue += saleRevenue;
@@ -507,8 +504,8 @@ export default function ReportsPage() {
     const totalRefunds = refunds.reduce((sum, r) => sum + Number(r.amount), 0);
     const netRevenue = totalRevenue - totalRefunds;
 
-    // Net profit includes refunds and expenses
-    const netProfit = totalSubtotal - totalRefunds - totalCOGS - totalPlatformFees - expenseTotals.total;
+    // Net profit = revenue - product costs - expenses (platform fees excluded — removed May 2026)
+    const netProfit = totalSubtotal - totalRefunds - totalCOGS - expenseTotals.total;
     const salesCount = sales.length;
     const avgSaleValue = salesCount > 0 ? totalRevenue / salesCount : 0;
 
@@ -562,7 +559,7 @@ export default function ReportsPage() {
       }
 
       const boothFee = boothFeeMap.get(ev.id) || 0;
-      const costs = cogs + boothFee + absorbedFees;
+      const costs = cogs + boothFee;
 
       return {
         id: ev.id,
@@ -572,7 +569,7 @@ export default function ReportsPage() {
         salesCount: eventSales.length,
         revenue,
         costs,
-        profit: subtotal - cogs - boothFee - absorbedFees,
+        profit: subtotal - cogs - boothFee,
       };
     }).filter((ev) => ev.salesCount > 0 || new Date(ev.date) >= dateRange.start);
   }, [events, sales, boothFeeMap, activeTab, dateRange]);
@@ -903,9 +900,8 @@ export default function ReportsPage() {
                       </>
                     )}
 
-                    <ReportRow label="Platform Fees" value={money(aggregated.totalPlatformFees)} negative />
                     <div className="border-t border-[var(--border-default)] mt-1 pt-3">
-                      <ReportRow label="Total Costs" value={money(aggregated.totalCOGS + aggregated.totalPlatformFees + expenseTotals.total)} bold negative />
+                      <ReportRow label="Total Costs" value={money(aggregated.totalCOGS + expenseTotals.total)} bold negative />
                     </div>
                     <div className="border-t border-[var(--border-default)] mt-1 pt-4">
                       <div className="flex items-center justify-between">
