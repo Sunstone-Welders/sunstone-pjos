@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
 import { logSmsCost } from '@/lib/cost-tracker';
 import { sendSMS } from '@/lib/twilio';
@@ -27,7 +28,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ sent: false, reason: 'no_sms_consent' });
     }
 
-    const smsBody = `Hi ${name}! You're next at the ${tenantName || 'Sunstone'} booth. Please head over now!`;
+    // Fetch business name from tenants table (ignore client-supplied tenantName)
+    let businessName = 'the booth';
+    if (tenantId) {
+      try {
+        const svc = await createServiceRoleClient();
+        const { data: tenant } = await svc
+          .from('tenants')
+          .select('name')
+          .eq('id', tenantId)
+          .single();
+        if (tenant?.name) businessName = tenant.name;
+      } catch {
+        // Fallback silently — SMS still sends with neutral "the booth"
+      }
+    }
+
+    const smsBody = `Hi ${name}! You're next at the ${businessName} booth. Please head over now!`;
     const sid = await sendSMS({ to: phone, body: smsBody, tenantId: tenantId || undefined });
 
     if (!sid) {
@@ -41,18 +58,16 @@ export async function POST(request: NextRequest) {
 
     // Log to message_log (fire-and-forget)
     if (tenantId) {
-      import('@/lib/supabase/server').then(({ createServiceRoleClient }) =>
-        createServiceRoleClient().then(svc =>
-          svc.from('message_log').insert({
-            tenant_id: tenantId,
-            direction: 'outbound',
-            channel: 'sms',
-            recipient_phone: phone,
-            body: smsBody,
-            source: 'queue_notify',
-            status: 'sent',
-          })
-        )
+      createServiceRoleClient().then(svc =>
+        svc.from('message_log').insert({
+          tenant_id: tenantId,
+          direction: 'outbound',
+          channel: 'sms',
+          recipient_phone: phone,
+          body: smsBody,
+          source: 'queue_notify',
+          status: 'sent',
+        })
       ).catch(() => {});
     }
 
