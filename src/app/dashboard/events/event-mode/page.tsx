@@ -26,9 +26,9 @@ import JumpRingPickerModal from '@/components/JumpRingPickerModal';
 import CashDrawerPanel from '@/components/CashDrawerPanel';
 import { createWarrantyRecords } from '@/lib/warranty';
 import { checkTapToPayAvailability, type TapToPayResult } from '@/lib/tap-to-pay';
-import { ProductSelector, QueueBadge, CheckoutFlow, PendingPayments, GiftCardModal, SalesPanel } from '@/components/pos';
+import { ProductSelector, CheckoutFlow, PendingPayments, GiftCardModal, SalesPanel } from '@/components/pos';
 import type { CompletedSaleData, CheckoutStep, GiftCardData } from '@/components/pos';
-import type { QueueEntry } from '@/components/MiniQueueStrip';
+import MiniQueueStrip, { type QueueEntry } from '@/components/MiniQueueStrip';
 import type {
   InventoryItem, InventoryItemVariant, Event, TaxProfile, ProductType, ChainProductPrice, JumpRingResolution, CartItem,
   PricingTier, PricingTierCustomPrice,
@@ -923,20 +923,19 @@ function EventModePageInner() {
             </button>
           </div>
         </div>
-        {/* Row 2: Queue pill */}
-        {tenant && eventId && (
-          <div className="px-4 pb-2.5">
-            <QueueBadge
-              tenantId={tenant.id}
-              eventId={eventId}
-              mode="event"
-              onStartSale={handleQueueStartSale}
-              isServingActive={!!activeQueueEntry}
-              refreshTrigger={queueRefresh}
-            />
-          </div>
-        )}
       </header>
+
+      {/* ── MiniQueueStrip — only when queue mode is ON ── */}
+      {queueModeOn && step === 'items' && tenant && eventId && (
+        <MiniQueueStrip
+          tenantId={tenant.id}
+          eventId={eventId}
+          mode="event"
+          onStartSale={handleQueueStartSale}
+          isServingActive={!!activeQueueEntry}
+          refreshTrigger={queueRefresh}
+        />
+      )}
 
       {/* ── Serving Banner ── */}
       {activeQueueEntry && step === 'items' && (
