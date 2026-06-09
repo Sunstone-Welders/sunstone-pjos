@@ -165,7 +165,7 @@ export default function EventsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/dashboard/pos">
+          <Link href="/dashboard/pos?intent=store">
             <Button variant="secondary">
               Store Mode
             </Button>

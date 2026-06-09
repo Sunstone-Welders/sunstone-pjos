@@ -97,6 +97,10 @@ export default function StoreModePage() {
   // Variant state
   const [itemVariants, setItemVariants] = useState<Record<string, InventoryItemVariant[]>>({});
 
+  // Active-event prompt state
+  const [activeEventPrompt, setActiveEventPrompt] = useState<{ id: string; name: string } | null>(null);
+  const [showActiveEventModal, setShowActiveEventModal] = useState(false);
+
   // Tap to Pay — only show in PaymentScreen when (a) the device is native +
   // contactless-capable AND (b) the tenant has finished setup in Settings AND
   // (c) Square is connected (Stripe Terminal lands in a follow-up).
@@ -109,6 +113,32 @@ export default function StoreModePage() {
     });
     return () => { cancelled = true; };
   }, []);
+
+  // ── Active-event detection — prompt to switch to Event Mode ──────────
+  useEffect(() => {
+    if (!tenant) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('intent') === 'store') return;
+
+    let cancelled = false;
+    (async () => {
+      const now = new Date().toISOString();
+      const { data } = await createClient()
+        .from('events')
+        .select('id, name')
+        .eq('tenant_id', tenant.id)
+        .eq('is_active', true)
+        .lte('start_time', now)
+        .or(`end_time.is.null,end_time.gte.${now}`)
+        .order('start_time', { ascending: false })
+        .limit(1);
+      if (cancelled || !data?.length) return;
+      setActiveEventPrompt({ id: data[0].id, name: data[0].name });
+      setShowActiveEventModal(true);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenant?.id]);
 
   const cart = useCartStore();
   const supabase = createClient();
@@ -1075,6 +1105,38 @@ export default function StoreModePage() {
             { title: 'Jump rings are auto-deducted', body: 'When you complete a sale, jump rings are deducted from inventory based on each product type\'s requirements.' },
           ]}
         />
+      )}
+
+      {/* ── Active Event Prompt ── */}
+      {activeEventPrompt && (
+        <Modal isOpen={showActiveEventModal} onClose={() => setShowActiveEventModal(false)} size="sm">
+          <ModalHeader>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+              {activeEventPrompt.name} is live right now
+            </h2>
+          </ModalHeader>
+          <ModalBody>
+            <p className="text-sm text-[var(--text-secondary)]">
+              Do you want to ring this sale under the event, or use Store Mode?
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="secondary"
+              className="min-h-[48px]"
+              onClick={() => setShowActiveEventModal(false)}
+            >
+              Continue in Store Mode
+            </Button>
+            <Button
+              variant="primary"
+              className="min-h-[48px]"
+              onClick={() => router.push(`/dashboard/events/event-mode?eventId=${activeEventPrompt.id}`)}
+            >
+              Use Event Mode
+            </Button>
+          </ModalFooter>
+        </Modal>
       )}
     </div>
   );
