@@ -46,6 +46,7 @@ interface CreatedBooking {
   status: string;
   customer_name: string;
   booking_type_id: string;
+  cancellation_token: string;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -96,6 +97,25 @@ function formatDayLetter(d: Date): string {
 /** Day number: "11" */
 function formatDayNum(d: Date): string {
   return d.getDate().toString();
+}
+
+/** Build a Google Calendar event URL */
+function buildGoogleCalendarUrl(params: {
+  title: string;
+  startTime: string;
+  endTime: string;
+  description: string;
+  location: string;
+}): string {
+  const fmt = (iso: string) => new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const qs = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: params.title,
+    dates: `${fmt(params.startTime)}/${fmt(params.endTime)}`,
+    details: params.description,
+    location: params.location,
+  });
+  return `https://calendar.google.com/calendar/render?${qs.toString()}`;
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -345,6 +365,41 @@ export default function BookingPage({
               </div>
             )}
           </div>
+
+          {/* ── Add to Calendar ─────────────────────────────────── */}
+          {confirmedStatus === 'confirmed' && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-[var(--text-secondary)] text-center">Add to Calendar</p>
+              <div className="flex gap-2">
+                <a
+                  href={buildGoogleCalendarUrl({
+                    title: `${bookingType?.name || 'Appointment'} — ${tenant.name}`,
+                    startTime: confirmedBooking.start_time,
+                    endTime: confirmedBooking.end_time,
+                    description: `${bookingType?.duration_minutes || 30} min appointment with ${tenant.name}`,
+                    location: '',
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 min-h-[48px] rounded-xl border border-[var(--border-default)] bg-[var(--surface-raised)] text-sm font-medium text-[var(--text-primary)] hover:border-[var(--accent-primary)] transition-colors"
+                >
+                  <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19.5 3h-3V1.5h-1.5V3h-6V1.5H7.5V3h-3C3.675 3 3 3.675 3 4.5v15c0 .825.675 1.5 1.5 1.5h15c.825 0 1.5-.675 1.5-1.5v-15c0-.825-.675-1.5-1.5-1.5zm0 16.5h-15V8.25h15V19.5z"/>
+                  </svg>
+                  Google Calendar
+                </a>
+                <a
+                  href={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/public/bookings/${confirmedBooking.id}/calendar?token=${confirmedBooking.cancellation_token}`}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 min-h-[48px] rounded-xl border border-[var(--border-default)] bg-[var(--surface-raised)] text-sm font-medium text-[var(--text-primary)] hover:border-[var(--accent-primary)] transition-colors"
+                >
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                  </svg>
+                  Apple / Outlook
+                </a>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-col gap-3">
             <Link

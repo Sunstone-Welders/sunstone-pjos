@@ -9,7 +9,7 @@
 import { NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
-import { normalizePhone } from '@/lib/twilio';
+import { normalizePhone, sendSMS } from '@/lib/twilio';
 
 export async function POST(request: Request) {
   // Rate limit: 10 per hour per IP
@@ -195,6 +195,94 @@ export async function POST(request: Request) {
   if (insertError) {
     console.error('Booking insert failed:', insertError);
     return NextResponse.json({ error: 'Failed to create booking' }, { status: 500 });
+  }
+
+  // ── Post-creation notifications (fire-and-forget) ─────────────────────────
+  // SMS failures must never block the booking response.
+  try {
+    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sunstonepj.app';
+
+    // Fetch tenant info for notifications
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('name, phone, city, state')
+      .eq('id', tenantId)
+      .single();
+
+    const businessName = tenant?.name || 'your artist';
+    const bookingDate = start.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'UTC',
+    });
+    const bookingTime = start.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'UTC',
+    });
+    const duration = bookingType.duration_minutes;
+    const locationParts = [tenant?.city, tenant?.state].filter(Boolean);
+    const locationLine = locationParts.length > 0 ? `\n${locationParts.join(', ')}` : '';
+
+    const cancelLink = `${APP_URL}/booking/manage/${booking.cancellation_token}`;
+    const calendarLink = `${APP_URL}/api/public/bookings/${booking.id}/calendar?token=${booking.cancellation_token}`;
+
+    // ── A) Customer confirmation SMS ──────────────────────────────────────
+    let customerMsg = '';
+    if (status === 'confirmed') {
+      customerMsg =
+        `Your appointment is confirmed!\n` +
+        `${bookingType.name} with ${businessName}\n` +
+        `${bookingDate} at ${bookingTime}\n` +
+        `${duration} min${locationLine}\n` +
+        `\nAdd to calendar: ${calendarLink}` +
+        `\nTo cancel or reschedule: ${cancelLink}`;
+    } else {
+      customerMsg =
+        `Your booking request has been received!\n` +
+        `${bookingType.name} with ${businessName}\n` +
+        `${bookingDate} at ${bookingTime}\n` +
+        `${duration} min\n` +
+        `${businessName} will confirm your appointment shortly.\n` +
+        `Questions? Reply to this message.`;
+    }
+
+    sendSMS({
+      to: normalizedPhone,
+      body: customerMsg,
+      tenantId,
+      skipConsentCheck: true,
+    }).catch((err) => {
+      console.error('[Booking SMS] Customer confirmation failed:', err);
+    });
+
+    // ── B) Artist notification SMS ────────────────────────────────────────
+    if (tenant?.phone) {
+      const statusWord = status === 'confirmed' ? 'confirmed' : 'received';
+      const actionLine = status === 'pending'
+        ? '\nAction needed: approve or decline in your dashboard.'
+        : '';
+
+      const artistMsg =
+        `New booking ${statusWord}!\n` +
+        `${customerName.trim()} booked ${bookingType.name}\n` +
+        `${bookingDate} at ${bookingTime}\n` +
+        `${normalizedPhone}${actionLine}`;
+
+      sendSMS({
+        to: tenant.phone,
+        body: artistMsg,
+        tenantId,
+        skipConsentCheck: true,
+      }).catch((err) => {
+        console.error('[Booking SMS] Artist notification failed:', err);
+      });
+    }
+  } catch (notifErr) {
+    // Notification errors must never block the booking response
+    console.error('[Booking SMS] Notification setup failed:', notifErr);
   }
 
   return NextResponse.json({
