@@ -119,6 +119,8 @@ export interface Tenant {
   tap_to_pay_splash_shown: boolean;
   // Ambassador-only mode (influencers who don't use Studio tools)
   ambassador_only: boolean;
+  // Booking
+  team_booking_enabled: boolean;
   // Timestamps
   created_at: string;
   updated_at: string;
