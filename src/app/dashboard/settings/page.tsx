@@ -40,6 +40,7 @@ import SunnyTutorial from '@/components/SunnyTutorial';
 import ProductTypesSection from '@/components/settings/ProductTypesSection';
 import SuppliersSection from '@/components/settings/SuppliersSection';
 import BookingTypesSection from '@/components/settings/BookingTypesSection';
+import AvailabilitySection from '@/components/settings/AvailabilitySection';
 import { canShowBillingUI } from '@/lib/billing-gate';
 import { isNativeApp, getPlatform } from '@/lib/native';
 import TapToPaySetup from '@/components/TapToPaySetup';
@@ -2491,6 +2492,10 @@ function SettingsPage() {
       >
         <div className="pt-4">
           <BookingTypesSection
+            tenantId={tenant.id}
+            teamBookingEnabled={(tenant as any).team_booking_enabled ?? false}
+          />
+          <AvailabilitySection
             tenantId={tenant.id}
             teamBookingEnabled={(tenant as any).team_booking_enabled ?? false}
           />
