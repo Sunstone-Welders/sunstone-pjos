@@ -254,6 +254,78 @@ export async function POST(request: NextRequest) {
           break;
         }
 
+        // ── Booking deposit completed (from connected account) ──
+        if (session.mode === 'payment' && session.metadata?.type === 'booking_deposit') {
+          const bookingId = session.metadata.booking_id;
+          const depositTenantId = session.metadata.tenant_id;
+          const paymentIntentId = typeof session.payment_intent === 'string'
+            ? session.payment_intent : null;
+
+          if (bookingId) {
+            await serviceRole
+              .from('bookings')
+              .update({
+                deposit_status: 'paid',
+                deposit_paid_at: new Date().toISOString(),
+                stripe_payment_intent_id: paymentIntentId,
+              })
+              .eq('id', bookingId);
+
+            // Notify customer + artist via SMS
+            if (depositTenantId) {
+              try {
+                const { data: bookingData } = await serviceRole
+                  .from('bookings')
+                  .select('customer_name, customer_phone, deposit_amount, start_time, booking_types(name)')
+                  .eq('id', bookingId)
+                  .single();
+
+                const { data: tenantData } = await serviceRole
+                  .from('tenants')
+                  .select('phone, name, dedicated_phone_number')
+                  .eq('id', depositTenantId)
+                  .single();
+
+                if (bookingData) {
+                  const amt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(bookingData.deposit_amount);
+                  const typeName = (bookingData.booking_types as any)?.name || 'Appointment';
+                  const bookingDate = new Date(bookingData.start_time).toLocaleDateString('en-US', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                    timeZone: 'UTC',
+                  });
+
+                  // Notify customer
+                  if (bookingData.customer_phone) {
+                    sendSMS({
+                      to: bookingData.customer_phone,
+                      body: `Deposit received! Your ${typeName} on ${bookingDate} is confirmed. Thank you!`,
+                      tenantId: depositTenantId,
+                      skipConsentCheck: true,
+                    }).catch(() => {});
+                  }
+
+                  // Notify artist
+                  if (tenantData?.phone) {
+                    sendSMS({
+                      to: tenantData.phone,
+                      body: `${bookingData.customer_name || 'A customer'} paid the ${amt} deposit for their ${typeName} on ${bookingDate}.`,
+                      tenantId: depositTenantId,
+                      skipConsentCheck: true,
+                    }).catch(() => {});
+                  }
+                }
+              } catch {
+                // Non-critical — don't block webhook
+              }
+            }
+
+            console.log(`[Webhook] Booking deposit completed — booking ${bookingId}`);
+          }
+          break;
+        }
+
         // ── CRM add-on checkout completed ──
         if (session.mode === 'subscription' && session.metadata?.type === 'crm_addon') {
           const crmTenantId = session.metadata?.tenant_id;
@@ -386,6 +458,17 @@ export async function POST(request: NextRequest) {
             .eq('id', expiredPartyId);
 
           console.log(`[Webhook] Party deposit expired — party ${expiredPartyId}`);
+        }
+
+        // Handle expired booking deposit sessions
+        const expiredBookingId = session.metadata?.booking_id;
+        if (session.metadata?.type === 'booking_deposit' && expiredBookingId) {
+          await serviceRole
+            .from('bookings')
+            .update({ deposit_status: 'none', stripe_checkout_session_id: null })
+            .eq('id', expiredBookingId);
+
+          console.log(`[Webhook] Booking deposit expired — booking ${expiredBookingId}`);
         }
         break;
       }

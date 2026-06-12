@@ -23,6 +23,8 @@ interface BookingType {
   name: string;
   duration_minutes: number;
   color: string | null;
+  deposit_required: boolean;
+  deposit_amount: number | null;
 }
 
 interface Booking {
@@ -38,6 +40,9 @@ interface Booking {
   customer_phone: string | null;
   customer_email: string | null;
   notes: string | null;
+  deposit_amount: number | null;
+  deposit_status: string | null;
+  deposit_paid_at: string | null;
   cancellation_token: string;
   created_at: string;
   updated_at: string;
@@ -164,6 +169,7 @@ export default function BookingsPage() {
   const [hasBookingTypes, setHasBookingTypes] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
+  const [depositSending, setDepositSending] = useState(false);
 
   // ── Data fetching ─────────────────────────────────────────────────────────
   const fetchBookings = useCallback(async () => {
@@ -178,7 +184,7 @@ export default function BookingsPage() {
 
     const { data, error } = await supabase
       .from('bookings')
-      .select('*, booking_types(name, duration_minutes, color)')
+      .select('*, booking_types(name, duration_minutes, color, deposit_required, deposit_amount)')
       .eq('tenant_id', tenant.id)
       .order('start_time', { ascending: false });
 
@@ -328,6 +334,29 @@ export default function BookingsPage() {
       }
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  // ── Send deposit link ────────────────────────────────────────────────────
+  const handleSendDeposit = async (booking: Booking) => {
+    setDepositSending(true);
+    try {
+      const res = await fetch(`/api/bookings/${booking.id}/send-deposit`, { method: 'POST' });
+      if (res.ok) {
+        // Update local booking state to reflect pending deposit
+        setBookings(prev => prev.map(b =>
+          b.id === booking.id ? { ...b, deposit_status: 'pending' } : b
+        ));
+        if (selectedBooking?.id === booking.id) {
+          setSelectedBooking(prev => prev ? { ...prev, deposit_status: 'pending' } : null);
+        }
+        setToast(`Deposit link sent to ${booking.customer_name || 'customer'}`);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setToast(data.error || 'Failed to send deposit link');
+      }
+    } finally {
+      setDepositSending(false);
     }
   };
 
@@ -499,6 +528,8 @@ export default function BookingsPage() {
           onMarkComplete={() => handleStatusChange(selectedBooking, 'completed')}
           onMarkNoShow={() => handleStatusChange(selectedBooking, 'no_show')}
           onCancel={() => handleStatusChange(selectedBooking, 'cancelled')}
+          onSendDeposit={() => handleSendDeposit(selectedBooking)}
+          depositSending={depositSending}
         />
       )}
 
@@ -671,6 +702,8 @@ function BookingDetailModal({
   onMarkComplete,
   onMarkNoShow,
   onCancel,
+  onSendDeposit,
+  depositSending,
 }: {
   booking: Booking;
   actionLoading: string | null;
@@ -680,12 +713,20 @@ function BookingDetailModal({
   onMarkComplete: () => void;
   onMarkNoShow: () => void;
   onCancel: () => void;
+  onSendDeposit?: () => void;
+  depositSending?: boolean;
 }) {
   const config = STATUS_CONFIG[booking.status] || STATUS_CONFIG.cancelled;
   const typeName = booking.booking_types?.name || 'Appointment';
   const duration = booking.booking_types?.duration_minutes || 0;
   const color = booking.booking_types?.color || 'var(--accent-500)';
   const isLoading = actionLoading === booking.id;
+
+  // Deposit display
+  const depositRequired = booking.booking_types?.deposit_required || false;
+  const depositAmount = booking.deposit_amount || booking.booking_types?.deposit_amount;
+  const depositStatus = booking.deposit_status || 'none';
+  const showSendDeposit = booking.status === 'confirmed' && depositRequired && depositStatus !== 'paid' && depositAmount;
 
   return (
     <Modal isOpen onClose={onClose} size="lg">
@@ -744,6 +785,44 @@ function BookingDetailModal({
             <p className="text-sm text-[var(--text-secondary)] bg-[var(--surface-subtle)] rounded-lg p-3">
               {booking.notes}
             </p>
+          </div>
+        )}
+
+        {/* Deposit Status */}
+        {depositRequired && (
+          <div className="space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Deposit</h3>
+            <div className="flex items-center gap-2">
+              {depositStatus === 'paid' ? (
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  Paid{depositAmount ? ` — $${Number(depositAmount).toFixed(2)}` : ''}
+                </span>
+              ) : depositStatus === 'pending' ? (
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                  Pending{depositAmount ? ` — $${Number(depositAmount).toFixed(2)}` : ''}
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[var(--surface-subtle)] text-[var(--text-tertiary)] border border-[var(--border-subtle)]">
+                  Not collected{depositAmount ? ` — $${Number(depositAmount).toFixed(2)}` : ''}
+                </span>
+              )}
+            </div>
+            {showSendDeposit && onSendDeposit && (
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={depositSending}
+                onClick={onSendDeposit}
+              >
+                <svg className="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                </svg>
+                Send Deposit Link
+              </Button>
+            )}
           </div>
         )}
 

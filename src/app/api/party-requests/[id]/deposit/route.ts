@@ -1,21 +1,17 @@
 // ============================================================================
 // Party Deposit API — POST /api/party-requests/[id]/deposit
 // ============================================================================
-// Creates a Stripe Checkout Session for the deposit amount on the artist's
-// connected account. No platform fee on deposits — it's the artist's money.
-// Optionally sends the payment link to the host via SMS.
+// Creates a payment link (Stripe or Square) for the deposit amount on the
+// artist's connected account. No platform fee on deposits — it's the artist's
+// money. Optionally sends the payment link to the host via SMS.
 // ============================================================================
 
 export const runtime = 'nodejs';
 
-import Stripe from 'stripe';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase, createServiceRoleClient } from '@/lib/supabase/server';
 import { sendSMS, normalizePhone } from '@/lib/twilio';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-02-24.acacia' as any,
-});
+import { resolvePaymentProvider, createDepositPaymentLink } from '@/lib/deposit-utils';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -64,65 +60,40 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Deposit already paid' }, { status: 400 });
     }
 
-    // ── Get tenant's Stripe account ─────────────────────────────────────
+    // ── Get tenant payment credentials ──────────────────────────────────
     const { data: tenant } = await db
       .from('tenants')
-      .select('stripe_account_id, name, slug, dedicated_phone_number')
+      .select('id, name, slug, dedicated_phone_number, default_payment_processor, stripe_account_id, square_access_token, square_location_id')
       .eq('id', tenantId)
       .single();
 
-    if (!tenant?.stripe_account_id) {
+    if (!tenant) {
+      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+    }
+
+    // ── Resolve payment provider ────────────────────────────────────────
+    const provider = resolvePaymentProvider(tenant);
+    if (!provider) {
       return NextResponse.json(
-        { error: 'Stripe not connected. Go to Settings → Payments to connect.' },
+        { error: 'No payment processor connected. Go to Settings → Payments to connect Stripe or Square.' },
         { status: 400 }
       );
     }
 
-    // ── Create Stripe Checkout Session ──────────────────────────────────
+    // ── Create payment link ─────────────────────────────────────────────
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sunstonepj.app';
-    const amountCents = Math.round(Number(depositAmount) * 100);
-
-    const sessionParams: Record<string, unknown> = {
-      mode: 'payment',
-      payment_method_types: ['card'],
-      line_items: [{
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: `Party Deposit — ${party.host_name}`,
-          },
-          unit_amount: amountCents,
-        },
-        quantity: 1,
-      }],
-      // No application_fee_amount — deposits are the artist's money
-      success_url: `${baseUrl}/studio/${tenant.slug}?deposit=success`,
-      cancel_url: `${baseUrl}/studio/${tenant.slug}?deposit=cancelled`,
-      expires_at: Math.floor(Date.now() / 1000) + (24 * 60 * 60), // 24 hours from now
+    const result = await createDepositPaymentLink({
+      provider,
+      tenant,
+      amount: Number(depositAmount),
       metadata: {
         type: 'party_deposit',
-        party_request_id: partyRequestId,
-        tenant_id: tenantId,
+        referenceId: partyRequestId,
+        tenantId,
       },
-    };
-
-    const session = await stripe.checkout.sessions.create(
-      sessionParams as Stripe.Checkout.SessionCreateParams,
-      { stripeAccount: tenant.stripe_account_id }
-    );
-
-    // ── Store session→tenant mapping for /pay redirect lookup ────────────
-    const { error: sessionInsertError } = await db
-      .from('checkout_sessions')
-      .insert({
-        session_id: session.id,
-        tenant_id: tenantId,
-        stripe_account_id: tenant.stripe_account_id,
-        amount_cents: amountCents,
-      });
-    if (sessionInsertError) {
-      console.error('[Party Deposit] checkout_sessions insert failed:', sessionInsertError);
-    }
+      successUrl: `${baseUrl}/studio/${tenant.slug}?deposit=success`,
+      cancelUrl: `${baseUrl}/studio/${tenant.slug}?deposit=cancelled`,
+    });
 
     // ── Update party request with pending deposit ───────────────────────
     await db
@@ -130,29 +101,30 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .update({
         deposit_amount: depositAmount,
         deposit_status: 'pending',
-        stripe_checkout_session_id: session.id,
+        deposit_payment_provider: provider,
+        ...(result.sessionId ? { stripe_checkout_session_id: result.sessionId } : {}),
+        ...(result.orderId ? { square_order_id: result.orderId } : {}),
       })
       .eq('id', partyRequestId);
 
     // ── Optionally send deposit link to host via SMS ────────────────────
     if (sendSmsToHost && party.host_phone && tenant.dedicated_phone_number) {
       const formattedAmount = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(depositAmount);
-      // Use clean redirect URL — Stripe URLs contain # fragments which iOS truncates
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sunstonepj.app';
-      const cleanUrl = `${baseUrl}/pay/${session.id}`;
       sendSMS({
         to: normalizePhone(party.host_phone),
-        body: `Hi ${party.host_name}! ${tenant.name} has requested a ${formattedAmount} deposit to confirm your party. Pay securely here: ${cleanUrl}`,
+        body: `Hi ${party.host_name}! ${tenant.name} has requested a ${formattedAmount} deposit to confirm your party. Pay securely here: ${result.paymentUrl}`,
         tenantId,
       }).catch(() => {}); // fire-and-forget
     }
 
     return NextResponse.json({
-      url: session.url,
-      sessionId: session.id,
+      url: result.paymentUrl,
+      sessionId: result.sessionId || null,
+      orderId: result.orderId || null,
+      provider,
     });
   } catch (error: any) {
-    console.error('[Party Deposit] Error creating checkout session:', error);
+    console.error('[Party Deposit] Error creating deposit link:', error);
     return NextResponse.json(
       { error: 'Failed to create deposit link' },
       { status: 500 }

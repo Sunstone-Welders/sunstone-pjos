@@ -27,6 +27,9 @@ interface BookingInfo {
   status: string;
   customerName: string;
   isCancelled: boolean;
+  depositAmount: number | null;
+  depositStatus: string | null;
+  depositPaidAt: string | null;
 }
 
 interface BookingTypeInfo {
@@ -35,6 +38,8 @@ interface BookingTypeInfo {
   durationMinutes: number;
   description: string | null;
   price: number | null;
+  depositAmount: number | null;
+  depositRequired: boolean;
 }
 
 interface TenantInfo {
@@ -115,6 +120,11 @@ export default function ManageBookingPage({ token }: { token: string }) {
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
   const [logoError, setLogoError] = useState(false);
 
+  // Deposit state
+  const [depositBanner, setDepositBanner] = useState<'success' | 'cancelled' | null>(null);
+  const [depositPayUrl, setDepositPayUrl] = useState<string | null>(null);
+  const [creatingDepositLink, setCreatingDepositLink] = useState(false);
+
   // Cancel state
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -133,6 +143,13 @@ export default function ManageBookingPage({ token }: { token: string }) {
 
   // ── Load booking data ───────────────────────────────────────────────────
   useEffect(() => {
+    // Check URL params for deposit status
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('deposit') === 'success') setDepositBanner('success');
+      else if (params.get('deposit') === 'cancelled') setDepositBanner('cancelled');
+    }
+
     async function load() {
       try {
         const res = await fetch(`/api/public/bookings/manage?token=${encodeURIComponent(token)}`);
@@ -259,6 +276,31 @@ export default function ManageBookingPage({ token }: { token: string }) {
       setRescheduleError(message);
     } finally {
       setRescheduling(false);
+    }
+  };
+
+  // ── Create fresh deposit link ───────────────────────────────────────────
+  const handlePayDeposit = async () => {
+    if (!booking) return;
+    setCreatingDepositLink(true);
+    try {
+      const res = await fetch(`/api/public/bookings/create-deposit-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: booking.id, token }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to create deposit link');
+      }
+      const data = await res.json();
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      }
+    } catch (err: unknown) {
+      console.error('[ManageBooking] Deposit link error:', err);
+    } finally {
+      setCreatingDepositLink(false);
     }
   };
 
@@ -668,6 +710,28 @@ export default function ManageBookingPage({ token }: { token: string }) {
             </div>
           </div>
 
+          {/* Deposit banners */}
+          {depositBanner === 'success' && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+              <svg className="w-5 h-5 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+              <p className="text-sm font-medium text-green-800">
+                Deposit received! Your booking is confirmed.
+              </p>
+            </div>
+          )}
+          {depositBanner === 'cancelled' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+              <svg className="w-5 h-5 text-amber-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+              <p className="text-sm font-medium text-amber-800">
+                Deposit not completed. You can pay below.
+              </p>
+            </div>
+          )}
+
           {/* Booking details card */}
           <div className="bg-[var(--surface-raised)] border border-[var(--border-default)] rounded-xl p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
@@ -724,6 +788,27 @@ export default function ManageBookingPage({ token }: { token: string }) {
               </div>
             )}
           </div>
+
+          {/* Pay Deposit button for confirmed bookings with pending deposit */}
+          {booking.status === 'confirmed' &&
+            booking.depositStatus === 'pending' &&
+            booking.depositAmount &&
+            depositBanner !== 'success' && (
+            <button
+              onClick={handlePayDeposit}
+              disabled={creatingDepositLink}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 min-h-[48px] rounded-xl bg-[var(--accent-primary)] text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
+            >
+              {creatingDepositLink ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+                </svg>
+              )}
+              Pay ${Number(booking.depositAmount).toFixed(2)} Deposit
+            </button>
+          )}
 
           {/* Action buttons */}
           <div className="flex gap-3">

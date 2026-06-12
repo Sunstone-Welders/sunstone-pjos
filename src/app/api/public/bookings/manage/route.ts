@@ -38,6 +38,9 @@ export async function GET(request: Request) {
       customer_email,
       notes,
       cancellation_token,
+      deposit_amount,
+      deposit_status,
+      deposit_paid_at,
       created_at
     `)
     .eq('cancellation_token', token)
@@ -55,7 +58,7 @@ export async function GET(request: Request) {
   // Fetch booking type info
   const { data: bookingType } = await supabase
     .from('booking_types')
-    .select('id, name, duration_minutes, description, price')
+    .select('id, name, duration_minutes, description, price, deposit_amount, deposit_required')
     .eq('id', booking.booking_type_id)
     .single();
 
@@ -80,6 +83,9 @@ export async function GET(request: Request) {
       status: booking.status,
       customerName: booking.customer_name,
       isCancelled: booking.status === 'cancelled',
+      depositAmount: booking.deposit_amount,
+      depositStatus: booking.deposit_status,
+      depositPaidAt: booking.deposit_paid_at,
     },
     bookingType: bookingType
       ? {
@@ -88,6 +94,8 @@ export async function GET(request: Request) {
           durationMinutes: bookingType.duration_minutes,
           description: bookingType.description,
           price: bookingType.price,
+          depositAmount: bookingType.deposit_amount,
+          depositRequired: bookingType.deposit_required,
         }
       : null,
     tenant: {

@@ -201,6 +201,8 @@ export default function BookingPage({
   // Confirmation
   const [confirmedBooking, setConfirmedBooking] = useState<CreatedBooking | null>(null);
   const [confirmedStatus, setConfirmedStatus] = useState<'confirmed' | 'pending' | null>(null);
+  const [depositPaymentUrl, setDepositPaymentUrl] = useState<string | null>(null);
+  const [requiresPayment, setRequiresPayment] = useState(false);
 
   // ── Load tenant + initial data ────────────────────────────────────────────
   useEffect(() => {
@@ -318,6 +320,10 @@ export default function BookingPage({
       const data = await res.json();
       setConfirmedBooking(data.booking);
       setConfirmedStatus(data.status);
+      if (data.requiresPayment && data.paymentUrl) {
+        setRequiresPayment(true);
+        setDepositPaymentUrl(data.paymentUrl);
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
       setFormError(message);
@@ -404,7 +410,7 @@ export default function BookingPage({
               </div>
             </div>
 
-            {bookingType?.deposit_required && bookingType.deposit_amount && (
+            {bookingType?.deposit_required && bookingType.deposit_amount && !requiresPayment && (
               <div className="pt-2 border-t border-[var(--border-subtle)]">
                 <p className="text-xs text-[var(--accent-primary)] font-medium">
                   A deposit of ${Number(bookingType.deposit_amount).toFixed(2)} is required to confirm your booking.
@@ -412,6 +418,29 @@ export default function BookingPage({
               </div>
             )}
           </div>
+
+          {/* ── Pay Deposit CTA ─────────────────────────────────── */}
+          {requiresPayment && depositPaymentUrl && bookingType?.deposit_amount && (
+            <div className="bg-[var(--accent-100)] border border-[var(--accent-primary)]/20 rounded-xl p-5 space-y-3">
+              <div className="text-center space-y-1">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">
+                  Almost done! Complete your deposit to secure your booking.
+                </p>
+                <p className="text-xs text-[var(--text-secondary)]">
+                  You can also pay later from your booking confirmation text.
+                </p>
+              </div>
+              <button
+                onClick={() => { window.location.href = depositPaymentUrl; }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 min-h-[48px] rounded-xl bg-[var(--accent-primary)] text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+                </svg>
+                Pay ${Number(bookingType.deposit_amount).toFixed(2)} Deposit
+              </button>
+            </div>
+          )}
 
           {/* ── Add to Calendar ─────────────────────────────────── */}
           {confirmedStatus === 'confirmed' && (

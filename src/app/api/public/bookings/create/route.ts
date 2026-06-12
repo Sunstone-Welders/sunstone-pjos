@@ -10,6 +10,7 @@ import { NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
 import { normalizePhone, sendSMS } from '@/lib/twilio';
+import { resolvePaymentProvider, createDepositPaymentLink } from '@/lib/deposit-utils';
 
 export async function POST(request: Request) {
   // Rate limit: 10 per hour per IP
@@ -197,6 +198,63 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to create booking' }, { status: 500 });
   }
 
+  // ── Deposit payment link (auto-confirm + deposit_required only) ───────────
+  let paymentUrl: string | null = null;
+  let requiresPayment = false;
+
+  if (
+    bookingType.deposit_required &&
+    bookingType.deposit_amount &&
+    bookingType.booking_mode === 'auto'
+  ) {
+    try {
+      // Fetch tenant payment credentials
+      const { data: tenantPayment } = await supabase
+        .from('tenants')
+        .select('default_payment_processor, stripe_account_id, square_access_token, square_location_id, name')
+        .eq('id', tenantId)
+        .single();
+
+      if (tenantPayment) {
+        const provider = resolvePaymentProvider(tenantPayment);
+        if (provider) {
+          const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sunstonepj.app';
+          const result = await createDepositPaymentLink({
+            provider,
+            tenant: { id: tenantId, ...tenantPayment },
+            amount: Number(bookingType.deposit_amount),
+            metadata: {
+              type: 'booking_deposit',
+              referenceId: booking.id,
+              tenantId,
+            },
+            successUrl: `${APP_URL}/booking/manage/${booking.cancellation_token}?deposit=success`,
+            cancelUrl: `${APP_URL}/booking/manage/${booking.cancellation_token}?deposit=cancelled`,
+          });
+
+          paymentUrl = result.paymentUrl;
+          requiresPayment = true;
+
+          // Update booking with deposit payment info
+          await supabase
+            .from('bookings')
+            .update({
+              deposit_status: 'pending',
+              deposit_payment_provider: provider,
+              ...(result.sessionId ? { stripe_checkout_session_id: result.sessionId } : {}),
+              ...(result.orderId ? { square_order_id: result.orderId } : {}),
+            })
+            .eq('id', booking.id);
+        }
+        // If no provider connected: booking proceeds without automated deposit.
+        // Artist can send a deposit link manually later.
+      }
+    } catch (depositErr: any) {
+      // Deposit link failure must not block the booking creation
+      console.error('[Booking Create] Deposit payment link failed:', depositErr);
+    }
+  }
+
   // ── Post-creation notifications (fire-and-forget) ─────────────────────────
   // SMS failures must never block the booking response.
   try {
@@ -237,6 +295,9 @@ export async function POST(request: Request) {
         `${bookingType.name} with ${businessName}\n` +
         `${bookingDate} at ${bookingTime}\n` +
         `${duration} min${locationLine}\n` +
+        (paymentUrl
+          ? `\nPay your $${Number(bookingType.deposit_amount).toFixed(2)} deposit: ${paymentUrl}\n`
+          : '') +
         `\nAdd to calendar: ${calendarLink}` +
         `\nTo cancel or reschedule: ${cancelLink}`;
     } else {
@@ -288,5 +349,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     booking,
     status,
+    requiresPayment,
+    paymentUrl,
   });
 }
