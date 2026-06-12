@@ -195,6 +195,11 @@ export default function BookingListPage({ slug }: { slug: string }) {
                         </svg>
                         {bt.duration_minutes} min
                       </span>
+                      {bt.booking_mode === 'request' && (
+                        <span className="text-xs text-[var(--text-tertiary)]">
+                          Requires approval
+                        </span>
+                      )}
                       {bt.deposit_required && bt.deposit_amount && (
                         <span className="text-xs text-[var(--accent-primary)] font-medium">
                           Deposit required

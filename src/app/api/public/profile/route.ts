@@ -77,6 +77,13 @@ export async function GET(request: Request) {
     }
   }
 
+  // Count active booking types
+  const { count: activeBookingTypesCount } = await supabase
+    .from('booking_types')
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenant.id)
+    .eq('is_active', true);
+
   // Fetch upcoming events
   let events: { id: string; name: string; start_time: string; end_time: string | null; location: string | null }[] = [];
   if (settings.show_events !== false) {
@@ -114,5 +121,6 @@ export async function GET(request: Request) {
     services,
     events,
     tiers,
+    activeBookingTypesCount: activeBookingTypesCount || 0,
   });
 }

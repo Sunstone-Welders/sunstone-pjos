@@ -64,6 +64,48 @@ function getDateRange(days: number): Date[] {
   return dates;
 }
 
+/** Get the max bookable date (90 days from today) */
+function getMaxDate(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 90);
+  return d;
+}
+
+/** Get today at midnight */
+function getToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/** Generate calendar grid for a given month/year */
+function getMonthGrid(year: number, month: number): (Date | null)[][] {
+  const firstDay = new Date(year, month, 1);
+  const startDow = firstDay.getDay(); // 0=Sun
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const weeks: (Date | null)[][] = [];
+  let week: (Date | null)[] = new Array(startDow).fill(null);
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    week.push(new Date(year, month, day));
+    if (week.length === 7) {
+      weeks.push(week);
+      week = [];
+    }
+  }
+  if (week.length > 0) {
+    while (week.length < 7) week.push(null);
+    weeks.push(week);
+  }
+  return weeks;
+}
+
+/** Format month header: "June 2026" */
+function formatMonthYear(year: number, month: number): string {
+  return new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
 /** Format date as YYYY-MM-DD */
 function toDateStr(d: Date): string {
   return d.toISOString().split('T')[0];
@@ -140,6 +182,11 @@ export default function BookingPage({
   const [slots, setSlots] = useState<Slot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
+
+  // Calendar picker mode
+  const [pickerMode, setPickerMode] = useState<'strip' | 'calendar'>('strip');
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
 
   // Form
   const [form, setForm] = useState({
@@ -480,40 +527,165 @@ export default function BookingPage({
 
         {/* ── Step 1: Date Selection ─────────────────────────────── */}
         <section>
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
-            Select a Date
-          </h2>
-          <div className="flex gap-1.5 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-            {dates.map((d) => {
-              const ds = toDateStr(d);
-              const isSelected = ds === selectedDate;
-              const isToday = ds === toDateStr(new Date());
-              return (
-                <button
-                  key={ds}
-                  onClick={() => handleDateSelect(ds)}
-                  className={`
-                    flex flex-col items-center justify-center min-w-[52px] h-[68px] rounded-xl border transition-all flex-shrink-0
-                    ${isSelected
-                      ? 'bg-[var(--accent-primary)] border-[var(--accent-primary)] text-white'
-                      : 'bg-[var(--surface-raised)] border-[var(--border-default)] text-[var(--text-primary)] hover:border-[var(--accent-primary)]'
-                    }
-                  `}
-                >
-                  <span className={`text-[10px] font-medium uppercase ${isSelected ? 'text-white/80' : 'text-[var(--text-tertiary)]'}`}>
-                    {formatDayLetter(d)}
-                  </span>
-                  <span className={`text-lg font-semibold ${isSelected ? 'text-white' : ''}`}>
-                    {formatDayNum(d)}
-                  </span>
-                  {isToday && (
-                    <div className={`w-1 h-1 rounded-full mt-0.5 ${isSelected ? 'bg-white' : 'bg-[var(--accent-primary)]'}`} />
-                  )}
-                </button>
-              );
-            })}
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+              Select a Date
+            </h2>
+            <button
+              onClick={() => setPickerMode(pickerMode === 'strip' ? 'calendar' : 'strip')}
+              className="flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-primary)] transition-colors"
+              title={pickerMode === 'strip' ? 'Switch to calendar view' : 'Switch to strip view'}
+            >
+              {pickerMode === 'strip' ? (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6h.008v.008H12v-.008zM12 15h.008v.008H12V15zm0 2.25h.008v.008H12v-.008zM9.75 15h.008v.008H9.75V15zm0 2.25h.008v.008H9.75v-.008zM7.5 15h.008v.008H7.5V15zm0 2.25h.008v.008H7.5v-.008zm6.75-4.5h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V15zm0 2.25h.008v.008h-.008v-.008zm2.25-4.5h.008v.008H16.5v-.008zm0 2.25h.008v.008H16.5V15z" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                </svg>
+              )}
+            </button>
           </div>
-          {selectedDate && (
+
+          {/* Strip Mode */}
+          {pickerMode === 'strip' && (
+            <>
+              <div className="flex gap-1.5 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+                {dates.map((d) => {
+                  const ds = toDateStr(d);
+                  const isSelected = ds === selectedDate;
+                  const isToday = ds === toDateStr(new Date());
+                  return (
+                    <button
+                      key={ds}
+                      onClick={() => handleDateSelect(ds)}
+                      className={`
+                        flex flex-col items-center justify-center min-w-[52px] h-[68px] rounded-xl border transition-all flex-shrink-0
+                        ${isSelected
+                          ? 'bg-[var(--accent-primary)] border-[var(--accent-primary)] text-white'
+                          : 'bg-[var(--surface-raised)] border-[var(--border-default)] text-[var(--text-primary)] hover:border-[var(--accent-primary)]'
+                        }
+                      `}
+                    >
+                      <span className={`text-[10px] font-medium uppercase ${isSelected ? 'text-white/80' : 'text-[var(--text-tertiary)]'}`}>
+                        {formatDayLetter(d)}
+                      </span>
+                      <span className={`text-lg font-semibold ${isSelected ? 'text-white' : ''}`}>
+                        {formatDayNum(d)}
+                      </span>
+                      {isToday && (
+                        <div className={`w-1 h-1 rounded-full mt-0.5 ${isSelected ? 'bg-white' : 'bg-[var(--accent-primary)]'}`} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedDate && (
+                <p className="text-xs text-[var(--text-secondary)] mt-2">
+                  {formatDateLong(new Date(selectedDate + 'T00:00:00'))}
+                </p>
+              )}
+            </>
+          )}
+
+          {/* Calendar Month Grid Mode */}
+          {pickerMode === 'calendar' && (() => {
+            const today = getToday();
+            const maxDate = getMaxDate();
+            const weeks = getMonthGrid(calYear, calMonth);
+            const todayStr = toDateStr(today);
+            const canPrev = calYear > today.getFullYear() || (calYear === today.getFullYear() && calMonth > today.getMonth());
+            const canNext = new Date(calYear, calMonth + 1, 1) <= maxDate;
+
+            return (
+              <div className="bg-[var(--surface-raised)] border border-[var(--border-default)] rounded-xl p-3">
+                {/* Month header with navigation */}
+                <div className="flex items-center justify-between mb-3">
+                  <button
+                    onClick={() => {
+                      if (canPrev) {
+                        if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); }
+                        else setCalMonth(calMonth - 1);
+                      }
+                    }}
+                    disabled={!canPrev}
+                    className="flex items-center justify-center w-8 h-8 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                    </svg>
+                  </button>
+                  <span className="text-sm font-semibold text-[var(--text-primary)]">
+                    {formatMonthYear(calYear, calMonth)}
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (canNext) {
+                        if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); }
+                        else setCalMonth(calMonth + 1);
+                      }
+                    }}
+                    disabled={!canNext}
+                    className="flex items-center justify-center w-8 h-8 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Day-of-week headers */}
+                <div className="grid grid-cols-7 mb-1">
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                    <div key={i} className="text-center text-[10px] font-medium text-[var(--text-tertiary)] uppercase py-1">
+                      {d}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Day cells */}
+                {weeks.map((week, wi) => (
+                  <div key={wi} className="grid grid-cols-7">
+                    {week.map((day, di) => {
+                      if (!day) return <div key={di} className="h-10" />;
+                      const ds = toDateStr(day);
+                      const isPast = day < today;
+                      const isBeyondMax = day > maxDate;
+                      const isDisabled = isPast || isBeyondMax;
+                      const isSelected = ds === selectedDate;
+                      const isToday = ds === todayStr;
+
+                      return (
+                        <button
+                          key={di}
+                          onClick={() => !isDisabled && handleDateSelect(ds)}
+                          disabled={isDisabled}
+                          className={`
+                            relative flex flex-col items-center justify-center h-10 rounded-lg text-sm transition-colors
+                            ${isDisabled
+                              ? 'text-[var(--text-tertiary)] opacity-40 cursor-not-allowed'
+                              : isSelected
+                                ? 'bg-[var(--accent-primary)] text-white font-semibold'
+                                : 'text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer'
+                            }
+                          `}
+                        >
+                          {day.getDate()}
+                          {isToday && (
+                            <div className={`absolute bottom-1 w-1 h-1 rounded-full ${isSelected ? 'bg-white' : 'bg-[var(--accent-primary)]'}`} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* Selected date display for calendar mode */}
+          {pickerMode === 'calendar' && selectedDate && (
             <p className="text-xs text-[var(--text-secondary)] mt-2">
               {formatDateLong(new Date(selectedDate + 'T00:00:00'))}
             </p>
