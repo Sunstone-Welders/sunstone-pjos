@@ -6,6 +6,8 @@
 // Re-checks slot availability before insert to prevent double-booking.
 // ============================================================================
 
+export const runtime = 'nodejs';
+
 import { NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
@@ -155,18 +157,20 @@ export async function POST(request: Request) {
     clientId = existingClient.id;
   } else {
     // Create a new client record
-    const { data: newClient } = await supabase
+    const { data: newClient, error: clientErr } = await supabase
       .from('clients')
       .insert({
         tenant_id: tenantId,
         name: customerName.trim(),
         phone: normalizedPhone,
         email: customerEmail?.trim() || null,
-        source: 'booking',
       })
       .select('id')
       .single();
 
+    if (clientErr) {
+      console.error('[Booking Create] Client creation failed:', clientErr);
+    }
     if (newClient) {
       clientId = newClient.id;
     }
@@ -201,6 +205,7 @@ export async function POST(request: Request) {
   // ── Deposit payment link (auto-confirm + deposit_required only) ───────────
   let paymentUrl: string | null = null;
   let requiresPayment = false;
+  let depositError = false;
 
   if (
     bookingType.deposit_required &&
@@ -219,39 +224,71 @@ export async function POST(request: Request) {
         const provider = resolvePaymentProvider(tenantPayment);
         if (provider) {
           const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sunstonepj.app';
-          const result = await createDepositPaymentLink({
-            provider,
+          const linkParams = {
             tenant: { id: tenantId, ...tenantPayment },
             amount: Number(bookingType.deposit_amount),
             metadata: {
-              type: 'booking_deposit',
+              type: 'booking_deposit' as const,
               referenceId: booking.id,
               tenantId,
             },
             successUrl: `${APP_URL}/booking/manage/${booking.cancellation_token}?deposit=success`,
             cancelUrl: `${APP_URL}/booking/manage/${booking.cancellation_token}?deposit=cancelled`,
-          });
+          };
 
-          paymentUrl = result.paymentUrl;
-          requiresPayment = true;
+          let result: { paymentUrl: string; sessionId?: string; orderId?: string } | null = null;
+          let usedProvider = provider;
 
-          // Update booking with deposit payment info
-          await supabase
-            .from('bookings')
-            .update({
-              deposit_status: 'pending',
-              deposit_payment_provider: provider,
-              ...(result.sessionId ? { stripe_checkout_session_id: result.sessionId } : {}),
-              ...(result.orderId ? { square_order_id: result.orderId } : {}),
-            })
-            .eq('id', booking.id);
+          // Try primary provider
+          try {
+            result = await createDepositPaymentLink({ ...linkParams, provider });
+          } catch (primaryErr: any) {
+            console.error(`[Booking Create] ${provider} deposit link failed:`, primaryErr?.message || primaryErr);
+
+            // Fallback: try the other connected provider before giving up
+            const fallback: 'stripe' | 'square' | null =
+              provider === 'square' && tenantPayment.stripe_account_id ? 'stripe'
+              : provider === 'stripe' && tenantPayment.square_access_token && tenantPayment.square_location_id ? 'square'
+              : null;
+
+            if (fallback) {
+              console.log(`[Booking Create] Attempting ${fallback} fallback for booking ${booking.id}`);
+              try {
+                result = await createDepositPaymentLink({ ...linkParams, provider: fallback });
+                usedProvider = fallback;
+              } catch (fallbackErr: any) {
+                console.error(`[Booking Create] ${fallback} fallback also failed:`, fallbackErr?.message || fallbackErr);
+              }
+            }
+          }
+
+          if (result) {
+            paymentUrl = result.paymentUrl;
+            requiresPayment = true;
+
+            // Update booking with deposit payment info
+            await supabase
+              .from('bookings')
+              .update({
+                deposit_status: 'pending',
+                deposit_payment_provider: usedProvider,
+                ...(result.sessionId ? { stripe_checkout_session_id: result.sessionId } : {}),
+                ...(result.orderId ? { square_order_id: result.orderId } : {}),
+              })
+              .eq('id', booking.id);
+          } else {
+            // Both providers failed or no fallback available
+            depositError = true;
+            console.error(`[Booking Create] All deposit providers failed for booking ${booking.id}`);
+          }
         }
         // If no provider connected: booking proceeds without automated deposit.
         // Artist can send a deposit link manually later.
       }
     } catch (depositErr: any) {
-      // Deposit link failure must not block the booking creation
-      console.error('[Booking Create] Deposit payment link failed:', depositErr);
+      // Deposit infrastructure failure (DB query, etc.) must not block booking
+      depositError = true;
+      console.error('[Booking Create] Deposit payment setup failed:', depositErr?.message || depositErr, depositErr?.stack);
     }
   }
 
@@ -351,5 +388,6 @@ export async function POST(request: Request) {
     status,
     requiresPayment,
     paymentUrl,
+    ...(depositError ? { depositError: true } : {}),
   });
 }
