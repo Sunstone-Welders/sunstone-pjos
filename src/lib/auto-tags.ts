@@ -161,8 +161,8 @@ export async function autoTagClient(
           ? 'private_party_purchase'
           : 'event_purchase'; // default to event purchase
       await queueWorkflow(tenantId, clientId, triggerType);
-    } catch {
-      // Non-blocking — don't fail the auto-tag if workflow queueing fails
+    } catch (err) {
+      console.error('[Workflow Queue] Failed to enqueue workflow:', err);
     }
   }
 }

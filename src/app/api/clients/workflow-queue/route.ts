@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ ready, upcoming });
 }
 
-// POST: Send a queued message
+// POST: Send a queued message (manual send from NeedsAttention widget)
 export async function POST(request: NextRequest) {
   const supabase = await createServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
@@ -71,19 +71,22 @@ export async function POST(request: NextRequest) {
   const { queue_id } = body;
   if (!queue_id) return NextResponse.json({ error: 'queue_id required' }, { status: 400 });
 
-  // Fetch the queue item
+  // Fetch the queue item — only if still pending (idempotency guard)
   const { data: item, error: fetchError } = await supabase
     .from('workflow_queue')
     .select('*, client:clients(phone, email, first_name, last_name)')
     .eq('id', queue_id)
+    .eq('status', 'pending')
     .single();
 
   if (fetchError || !item) {
-    return NextResponse.json({ error: 'Queue item not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Queue item not found or already processed' }, { status: 404 });
   }
 
   // Send the message via existing Twilio/Resend integration
   let sent = false;
+  let sendError: string | null = null;
+
   if (item.channel === 'sms' && item.client?.phone) {
     try {
       const sid = await twilioSendSMS({ to: item.client.phone, body: item.message_body, tenantId: item.tenant_id });
@@ -102,7 +105,8 @@ export async function POST(request: NextRequest) {
         }).then(null, () => {});
       }
     } catch (err: any) {
-      console.error('[Workflow SMS] Failed:', err?.message);
+      sendError = err?.message || 'Unknown SMS error';
+      console.error('[Workflow SMS] Failed:', sendError);
     }
   } else if (item.channel === 'email' && item.client?.email) {
     try {
@@ -118,12 +122,13 @@ export async function POST(request: NextRequest) {
         sent = true;
       }
     } catch (err: any) {
-      console.error('[Workflow Email] Failed:', err?.message);
+      sendError = err?.message || 'Unknown email error';
+      console.error('[Workflow Email] Failed:', sendError);
     }
   }
 
-  // Log to message_log (fire-and-forget)
   if (sent) {
+    // Log to message_log (fire-and-forget)
     supabase.from('message_log').insert({
       tenant_id: item.tenant_id,
       client_id: item.client_id,
@@ -136,15 +141,25 @@ export async function POST(request: NextRequest) {
       source: 'workflow',
       status: 'sent',
     }).then(null, () => {});
+
+    // Mark as sent — guarded: only update if still pending (idempotency)
+    await supabase
+      .from('workflow_queue')
+      .update({ status: 'sent', acted_at: new Date().toISOString() })
+      .eq('id', queue_id)
+      .eq('status', 'pending');
+
+    return NextResponse.json({ sent: true, status: 'sent' });
+  } else {
+    // Mark as failed — do NOT mark sent on failure
+    await supabase
+      .from('workflow_queue')
+      .update({ status: 'failed', acted_at: new Date().toISOString() })
+      .eq('id', queue_id)
+      .eq('status', 'pending');
+
+    return NextResponse.json({ sent: false, status: 'failed', error: sendError });
   }
-
-  // Mark as sent
-  await supabase
-    .from('workflow_queue')
-    .update({ status: 'sent', acted_at: new Date().toISOString() })
-    .eq('id', queue_id);
-
-  return NextResponse.json({ sent, status: 'sent' });
 }
 
 // PATCH: Skip a queued message
