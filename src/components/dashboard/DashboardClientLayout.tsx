@@ -51,6 +51,29 @@ function useUnreadCount() {
 }
 
 // ============================================================================
+// Pending bookings count hook (polls every 60s)
+// ============================================================================
+
+function usePendingBookingsCount() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const fetchCount = () => {
+      fetch('/api/bookings/pending-count')
+        .then(r => r.ok ? r.json() : { count: 0 })
+        .then(d => setCount(d.count || 0))
+        .catch(() => {});
+    };
+
+    fetchCount();
+    const interval = setInterval(fetchCount, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return count;
+}
+
+// ============================================================================
 // Spotlight mini card data (from /api/dashboard/spotlight)
 // ============================================================================
 
@@ -83,6 +106,7 @@ const sidebarItems: NavItem[] = [
   { href: '/dashboard',           label: 'Home',       icon: HomeIcon },
   { href: '/dashboard/events',    label: 'Events',     icon: EventsIcon },
   { href: '/dashboard/parties',   label: 'Parties',    icon: PartyIcon },
+  { href: '/dashboard/bookings',  label: 'Bookings',   icon: BookingsIcon },
   { href: '/dashboard/pos',       label: 'POS',        icon: POSIcon },
   { href: '/dashboard/clients',   label: 'Clients',    icon: ClientsIcon },
   { href: '/dashboard/messages',  label: 'Messages',   icon: MessagesIcon },
@@ -109,6 +133,7 @@ const phoneTabItems: NavItem[] = [
 const moreSheetItems: NavItem[] = [
   { href: '/dashboard/events',     label: 'Events',     icon: EventsIcon },
   { href: '/dashboard/parties',    label: 'Parties',    icon: PartyIcon },
+  { href: '/dashboard/bookings',   label: 'Bookings',   icon: BookingsIcon },
   { href: '/dashboard/clients',    label: 'Clients',    icon: ClientsIcon },
   { href: '/dashboard/inventory',  label: 'Inventory',  icon: InventoryIcon },
   { href: '/dashboard/gift-cards', label: 'Gift Cards', icon: GiftCardIcon },
@@ -690,6 +715,7 @@ function TabletSidebar() {
   const handleLogout = useLogout();
   const visibleItems = useFilteredItems(sidebarItems);
   const unreadCount = useUnreadCount();
+  const pendingBookingsCount = usePendingBookingsCount();
   const crmStatus = useCrmStatus();
 
   const mainItems = visibleItems.filter(i => !i.group);
@@ -699,6 +725,7 @@ function TabletSidebar() {
     const isActive = item.href === '/dashboard'
       ? pathname === '/dashboard'
       : pathname.startsWith(item.href);
+    const badgeCount = item.label === 'Messages' ? unreadCount : item.label === 'Bookings' ? pendingBookingsCount : 0;
     return (
       <Link
         key={item.href}
@@ -717,9 +744,9 @@ function TabletSidebar() {
       >
         <span className="relative shrink-0">
           <item.icon className="w-5 h-5" />
-          {item.label === 'Messages' && !locked && unreadCount > 0 && (
+          {!locked && badgeCount > 0 && (
             <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] rounded-full bg-[var(--accent-500)] text-white text-[10px] font-bold flex items-center justify-center px-1">
-              {unreadCount > 99 ? '99+' : unreadCount}
+              {badgeCount > 99 ? '99+' : badgeCount}
             </span>
           )}
         </span>
@@ -810,6 +837,7 @@ function DesktopSidebar() {
   const handleLogout = useLogout();
   const visibleItems = useFilteredItems(sidebarItems);
   const unreadCount = useUnreadCount();
+  const pendingBookingsCount = usePendingBookingsCount();
   const crmStatus = useCrmStatus();
 
   // Split items into non-CRM and CRM groups
@@ -820,6 +848,7 @@ function DesktopSidebar() {
     const isActive = item.href === '/dashboard'
       ? pathname === '/dashboard'
       : pathname.startsWith(item.href);
+    const badgeCount = item.label === 'Messages' ? unreadCount : item.label === 'Bookings' ? pendingBookingsCount : 0;
     return (
       <Link
         key={item.href}
@@ -836,9 +865,9 @@ function DesktopSidebar() {
       >
         <span className="relative shrink-0">
           <item.icon className="w-5 h-5" />
-          {item.label === 'Messages' && !locked && unreadCount > 0 && (
+          {!locked && badgeCount > 0 && (
             <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] rounded-full bg-[var(--accent-500)] text-white text-[10px] font-bold flex items-center justify-center px-1">
-              {unreadCount > 99 ? '99+' : unreadCount}
+              {badgeCount > 99 ? '99+' : badgeCount}
             </span>
           )}
         </span>
@@ -1449,6 +1478,15 @@ function PartyIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.87c1.355 0 2.697.055 4.024.165C17.155 8.51 18 9.473 18 10.608v2.513m-3-4.87v-1.5m-6 1.5v-1.5m12 9.75l-1.5.75a3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0L3 16.5m15-3.38a48.474 48.474 0 00-6-.37c-2.032 0-4.034.126-6 .37m12 0c.39.049.777.102 1.163.16 1.07.16 1.837 1.094 1.837 2.175v5.17c0 .62-.504 1.124-1.125 1.124H4.125A1.125 1.125 0 013 20.625v-5.17c0-1.08.768-2.014 1.837-2.174A47.78 47.78 0 016 13.12M12.265 3.11a.375.375 0 11-.53 0L12 2.845l.265.265zm-3 0a.375.375 0 11-.53 0L9 2.845l.265.265zm6 0a.375.375 0 11-.53 0L15 2.845l.265.265z" />
+    </svg>
+  );
+}
+
+function BookingsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
     </svg>
   );
 }
