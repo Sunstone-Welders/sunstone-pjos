@@ -918,6 +918,7 @@ interface WorkflowTemplate {
   trigger_type: string;
   trigger_tag?: string | null;
   is_active: boolean;
+  send_mode?: string;
   created_at: string;
   steps: WorkflowStep[];
 }
@@ -932,61 +933,149 @@ interface WorkflowStep {
 }
 
 const TRIGGER_LABELS: Record<string, string> = {
-  event_purchase: 'Event Purchase',
-  private_party_purchase: 'Private Party Purchase',
-  new_client: 'New Client',
-  repeat_client: 'Repeat Client',
-  tag_added: 'Tag Added',
-  manual: 'Manual',
+  event_purchase: 'After an event purchase',
+  private_party_purchase: 'After a private party is booked',
+  new_client: 'When a new client is added',
+  repeat_client: 'When a returning client purchases',
+  booking_created: 'After a booking is confirmed',
+  tag_added: 'When a tag is added',
+  manual: 'Manual enrollment only',
 };
 
+function formatDelayHuman(hours: number): string {
+  if (hours === 0) return 'Immediately';
+  if (hours < 24) return `${hours}h after`;
+  const days = Math.round(hours / 24);
+  if (days === 1) return '1 day after';
+  if (days < 7) return `${days} days after`;
+  const weeks = Math.round(days / 7);
+  if (days % 7 === 0) {
+    return weeks === 1 ? '1 week after' : `${weeks} weeks after`;
+  }
+  return `${days} days after`;
+}
+
+function formatStepSummary(steps: WorkflowStep[]): string {
+  if (!steps || steps.length === 0) return 'No steps configured';
+  const count = steps.length;
+  const maxDelay = Math.max(...steps.map((s) => s.delay_hours));
+  const msgLabel = count === 1 ? '1 message' : `${count} messages`;
+  if (maxDelay === 0) return `${msgLabel}, sent immediately`;
+  if (maxDelay < 24) return `${msgLabel} over ${maxDelay}h`;
+  const days = Math.round(maxDelay / 24);
+  if (days < 7) return `${msgLabel} over ${days} day${days !== 1 ? 's' : ''}`;
+  const weeks = Math.round(days / 7);
+  if (days % 7 === 0) return `${msgLabel} over ${weeks} week${weeks !== 1 ? 's' : ''}`;
+  return `${msgLabel} over ${days} days`;
+}
+
 function WorkflowsTab({ tenantId }: { tenantId: string }) {
+  const { tenant, refetch } = useTenant();
   const [workflows, setWorkflows] = useState<WorkflowTemplate[]>([]);
+  const [templateMap, setTemplateMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingWorkflow, setEditingWorkflow] = useState<WorkflowTemplate | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
+  // Auto-send confirmation modal state
+  const [showAutoConfirm, setShowAutoConfirm] = useState(false);
+  const [pendingAutoWf, setPendingAutoWf] = useState<WorkflowTemplate | null>(null);
+
+  const autoSendConfirmed = tenant?.auto_send_confirmed ?? false;
+
   const fetchWorkflows = useCallback(async () => {
-    const res = await fetch(`/api/workflows?tenantId=${tenantId}`);
-    if (res.ok) {
-      const data = await res.json();
-      setWorkflows(data);
+    const [wfRes, tmplRes] = await Promise.all([
+      fetch(`/api/workflows?tenantId=${tenantId}`),
+      fetch(`/api/templates?tenantId=${tenantId}`),
+    ]);
+    if (wfRes.ok) {
+      setWorkflows(await wfRes.json());
+    }
+    if (tmplRes.ok) {
+      const tmplData = await tmplRes.json();
+      const map: Record<string, string> = {};
+      tmplData.forEach((t: any) => { map[t.name] = t.body; });
+      setTemplateMap(map);
     }
     setLoading(false);
   }, [tenantId]);
 
   useEffect(() => { fetchWorkflows(); }, [fetchWorkflows]);
 
+  // ── Active / Pause toggle ──────────────────────────────────────────────
   const toggleActive = async (wf: WorkflowTemplate) => {
+    const newActive = !wf.is_active;
+    setWorkflows((prev) =>
+      prev.map((w) => (w.id === wf.id ? { ...w, is_active: newActive } : w))
+    );
     const res = await fetch('/api/workflows', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: wf.id, is_active: !wf.is_active }),
+      body: JSON.stringify({ id: wf.id, is_active: newActive }),
     });
     if (res.ok) {
+      toast.success(`Workflow ${newActive ? 'activated' : 'paused'}`);
+    } else {
       setWorkflows((prev) =>
-        prev.map((w) => (w.id === wf.id ? { ...w, is_active: !w.is_active } : w))
+        prev.map((w) => (w.id === wf.id ? { ...w, is_active: wf.is_active } : w))
       );
-      toast.success(`Workflow ${wf.is_active ? 'paused' : 'activated'}`);
+      toast.error('Failed to update workflow');
     }
   };
 
-  const handleDelete = async (wf: WorkflowTemplate) => {
-    const res = await fetch(`/api/workflows?id=${wf.id}`, { method: 'DELETE' });
+  // ── Send automatically toggle ─────────────────────────────────────────
+  const toggleAutoSend = async (wf: WorkflowTemplate) => {
+    const turningOn = wf.send_mode !== 'auto_send';
+    if (turningOn && !autoSendConfirmed) {
+      setPendingAutoWf(wf);
+      setShowAutoConfirm(true);
+      return;
+    }
+    await executeAutoSendToggle(wf, turningOn);
+  };
+
+  const executeAutoSendToggle = async (wf: WorkflowTemplate, turningOn: boolean) => {
+    const newMode = turningOn ? 'auto_send' : 'review_first';
+    setWorkflows((prev) =>
+      prev.map((w) =>
+        w.id === wf.id
+          ? { ...w, send_mode: newMode, is_active: turningOn ? true : w.is_active }
+          : w
+      )
+    );
+    const body: Record<string, any> = { id: wf.id, send_mode: newMode };
+    if (turningOn) body.is_active = true;
+
+    const res = await fetch('/api/workflows', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
     if (res.ok) {
-      setWorkflows((prev) => prev.filter((w) => w.id !== wf.id));
-      toast.success('Workflow deleted');
+      toast.success(turningOn ? 'Automatic sending enabled' : 'Switched to manual review');
+    } else {
+      setWorkflows((prev) =>
+        prev.map((w) =>
+          w.id === wf.id ? { ...w, send_mode: wf.send_mode, is_active: wf.is_active } : w
+        )
+      );
+      toast.error('Failed to update workflow');
     }
   };
 
-  const formatDelay = (hours: number): string => {
-    if (hours === 0) return 'Immediately';
-    if (hours < 24) return `${hours}h after`;
-    const days = Math.floor(hours / 24);
-    const remaining = hours % 24;
-    if (remaining === 0) return `${days}d after`;
-    return `${days}d ${remaining}h after`;
+  const confirmAutoSend = async () => {
+    if (!pendingAutoWf) return;
+    // Mark tenant as confirmed (first-time only)
+    await fetch('/api/workflows', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm_auto_send: true }),
+    });
+    await refetch();
+    await executeAutoSendToggle(pendingAutoWf, true);
+    setShowAutoConfirm(false);
+    setPendingAutoWf(null);
   };
 
   if (loading) {
@@ -1027,11 +1116,17 @@ function WorkflowsTab({ tenantId }: { tenantId: string }) {
 
       {workflows.map((wf) => {
         const isExpanded = expandedId === wf.id;
+        const isAutoSend = wf.send_mode === 'auto_send';
+        const triggerLabel = TRIGGER_LABELS[wf.trigger_type] || wf.trigger_type;
+        const triggerExtra = wf.trigger_type === 'tag_added' && wf.trigger_tag ? ` "${wf.trigger_tag}"` : '';
+        const stepSummary = formatStepSummary(wf.steps);
+
         return (
           <Card key={wf.id} padding="none">
             <div className="p-4">
+              {/* Row 1: Active toggle + Name + badges + actions */}
               <div className="flex items-center gap-3">
-                {/* Active toggle */}
+                {/* Active/Pause toggle */}
                 <button
                   onClick={() => toggleActive(wf)}
                   className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
@@ -1062,11 +1157,20 @@ function WorkflowsTab({ tenantId }: { tenantId: string }) {
                     }`}>
                       {wf.is_active ? 'Active' : 'Paused'}
                     </span>
+                    {wf.is_active && (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                        isAutoSend
+                          ? 'bg-info-100 text-info-600'
+                          : 'bg-[var(--surface-subtle)] text-[var(--text-tertiary)]'
+                      }`}>
+                        {isAutoSend ? 'Auto' : 'Review'}
+                      </span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-[var(--text-tertiary)]">
-                    <span>Trigger: {TRIGGER_LABELS[wf.trigger_type] || wf.trigger_type}{wf.trigger_type === 'tag_added' && wf.trigger_tag ? ` "${wf.trigger_tag}"` : ''}</span>
+                  <div className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)] flex-wrap">
+                    <span>{triggerLabel}{triggerExtra}</span>
                     <span>·</span>
-                    <span>{wf.steps?.length || 0} steps</span>
+                    <span>{stepSummary}</span>
                   </div>
                 </button>
 
@@ -1092,43 +1196,118 @@ function WorkflowsTab({ tenantId }: { tenantId: string }) {
                 </div>
               </div>
 
-              {/* Expanded steps */}
+              {/* Row 2: Send automatically toggle (only when workflow is active) */}
+              {wf.is_active && (
+                <div className="mt-3 pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">Send automatically</p>
+                    <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                      {isAutoSend
+                        ? 'Messages will be sent without review'
+                        : 'Messages queue for your review before sending'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => toggleAutoSend(wf)}
+                    className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
+                      isAutoSend ? 'bg-info-500' : 'bg-[var(--surface-subtle)]'
+                    }`}
+                    title={isAutoSend ? 'Switch to manual review' : 'Enable automatic sending'}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                        isAutoSend ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              )}
+
+              {/* Paused notice */}
+              {!wf.is_active && (
+                <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">
+                  <p className="text-xs text-[var(--text-tertiary)] flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+                    </svg>
+                    Workflow is paused — no messages will be queued
+                  </p>
+                </div>
+              )}
+
+              {/* Expanded: Steps with message previews */}
               {isExpanded && wf.steps && wf.steps.length > 0 && (
-                <div className="mt-4 pl-13 space-y-0">
+                <div className="mt-4 pt-3 border-t border-[var(--border-subtle)] pl-2 space-y-0">
+                  <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-3">
+                    Message sequence
+                  </p>
                   {[...wf.steps]
                     .sort((a, b) => a.step_order - b.step_order)
-                    .map((step, idx) => (
-                    <div key={step.id} className="flex items-start gap-3 relative">
-                      {/* Vertical connector */}
-                      {idx < wf.steps.length - 1 && (
-                        <div className="absolute left-[11px] top-6 bottom-0 w-px bg-[var(--border-default)]" />
-                      )}
-                      {/* Step dot */}
-                      <div className="w-6 h-6 rounded-full border-2 border-[var(--accent-primary)] bg-[var(--surface-base)] flex items-center justify-center flex-shrink-0 z-10">
-                        <span className="text-[10px] font-bold text-[var(--accent-primary)]">{step.step_order}</span>
-                      </div>
-                      {/* Step content */}
-                      <div className="flex-1 pb-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-[var(--text-primary)]">
-                            {step.template_name}
-                          </span>
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[var(--surface-subtle)] text-[var(--text-tertiary)] uppercase">
-                            {step.channel}
-                          </span>
+                    .map((step, idx) => {
+                      const body = templateMap[step.template_name];
+                      const preview = body
+                        ? (body.length > 120 ? body.slice(0, 120) + '...' : body)
+                        : null;
+                      return (
+                        <div key={step.id} className="flex items-start gap-3 relative">
+                          {/* Vertical connector */}
+                          {idx < wf.steps.length - 1 && (
+                            <div className="absolute left-[11px] top-6 bottom-0 w-px bg-[var(--border-default)]" />
+                          )}
+                          {/* Step dot */}
+                          <div className="w-6 h-6 rounded-full border-2 border-[var(--accent-primary)] bg-[var(--surface-base)] flex items-center justify-center flex-shrink-0 z-10">
+                            <span className="text-[10px] font-bold text-[var(--accent-primary)]">{step.step_order}</span>
+                          </div>
+                          {/* Step content */}
+                          <div className="flex-1 pb-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-[var(--text-primary)]">
+                                {step.template_name}
+                              </span>
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[var(--surface-subtle)] text-[var(--text-tertiary)] uppercase">
+                                {step.channel}
+                              </span>
+                            </div>
+                            <div className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                              {formatDelayHuman(step.delay_hours)}
+                              {step.description && ` — ${step.description}`}
+                            </div>
+                            {/* Message preview */}
+                            {preview && (
+                              <div className="mt-1.5 text-xs text-[var(--text-secondary)] bg-[var(--surface-subtle)] rounded-lg px-3 py-2 leading-relaxed">
+                                &ldquo;{preview}&rdquo;
+                              </div>
+                            )}
+                            {!body && (
+                              <div className="mt-1.5 text-xs text-warning-600 flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                </svg>
+                                No matching template found — create &ldquo;{step.template_name}&rdquo; in Templates
+                              </div>
+                            )}
+                            {/* Edit message link */}
+                            {body && (
+                              <button
+                                onClick={() => {
+                                  const url = new URL(window.location.href);
+                                  url.searchParams.set('tab', 'templates');
+                                  window.location.href = url.pathname + url.search;
+                                }}
+                                className="mt-1 text-xs font-medium text-[var(--accent-primary)] hover:underline"
+                              >
+                                Edit message
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-xs text-[var(--text-tertiary)] mt-0.5">
-                          {formatDelay(step.delay_hours)}
-                          {step.description && ` — ${step.description}`}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                      );
+                    })}
                 </div>
               )}
 
               {isExpanded && (!wf.steps || wf.steps.length === 0) && (
-                <div className="mt-4 pl-13 text-sm text-[var(--text-tertiary)]">
+                <div className="mt-4 pl-2 text-sm text-[var(--text-tertiary)]">
                   No steps configured. Edit this workflow to add steps.
                 </div>
               )}
@@ -1150,6 +1329,31 @@ function WorkflowsTab({ tenantId }: { tenantId: string }) {
           onClose={() => { setShowCreate(false); setEditingWorkflow(null); }}
           onSaved={() => { setShowCreate(false); setEditingWorkflow(null); fetchWorkflows(); }}
         />
+      )}
+
+      {/* First-time auto-send confirmation modal */}
+      {showAutoConfirm && (
+        <Modal isOpen={true} onClose={() => { setShowAutoConfirm(false); setPendingAutoWf(null); }} size="sm">
+          <ModalHeader>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+              Turn on automatic messaging?
+            </h2>
+          </ModalHeader>
+          <ModalBody>
+            <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+              Messages in this sequence will be sent to your customers automatically,
+              without review. You can turn this off anytime.
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="secondary" onClick={() => { setShowAutoConfirm(false); setPendingAutoWf(null); }}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={confirmAutoSend}>
+              Turn on automatic
+            </Button>
+          </ModalFooter>
+        </Modal>
       )}
     </div>
   );

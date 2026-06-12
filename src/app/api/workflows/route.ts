@@ -154,9 +154,21 @@ export async function PATCH(request: NextRequest) {
   const tenantId = member.tenant_id;
 
   const body = await request.json();
-  const { id, is_active, name, trigger_type, trigger_tag, steps } = body;
+  const { id, is_active, name, trigger_type, trigger_tag, send_mode, confirm_auto_send, steps } = body;
 
-  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+  // Handle auto_send_confirmed flag on tenant (no workflow id needed)
+  if (confirm_auto_send) {
+    await supabase
+      .from('tenants')
+      .update({ auto_send_confirmed: true })
+      .eq('id', tenantId);
+  }
+
+  if (!id) {
+    // If only confirm_auto_send was sent (no workflow to update), return early
+    if (confirm_auto_send) return NextResponse.json({ success: true });
+    return NextResponse.json({ error: 'id required' }, { status: 400 });
+  }
 
   // Verify workflow belongs to user's tenant
   const { data: wf } = await supabase
@@ -170,6 +182,7 @@ export async function PATCH(request: NextRequest) {
   // Update workflow fields
   const updates: Record<string, any> = {};
   if (typeof is_active === 'boolean') updates.is_active = is_active;
+  if (send_mode === 'auto_send' || send_mode === 'review_first') updates.send_mode = send_mode;
   if (name) updates.name = name;
   if (trigger_type) {
     updates.trigger_type = trigger_type;
