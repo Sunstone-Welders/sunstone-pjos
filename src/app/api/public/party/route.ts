@@ -6,6 +6,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { getSubscriptionTier, canAccessPartyBooking } from '@/lib/subscription';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -27,12 +28,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  // Get tenant info for display
+  // Get tenant info for display (include subscription + CRM fields for gating)
   const { data: tenant } = await supabase
     .from('tenants')
-    .select('name, slug, logo_url, theme_id, waiver_required')
+    .select('name, slug, logo_url, theme_id, waiver_required, subscription_tier, subscription_status, trial_ends_at, admin_tier_override, crm_enabled, crm_subscription_id, crm_trial_end, crm_deactivated_at')
     .eq('id', party.tenant_id)
     .single();
+
+  // Check if party booking is still available for this tenant
+  if (tenant) {
+    const tier = getSubscriptionTier(tenant as any);
+    if (!canAccessPartyBooking(tier, tenant as any)) {
+      return NextResponse.json({ error: 'booking_unavailable' }, { status: 403 });
+    }
+  }
 
   // Get RSVP count
   const { count } = await supabase

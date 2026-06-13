@@ -11,8 +11,10 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useTenant } from '@/hooks/use-tenant';
 import { Button, Input, Textarea, Badge } from '@/components/ui';
+import UpgradePrompt from '@/components/ui/UpgradePrompt';
 import { toast } from 'sonner';
 import { getCrmStatus } from '@/lib/crm-status';
+import { getSubscriptionTier, canAccessPartyBooking } from '@/lib/subscription';
 import type { PartyRequest, PartyRsvp, PartyRequestStatus, PartyRewardSettings } from '@/types';
 
 const STATUS_CONFIG: Record<PartyRequestStatus, { label: string; color: string }> = {
@@ -370,10 +372,33 @@ export default function PartiesPage() {
 
   const selected = selectedId ? requests.find((r) => r.id === selectedId) : null;
 
+  // Party booking access check
+  const tier = tenant ? getSubscriptionTier(tenant as any) : 'starter' as const;
+  const hasPartyBooking = canAccessPartyBooking(tier, tenant as any);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="w-8 h-8 border-2 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!hasPartyBooking) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]" style={{ fontFamily: 'var(--font-heading)' }}>
+            Party Requests
+          </h1>
+          <p className="text-[var(--text-tertiary)] mt-1">Create and manage private party bookings with deposits, RSVPs, and host rewards.</p>
+        </div>
+        <UpgradePrompt
+          feature="Party Booking"
+          description="Accept party requests, collect deposits, track RSVPs, and manage your entire party business. Available on Pro, Business, or with the CRM add-on."
+          variant="inline"
+          showCrmPath
+        />
       </div>
     );
   }

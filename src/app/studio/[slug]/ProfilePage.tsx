@@ -78,6 +78,7 @@ export default function ProfilePage({ slug }: { slug: string }) {
   const [tiers, setTiers] = useState<TierItem[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [activeBookingTypesCount, setActiveBookingTypesCount] = useState(0);
+  const [partyBookingEnabled, setPartyBookingEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [logoError, setLogoError] = useState(false);
@@ -112,6 +113,7 @@ export default function ProfilePage({ slug }: { slug: string }) {
         setTiers(data.tiers || []);
         setEvents(data.events || []);
         setActiveBookingTypesCount(data.activeBookingTypesCount || 0);
+        setPartyBookingEnabled(data.partyBookingEnabled ?? false);
       } catch {
         setError('error');
       } finally {
@@ -253,7 +255,7 @@ export default function ProfilePage({ slug }: { slug: string }) {
               </svg>
               Book an Appointment
             </Link>
-            {settings?.show_party_booking !== false && (
+            {partyBookingEnabled && settings?.show_party_booking !== false && (
               <a
                 href="#book-party"
                 className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-[var(--surface-raised)] border border-[var(--border-default)] text-[var(--text-primary)] rounded-xl hover:border-[var(--accent-primary)] transition-colors"
@@ -358,7 +360,7 @@ export default function ProfilePage({ slug }: { slug: string }) {
         )}
 
         {/* ── Book a Party ─────────────────────────────────────── */}
-        {settings?.show_party_booking !== false && (
+        {partyBookingEnabled && settings?.show_party_booking !== false && (
           <section id="book-party" className="space-y-3">
             <h2 className="text-lg font-semibold text-[var(--text-primary)]" style={{ fontFamily: 'var(--font-heading)' }}>
               Book a Private Party

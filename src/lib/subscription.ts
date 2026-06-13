@@ -19,6 +19,7 @@ export type Feature =
   | 'team_members_unlimited'
   | 'artist_storefront'
   | 'party_booking'
+  | 'party_automation'
   | 'warranty_program'
   | 'advanced_analytics'
   | 'atlas_sms_support'
@@ -28,6 +29,8 @@ export type Feature =
   | 'tap_to_pay';
 
 // Feature access matrix — tiers differentiate by features, not fees (May 2026)
+// NOTE: party_booking has special CRM-aware logic — use canAccessPartyBooking() instead
+// of canAccessFeature() when checking party booking access.
 const FEATURE_ACCESS: Record<Feature, SubscriptionTier[]> = {
   ai_insights:              ['pro', 'business'],
   full_reports:             ['pro', 'business'],
@@ -38,7 +41,8 @@ const FEATURE_ACCESS: Record<Feature, SubscriptionTier[]> = {
   team_members_5:           ['pro', 'business'],
   team_members_unlimited:   ['business'],
   artist_storefront:        ['pro', 'business'],
-  party_booking:            ['pro', 'business'],
+  party_booking:            ['pro', 'business'],    // Also unlocked by CRM — see canAccessPartyBooking()
+  party_automation:         [],                      // CRM-only — use isCrmActive() directly
   warranty_program:         ['pro', 'business'],
   advanced_analytics:       ['business'],
   atlas_sms_support:        ['business'],
@@ -181,4 +185,87 @@ export function isCrmIncludedInTier(tier: SubscriptionTier): boolean {
  */
 export function getSunnyQuestionLimit(tier: SubscriptionTier): number {
   return SUNNY_LIMITS[tier] ?? 5;
+}
+
+// ============================================================================
+// CRM-Aware Feature Helpers
+// ============================================================================
+
+interface CrmFields {
+  crm_enabled?: boolean;
+  crm_subscription_id?: string | null;
+  crm_trial_end?: string | null;
+  crm_deactivated_at?: string | null;
+  subscription_tier?: string | null;
+  subscription_status?: string | null;
+  admin_tier_override?: boolean;
+}
+
+/**
+ * Whether CRM is active for a tenant. True when:
+ * - Business tier with active subscription (CRM bundled), OR
+ * - CRM add-on is subscribed (crm_subscription_id set), OR
+ * - CRM trial is active (crm_trial_end in the future), OR
+ * - Legacy crm_enabled flag is true
+ */
+export function isCrmActive(tenant: CrmFields | null | undefined): boolean {
+  if (!tenant) return false;
+
+  // Business tier includes CRM
+  if (tenant.subscription_tier === 'business') {
+    const hasActiveSub = tenant.admin_tier_override ||
+      ['active', 'past_due', 'trialing'].includes(tenant.subscription_status ?? '');
+    if (hasActiveSub) return true;
+  }
+
+  // Admin override with Pro tier
+  if (tenant.admin_tier_override && tenant.subscription_tier === 'pro') {
+    return true;
+  }
+
+  // Explicitly deactivated
+  if (tenant.crm_deactivated_at && !tenant.crm_subscription_id) {
+    return false;
+  }
+
+  // Active paid subscription
+  if (tenant.crm_subscription_id) return true;
+
+  // Active trial
+  if (tenant.crm_trial_end) {
+    const daysLeft = Math.ceil(
+      (new Date(tenant.crm_trial_end).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    );
+    if (daysLeft > 0) return true;
+  }
+
+  // Legacy flag
+  if (tenant.crm_enabled) return true;
+
+  return false;
+}
+
+/**
+ * Whether the tenant can access party booking.
+ * Unlocked when tier is Pro or Business, OR when CRM is active (any tier).
+ */
+export function canAccessPartyBooking(
+  tier: SubscriptionTier,
+  tenant: CrmFields | null | undefined
+): boolean {
+  // Pro and Business always have party booking
+  if (canAccessFeature(tier, 'party_booking')) return true;
+  // Any tier with active CRM also has party booking
+  return isCrmActive(tenant);
+}
+
+/**
+ * Whether the tenant can access party automation features
+ * (scheduled reminders, follow-ups, host rewards, min-guarantee tracking).
+ * Requires CRM to be active.
+ */
+export function canAccessPartyAutomation(
+  tenant: CrmFields | null | undefined
+): boolean {
+  return isCrmActive(tenant);
 }

@@ -7,6 +7,7 @@ import { createServerSupabase, createServiceRoleClient } from '@/lib/supabase/se
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
 import { normalizePhone, sendSMS } from '@/lib/twilio';
 import { handlePartyStatusChange } from '@/lib/party-templates';
+import { getSubscriptionTier, canAccessPartyBooking } from '@/lib/subscription';
 
 // ── POST: Create a party request (public) ──────────────────────────────────
 
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
   // Verify tenant exists and has party booking enabled
   const { data: tenant } = await supabase
     .from('tenants')
-    .select('id, name, phone, profile_settings')
+    .select('id, name, phone, profile_settings, subscription_tier, subscription_status, trial_ends_at, admin_tier_override, crm_enabled, crm_subscription_id, crm_trial_end, crm_deactivated_at')
     .eq('id', tenantId)
     .single();
 
@@ -41,6 +42,12 @@ export async function POST(request: Request) {
   const settings = (tenant.profile_settings || {}) as Record<string, boolean>;
   if (!settings.enabled || !settings.show_party_booking) {
     return NextResponse.json({ error: 'Party booking is not enabled' }, { status: 400 });
+  }
+
+  // Check subscription-level party booking access (Pro/Business OR CRM active)
+  const tier = getSubscriptionTier(tenant as any);
+  if (!canAccessPartyBooking(tier, tenant as any)) {
+    return NextResponse.json({ error: 'Party booking is currently unavailable' }, { status: 403 });
   }
 
   // Normalize phone and try to match existing client

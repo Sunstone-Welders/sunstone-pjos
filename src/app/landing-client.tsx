@@ -47,6 +47,7 @@ const PRICING = [
       'Up to 2 team members',
       'Sunny AI \u2014 10 questions/mo',
       'Basic reports',
+      'Party Booking with CRM add-on',
       'CRM available ($69/mo add-on)',
       '30-day Pro trial included',
     ],
@@ -62,7 +63,8 @@ const PRICING = [
       'Unlimited Sunny AI access',
       'Full reports & CSV export',
       'AI business insights',
-      'Artist Storefront & Party Booking',
+      'Artist Storefront',
+      'Party Booking',
       'Warranty Program',
       'Up to 5 team members',
       'CRM available ($69/mo add-on)',
@@ -78,6 +80,7 @@ const PRICING = [
     features: [
       'Everything in Pro, plus:',
       'CRM included \u2014 no add-on needed',
+      'Automated party reminders & follow-ups',
       'Unlimited team members',
       'Advanced analytics',
       'Atlas SMS support',
@@ -133,7 +136,7 @@ const FAQS = [
   },
   {
     q: "What's included in the CRM?",
-    a: 'Your own dedicated business phone number, two-way SMS conversations, automated aftercare sequences, broadcast messaging, client workflows, birthday automations, message templates, advanced party booking (deposits, RSVP tracking, automated reminders, host rewards), and client intelligence. $69/mo add-on on Starter and Pro plans, or included free with Business \u2014 all included during your 30-day Pro trial.',
+    a: 'Your own dedicated business phone number, two-way SMS conversations, automated aftercare sequences, broadcast messaging, client workflows, birthday automations, message templates, party booking (unlocked on any plan with CRM \u2014 includes deposits, RSVP tracking, automated reminders, and host rewards), and client intelligence. $69/mo add-on on Starter and Pro plans, or included free with Business \u2014 all included during your 30-day Pro trial.',
   },
 ]
 
@@ -1027,7 +1030,7 @@ export default function LandingPageClient() {
               <div>
                 <h2 style={{ fontFamily: FONT.display, fontSize: 'clamp(1.8rem, 4vw, 2.5rem)', margin: 0, lineHeight: 1.2 }}>
                   <span style={{ fontWeight: 400, color: B.deepWine }}>Your Own Artist Storefront</span>{' '}
-                  <span style={{ fontWeight: 400, fontStyle: 'italic', color: '#1D1D1D' }}>&mdash; included on every plan.</span>
+                  <span style={{ fontWeight: 400, fontStyle: 'italic', color: '#1D1D1D' }}>&mdash; included on Pro &amp; Business.</span>
                 </h2>
                 <p style={{ fontSize: 16, lineHeight: 1.7, color: B.softBrown, marginTop: 20 }}>
                   A beautiful, branded page that shows off your services, pricing, upcoming events, and party booking &mdash; shareable on Instagram, in your email signature, anywhere.

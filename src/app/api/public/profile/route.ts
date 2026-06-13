@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { getSubscriptionTier, canAccessFeature, canAccessPartyBooking } from '@/lib/subscription';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -18,10 +19,10 @@ export async function GET(request: Request) {
 
   const supabase = await createServiceRoleClient();
 
-  // Fetch tenant
+  // Fetch tenant (include subscription + CRM fields for feature gating)
   const { data: tenant, error: tenantError } = await supabase
     .from('tenants')
-    .select('id, name, slug, logo_url, bio, city, state, phone, website, instagram_url, facebook_url, tiktok_url, theme_id, profile_settings, dedicated_phone_number, waiver_text, waiver_required, pricing_mode')
+    .select('id, name, slug, logo_url, bio, city, state, phone, website, instagram_url, facebook_url, tiktok_url, theme_id, profile_settings, dedicated_phone_number, waiver_text, waiver_required, pricing_mode, subscription_tier, subscription_status, trial_ends_at, admin_tier_override, crm_enabled, crm_subscription_id, crm_trial_end, crm_deactivated_at')
     .eq('slug', slug)
     .single();
 
@@ -34,6 +35,15 @@ export async function GET(request: Request) {
   if (!settings.enabled) {
     return NextResponse.json({ error: 'Profile not enabled' }, { status: 404 });
   }
+
+  // Storefront requires Pro or Business tier
+  const tier = getSubscriptionTier(tenant as any);
+  if (!canAccessFeature(tier, 'artist_storefront')) {
+    return NextResponse.json({ error: 'Storefront not available' }, { status: 404 });
+  }
+
+  // Determine if party booking is available for this tenant
+  const partyBookingEnabled = canAccessPartyBooking(tier, tenant as any);
 
   // Fetch product types with min sell_price from chain_product_prices
   let services: { name: string; min_price: number }[] = [];
@@ -122,5 +132,6 @@ export async function GET(request: Request) {
     events,
     tiers,
     activeBookingTypesCount: activeBookingTypesCount || 0,
+    partyBookingEnabled,
   });
 }

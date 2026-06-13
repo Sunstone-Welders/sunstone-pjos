@@ -22,9 +22,11 @@ interface UpgradePromptProps {
   description?: string;
   /** If true, shows "Your Pro trial has ended" messaging */
   trialExpired?: boolean;
+  /** If true, shows dual-path messaging: "Upgrade to Pro, or add CRM to your plan" */
+  showCrmPath?: boolean;
 }
 
-export default function UpgradePrompt({ feature, variant, description, trialExpired }: UpgradePromptProps) {
+export default function UpgradePrompt({ feature, variant, description, trialExpired, showCrmPath }: UpgradePromptProps) {
   const router = useRouter();
   const [dismissed, setDismissed] = useState(false);
 
@@ -43,7 +45,10 @@ export default function UpgradePrompt({ feature, variant, description, trialExpi
       <div className="bg-gradient-to-r from-[var(--accent-50,#fdf2f8)] to-[var(--surface-raised)] border-b border-[var(--border-default)] px-4 py-2.5 flex items-center justify-between gap-3">
         <p className="text-sm text-[var(--text-secondary)] flex-1 min-w-0">
           <span className="hidden sm:inline">You&apos;re on the Starter plan. </span>
-          Upgrade to Pro to unlock <span className="font-medium text-[var(--text-primary)]">{feature}</span>.
+          {showCrmPath
+            ? <>Upgrade to Pro or add CRM to unlock <span className="font-medium text-[var(--text-primary)]">{feature}</span>.</>
+            : <>Upgrade to Pro to unlock <span className="font-medium text-[var(--text-primary)]">{feature}</span>.</>
+          }
         </p>
         <div className="flex items-center gap-2 shrink-0">
           <Button variant="primary" size="sm" onClick={navigateToPlans}>
@@ -105,11 +110,14 @@ export default function UpgradePrompt({ feature, variant, description, trialExpi
           )}
 
           <Button variant="primary" onClick={navigateToPlans}>
-            Upgrade to Pro
+            {showCrmPath ? 'View Plans & Add-ons' : 'Upgrade to Pro'}
           </Button>
 
           <p className="text-xs text-[var(--text-tertiary)] mt-3">
-            Available on Pro and Business plans
+            {showCrmPath
+              ? 'Available on Pro, Business, or any plan with the CRM add-on'
+              : 'Available on Pro and Business plans'
+            }
           </p>
         </div>
       </CardContent>

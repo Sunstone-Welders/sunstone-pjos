@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabase, createServiceRoleClient } from '@/lib/supabase/server';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
+import { getSubscriptionTier, canAccessPartyBooking } from '@/lib/subscription';
 
 // ── POST: Submit RSVP (public, rate-limited) ───────────────────────────────
 
@@ -37,6 +38,20 @@ export async function POST(request: Request) {
 
   if (party.status === 'cancelled') {
     return NextResponse.json({ error: 'This party has been cancelled' }, { status: 400 });
+  }
+
+  // Check subscription-level party booking access
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('subscription_tier, subscription_status, trial_ends_at, admin_tier_override, crm_enabled, crm_subscription_id, crm_trial_end, crm_deactivated_at')
+    .eq('id', party.tenant_id)
+    .single();
+
+  if (tenant) {
+    const tier = getSubscriptionTier(tenant as any);
+    if (!canAccessPartyBooking(tier, tenant as any)) {
+      return NextResponse.json({ error: 'Party booking is currently unavailable' }, { status: 403 });
+    }
   }
 
   const { data: rsvp, error } = await supabase

@@ -51,7 +51,11 @@ export default function RsvpPage({ slug, partyId }: { slug: string; partyId: str
       try {
         const res = await fetch(`/api/public/party?id=${partyId}`);
         if (!res.ok) {
-          setError('not_found');
+          if (res.status === 403) {
+            setError('booking_unavailable');
+          } else {
+            setError('not_found');
+          }
           return;
         }
         const data = await res.json();
@@ -109,6 +113,24 @@ export default function RsvpPage({ slug, partyId }: { slug: string; partyId: str
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--surface-base)]">
         <div className="w-8 h-8 border-2 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error === 'booking_unavailable') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--surface-base)] px-4">
+        <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center mb-4">
+          <svg className="w-6 h-6 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+        </div>
+        <h1 className="text-2xl font-semibold text-[var(--text-primary)] mb-2" style={{ fontFamily: 'var(--font-heading)' }}>
+          Booking Unavailable
+        </h1>
+        <p className="text-[var(--text-secondary)] text-center max-w-sm">
+          Party booking is currently unavailable for this artist. Please contact them directly for more information.
+        </p>
       </div>
     );
   }

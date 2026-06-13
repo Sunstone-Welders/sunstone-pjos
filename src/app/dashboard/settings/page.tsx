@@ -74,19 +74,22 @@ const PLAN_FEATURES: Record<string, string[]> = {
     'Up to 2 team members',
     'Sunny AI — 10 questions/mo',
     'Basic reports',
+    'Party Booking with CRM add-on',
   ],
   pro: [
     'Everything in Starter',
     'Unlimited Sunny AI questions',
     'Full reports & CSV export',
     'AI business insights',
-    'Artist Storefront & Party Booking',
+    'Artist Storefront',
+    'Party Booking',
     'Warranty Program',
     'Up to 5 team members',
   ],
   business: [
     'Everything in Pro',
     'CRM included (no add-on needed)',
+    'Automated party reminders & follow-ups',
     'Unlimited team members',
     'Advanced analytics',
     'Atlas SMS support',
@@ -2268,9 +2271,21 @@ function SettingsPage() {
                     <td className="py-2.5 px-3 text-center text-success-600">✓</td>
                   </tr>
                   <tr>
-                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Artist Storefront &amp; Party Booking</td>
+                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Artist Storefront</td>
                     <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">—</td>
                     <td className="py-2.5 px-3 text-center text-success-600">✓</td>
+                    <td className="py-2.5 px-3 text-center text-success-600">✓</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Party Booking</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">w/ CRM</td>
+                    <td className="py-2.5 px-3 text-center text-success-600">✓</td>
+                    <td className="py-2.5 px-3 text-center text-success-600">✓</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 text-[var(--text-secondary)]">Automated party reminders &amp; follow-ups</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">w/ CRM</td>
+                    <td className="py-2.5 px-3 text-center text-[var(--text-tertiary)]">w/ CRM</td>
                     <td className="py-2.5 px-3 text-center text-success-600">✓</td>
                   </tr>
                   <tr>
