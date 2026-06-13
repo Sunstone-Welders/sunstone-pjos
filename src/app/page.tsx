@@ -9,25 +9,29 @@ import { isNativeRequest } from '@/lib/native-server'
 import LandingPageClient from './landing-client'
 
 export const metadata: Metadata = {
-  title: 'Sunstone Studio — The Operating System for Permanent Jewelry Artists',
-  description: 'POS, inventory, AI mentor, CRM, digital waivers, reports — everything a permanent jewelry artist needs in one beautiful platform. Built by Sunstone Welders. Start your free 30-day trial.',
+  title: 'Permanent Jewelry Software & POS App | Sunstone Studio',
+  description: 'Run your permanent jewelry business in one app — POS, chain inventory by the inch, events, waivers, clients, and AI support. Try Pro free for 30 days.',
   keywords: [
     'permanent jewelry software',
     'permanent jewelry POS',
     'permanent jewelry business',
+    'permanent jewelry app',
     'PJ business tools',
     'Sunstone Studio',
-    'Sunstone Welders',
+    'Sunstone Permanent Jewelry',
     'permanent jewelry inventory',
     'permanent jewelry CRM',
     'event POS',
     'jewelry business management',
     'Sunny AI mentor',
     'permanent jewelry starter kit',
+    'chain inventory by the inch',
+    'permanent jewelry events',
+    'digital waivers permanent jewelry',
   ],
   openGraph: {
-    title: 'Sunstone Studio — Your Entire PJ Business. One Beautiful Platform.',
-    description: 'POS, inventory, AI mentor, CRM, waivers, reports — built specifically for permanent jewelry artists by the pioneers of PJ.',
+    title: 'The All-in-One App to Grow Your Permanent Jewelry Business',
+    description: 'POS, chain inventory by the inch, events, digital waivers, clients, and an AI mentor — built for permanent jewelry artists. Try Pro free for 30 days.',
     url: 'https://sunstonepj.app',
     siteName: 'Sunstone Studio',
     type: 'website',
@@ -36,14 +40,14 @@ export const metadata: Metadata = {
         url: '/landing/hero-dashboard.webp',
         width: 1200,
         height: 630,
-        alt: 'Sunstone Studio dashboard showing AI-powered business insights',
+        alt: 'Sunstone Studio dashboard showing POS, inventory, and AI-powered business insights for permanent jewelry artists',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Sunstone Studio — Your Entire PJ Business. One Beautiful Platform.',
-    description: 'POS, inventory, AI mentor, CRM, waivers, reports — built for permanent jewelry artists.',
+    title: 'The All-in-One App to Grow Your Permanent Jewelry Business',
+    description: 'POS, chain inventory by the inch, events, digital waivers, clients, and an AI mentor — built for permanent jewelry artists. Try Pro free for 30 days.',
     images: ['/landing/hero-dashboard.webp'],
   },
   robots: { index: true, follow: true },
@@ -83,5 +87,36 @@ export default async function LandingPage() {
     redirect('/dashboard')
   }
 
-  return <LandingPageClient />
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Sunstone Studio',
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'iOS, Android, Web',
+    url: 'https://sunstonepj.app',
+    description:
+      'All-in-one business app for permanent jewelry artists: POS, chain inventory by the inch, events, digital waivers, clients, reporting, and AI-powered support.',
+    offers: {
+      '@type': 'AggregateOffer',
+      lowPrice: '99',
+      highPrice: '279',
+      priceCurrency: 'USD',
+      offerCount: '3',
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'Sunstone Permanent Jewelry',
+      url: 'https://permanentjewelry.sunstonewelders.com',
+    },
+  }
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <LandingPageClient />
+    </>
+  )
 }

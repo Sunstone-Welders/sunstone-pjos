@@ -75,7 +75,7 @@ const PRICING = [
     name: 'Business',
     price: '$279',
     period: '/mo',
-    tagline: 'Everything, all in one place',
+    tagline: 'Everything, CRM included',
     popular: false,
     features: [
       'Everything in Pro, plus:',
@@ -111,8 +111,8 @@ const FAQS = [
     a: "Sunstone Studio works beautifully for any permanent jewelry artist, regardless of equipment. That said, artists using Sunstone welders get the deepest integration \u2014 Sunny knows your exact equipment inside and out, and our supply catalog is built right in.",
   },
   {
-    q: 'Can I use this at events and pop-ups?',
-    a: "Event Mode was designed specifically for pop-ups, markets, and festivals. QR code check-in, real-time queue management, digital waivers, and fast checkout \u2014 everything you need to handle a packed event without breaking a sweat.",
+    q: 'Can I use Sunstone Studio for permanent jewelry events and pop-ups?',
+    a: "Yes. Event Mode was designed specifically for permanent jewelry pop-ups, markets, festivals, and private parties \u2014 with QR code check-in, real-time queue management, digital waivers, and fast checkout, so you can handle a packed event without breaking a sweat.",
   },
   {
     q: 'Is my data secure?',
@@ -137,6 +137,10 @@ const FAQS = [
   {
     q: "What's included in the CRM?",
     a: 'Your own dedicated business phone number, two-way SMS conversations, automated aftercare sequences, broadcast messaging, client workflows, birthday automations, message templates, party booking (unlocked on any plan with CRM \u2014 includes deposits, RSVP tracking, automated reminders, and host rewards), and client intelligence. $69/mo add-on on Starter and Pro plans, or included free with Business \u2014 all included during your 30-day Pro trial.',
+  },
+  {
+    q: 'Who built Sunstone Studio?',
+    a: 'Sunstone Studio is built by Sunstone Permanent Jewelry \u2014 the company behind the welders many artists already use. We brought that hands-on industry experience into one business app for POS, chain inventory, events, digital waivers, clients, reporting, and AI-powered support.',
   },
 ]
 
@@ -714,7 +718,7 @@ export default function LandingPageClient() {
               >
                 <span style={{ color: B.pjRose, fontSize: 12 }}>{'\u2726'}</span>
                 <span style={{ fontSize: 12, fontWeight: 500, color: B.blackBrown, fontFamily: FONT.body }}>
-                  From the Pioneers of Permanent Jewelry
+                  Built by Sunstone, Pioneers of Permanent Jewelry
                 </span>
               </div>
             </div>
@@ -725,17 +729,17 @@ export default function LandingPageClient() {
               <Reveal delay={0.1}>
                 <h1 style={{ fontFamily: FONT.display, margin: 0, lineHeight: 1.15 }}>
                   <span style={{ display: 'block', fontSize: 'clamp(1.875rem, 4.5vw, 3.375rem)', fontWeight: 700, color: B.blackBrown }}>
-                    Grow Your PJ Business
+                    The All-in-One App to Grow
                   </span>
                   <span style={{ display: 'block', fontSize: 'clamp(1.875rem, 4.5vw, 3.375rem)', fontWeight: 700, color: B.blackBrown }}>
-                    with Confidence.
+                    Your Permanent Jewelry Business
                   </span>
                 </h1>
               </Reveal>
 
               <Reveal delay={0.2}>
                 <p className="hero-subline" style={{ fontSize: 16, fontWeight: 500, color: B.softBrown, maxWidth: 520, margin: '24px auto 0', lineHeight: 1.6, fontFamily: FONT.body }}>
-                  The all-in-one app for POS, inventory, clients, and AI-powered business intelligence &mdash; built by Sunstone for permanent jewelry artists.
+                  Manage POS, chain inventory, events, digital waivers, clients, and AI-powered support &mdash; all from one place.
                 </p>
               </Reveal>
 
@@ -808,7 +812,7 @@ export default function LandingPageClient() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
           <Image src="/landing/sunstone-logo.webp" alt="Sunstone" width={22} height={22} style={{ borderRadius: 4 }} />
           <span style={{ fontSize: 13, color: B.softBrown, fontFamily: FONT.body }}>
-            Trusted by PJ artists nationwide &middot; Powered by Sunstone Permanent Jewelry
+            Trusted by permanent jewelry artists nationwide &middot; Powered by Sunstone Permanent Jewelry
           </span>
         </div>
       </section>
@@ -818,7 +822,7 @@ export default function LandingPageClient() {
         <div style={wrap}>
           <Reveal>
             <h2 style={{ fontFamily: FONT.display, fontWeight: 400, fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', color: B.deepWine, textAlign: 'center', marginBottom: 56 }}>
-              What changes when you have the right platform?
+              What changes when you have the right permanent jewelry app?
             </h2>
           </Reveal>
 
@@ -831,7 +835,7 @@ export default function LandingPageClient() {
                   </svg>
                 ),
                 title: 'You make more money',
-                body: 'See your real profits, track every sale, and spot the upsells you\u2019re missing. Artists using Sunstone Studio consistently grow their average ticket.',
+                body: 'See your real profit on every sale, track what\u2019s working, and catch the upsells you\u2019re missing \u2014 so you finally know what your permanent jewelry business actually makes.',
               },
               {
                 icon: (
@@ -840,7 +844,7 @@ export default function LandingPageClient() {
                   </svg>
                 ),
                 title: 'You stop scrambling',
-                body: 'Inventory, waivers, queue, payments \u2014 it\u2019s all handled. Show up to your next event calm and prepared instead of stressed and guessing.',
+                body: 'Inventory, digital waivers, event queue, and payments \u2014 all handled in one place. Show up to your next pop-up, market, or private party calm and prepared instead of stressed and guessing.',
               },
               {
                 icon: (
@@ -849,7 +853,7 @@ export default function LandingPageClient() {
                   </svg>
                 ),
                 title: 'You look like a pro',
-                body: 'Your own branded storefront, polished receipts, and a seamless client experience. Customers remember how you made them feel.',
+                body: 'Your own branded storefront, polished digital receipts, and a smooth, professional experience from booking to checkout. Customers remember how you made them feel.',
               },
             ].map((item, i) => (
               <Reveal key={i} delay={i * 0.12}>
@@ -882,11 +886,11 @@ export default function LandingPageClient() {
           <Reveal>
             <div style={{ textAlign: 'center', marginBottom: 48 }}>
               <h2 style={{ fontFamily: FONT.display, fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', margin: 0, lineHeight: 1.2 }}>
-                <span style={{ fontWeight: 400, color: B.blackBrown }}>Everything you need,</span>{' '}
-                <span style={{ fontWeight: 400, fontStyle: 'italic', color: B.deepWine }}>nothing you don&rsquo;t.</span>
+                <span style={{ fontWeight: 400, color: B.blackBrown }}>Permanent Jewelry Software</span>{' '}
+                <span style={{ fontWeight: 400, fontStyle: 'italic', color: B.deepWine }}>Built Around How Artists Actually Work</span>
               </h2>
               <p style={{ fontSize: 16, fontWeight: 500, color: B.softBrown, marginTop: 14, fontFamily: FONT.body }}>
-                Built specifically for permanent jewelry &mdash; not adapted from something else.
+                Built specifically for permanent jewelry &mdash; POS, inventory, events, waivers, clients, and reporting in one app, not adapted from generic business software.
               </p>
             </div>
           </Reveal>
@@ -901,8 +905,8 @@ export default function LandingPageClient() {
               {
                 img: '/landing/pos-event.webp',
                 imgAlt: 'Sunstone Studio POS interface on tablet showing event mode with product selection and cart',
-                title: 'Sell anywhere, stress-free',
-                body: 'Tap-friendly POS for events and your studio. Tips, discounts, warranties, and multiple payment methods \u2014 without breaking your flow.',
+                title: 'Permanent Jewelry POS \u2014 Built to Sell Anywhere',
+                body: 'A tap-friendly POS built for permanent jewelry. Handle tips, discounts, warranties, QR checkout, text-to-pay, Stripe, Square, Venmo, and cash \u2014 without breaking your flow.',
                 icon: (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={B.forest} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                     <rect x="4" y="2" width="16" height="20" rx="2" ry="2" /><line x1="12" y1="18" x2="12.01" y2="18" />
@@ -912,8 +916,8 @@ export default function LandingPageClient() {
               {
                 img: '/landing/inventory.webp',
                 imgAlt: 'Inventory management showing chains tracked by the inch with stock levels and reorder thresholds',
-                title: 'Always know what you have',
-                body: 'Track every chain by the inch. See what\u2019s selling, what\u2019s low, and when to reorder \u2014 before you run out at an event.',
+                title: 'Track Your Chain Inventory by the Inch',
+                body: 'Track every chain by the inch. See what\u2019s selling, what\u2019s running low, and exactly when to reorder \u2014 before you run out at your next event, pop-up, or party.',
                 icon: (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={B.forest} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -923,8 +927,8 @@ export default function LandingPageClient() {
               {
                 img: '/landing/crm-workflows.webp',
                 imgAlt: 'Client profile showing purchase history, automated follow-ups, and CRM workflow configuration',
-                title: 'Turn one-time buyers into regulars',
-                body: 'Every customer remembered. Automated follow-ups, birthday texts, and win-back campaigns that run while you sleep.',
+                title: 'Turn One-Time Buyers Into Regulars',
+                body: 'Every client remembered \u2014 purchase history, automated follow-ups, birthday texts, and two-way SMS that bring one-time buyers back while you sleep.',
                 icon: (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={B.forest} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
@@ -934,8 +938,8 @@ export default function LandingPageClient() {
               {
                 img: '/landing/sunny-chains.webp',
                 imgAlt: 'Sunny AI mentor showing detailed chain knowledge and weld setting recommendations',
-                title: 'Your smartest business partner',
-                body: 'Ask Sunny anything \u2014 weld settings, pricing strategy, what to bring to your next event. A mentor in your pocket, trained on real Sunstone expertise.',
+                title: 'AI Business Support That Actually Knows Permanent Jewelry',
+                body: 'Ask Sunny anything \u2014 weld settings, pricing strategy, what to pack for your next event, how to win back a quiet client. A permanent jewelry mentor in your pocket, backed by real Sunstone expertise.',
                 icon: (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={B.forest} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -944,9 +948,9 @@ export default function LandingPageClient() {
               },
               {
                 img: '/landing/client-profile.webp',
-                imgAlt: 'Client profile showing booking history and party RSVPs',
-                title: 'Fill your calendar with private parties',
-                body: 'Your own booking page with deposits, RSVPs, and guest marketing \u2014 more revenue per hour than any farmers market.',
+                imgAlt: 'Permanent jewelry party booking page showing deposit collection, RSVPs, and guest management',
+                title: 'Fill Your Calendar With Private Parties',
+                body: 'Your own booking page with deposits, RSVPs, waivers, and guest follow-up \u2014 run private parties, pop-ups, and markets from one connected workflow. Often more revenue per hour than a farmers market.',
                 icon: (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={B.forest} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /><path d="M21 21v-2a4 4 0 0 0-3-3.87" />
@@ -956,8 +960,8 @@ export default function LandingPageClient() {
               {
                 img: '/landing/reports.webp',
                 imgAlt: 'Financial reports showing revenue, profit margins, cost breakdown, and event performance comparison',
-                title: 'See your real numbers',
-                body: 'Revenue, profit, expenses, and cost of goods \u2014 not just what you made, but what you kept. Finally understand your business.',
+                title: 'See Your Real Numbers \u2014 Sales, Profit, and Costs',
+                body: 'Revenue, profit, expenses, and cost of goods \u2014 broken down by event, so you see not just what you made, but what you actually kept. Finally understand your business.',
                 icon: (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={B.forest} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
@@ -1029,11 +1033,10 @@ export default function LandingPageClient() {
             <Reveal>
               <div>
                 <h2 style={{ fontFamily: FONT.display, fontSize: 'clamp(1.8rem, 4vw, 2.5rem)', margin: 0, lineHeight: 1.2 }}>
-                  <span style={{ fontWeight: 400, color: B.deepWine }}>Your Own Artist Storefront</span>{' '}
-                  <span style={{ fontWeight: 400, fontStyle: 'italic', color: '#1D1D1D' }}>&mdash; included on Pro &amp; Business.</span>
+                  <span style={{ fontWeight: 400, color: B.deepWine }}>Your Own Permanent Jewelry Storefront</span>
                 </h2>
                 <p style={{ fontSize: 16, lineHeight: 1.7, color: B.softBrown, marginTop: 20 }}>
-                  A beautiful, branded page that shows off your services, pricing, upcoming events, and party booking &mdash; shareable on Instagram, in your email signature, anywhere.
+                  A beautiful, branded page that shows off your services, pricing, upcoming events, and party booking &mdash; ready to share on Instagram, in your email signature, anywhere you promote your permanent jewelry business.
                 </p>
                 <p style={{ fontSize: 15, fontWeight: 500, color: B.blackBrown, marginTop: 16 }}>
                   No website builder. No monthly hosting fee. Just you, looking like a pro.
@@ -1045,7 +1048,7 @@ export default function LandingPageClient() {
                 <div style={{ maxWidth: 360, borderRadius: 24, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.12)' }}>
                   <Image
                     src="/landing/storefront-mobile.webp"
-                    alt="Mobile artist storefront showing services, upcoming events, and party booking form"
+                    alt="Permanent jewelry artist storefront on mobile showing services, pricing, upcoming events, and party booking"
                     width={645}
                     height={1577}
                     style={{ width: '100%', height: 'auto', display: 'block' }}
@@ -1063,10 +1066,10 @@ export default function LandingPageClient() {
           <Reveal>
             <div style={{ textAlign: 'center', marginBottom: 40 }}>
               <h2 style={{ fontFamily: FONT.display, fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', margin: 0, lineHeight: 1.2 }}>
-                <span style={{ fontWeight: 700, color: B.blackBrown }}>Meet Sunny</span>
+                <span style={{ fontWeight: 700, color: B.blackBrown }}>Meet Sunny, Your AI Mentor for Permanent Jewelry</span>
               </h2>
               <p style={{ fontFamily: FONT.display, fontSize: 'clamp(1.3rem, 3vw, 1.8rem)', fontWeight: 400, fontStyle: 'italic', color: B.deepWine, marginTop: 8 }}>
-                Your AI mentor who actually knows permanent jewelry.
+                An AI business mentor that actually knows permanent jewelry &mdash; built on Sunstone expertise and your own Studio data.
               </p>
             </div>
           </Reveal>
@@ -1075,6 +1078,7 @@ export default function LandingPageClient() {
             <p style={{ fontSize: 16, lineHeight: 1.7, color: B.blackBrown, textAlign: 'center', maxWidth: 700, margin: '0 auto 36px' }}>
               Other tools give you generic AI. Sunny was trained on 45+ official Sunstone documents &mdash; weld settings, chain science, pricing strategy, customer psychology. She doesn&rsquo;t guess.
             </p>
+
           </Reveal>
 
           {/* ─── Phone Mockup Demos ─── */}
@@ -1164,6 +1168,7 @@ export default function LandingPageClient() {
               <span style={{ fontSize: 14, fontWeight: 600, color: B.deepWine, fontFamily: FONT.body }}>
                 Try asking Sunny anything {'\u2192'}
               </span>
+
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, justifyContent: 'center', marginBottom: 40 }}>
               {[
@@ -1216,10 +1221,10 @@ export default function LandingPageClient() {
           <Reveal>
             <div style={{ textAlign: 'center', marginBottom: 48 }}>
               <h2 style={{ fontFamily: FONT.display, fontWeight: 400, fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', color: B.blackBrown }}>
-                A Plan for Every Stage of Your Journey
+                Pricing for Every Stage of Your Permanent Jewelry Business
               </h2>
               <p style={{ fontSize: 16, fontWeight: 500, color: B.softBrown, marginTop: 12 }}>
-                No platform fees on any plan. Start with a 30-day free Pro trial.
+                No platform fees on any plan. Start with a 30-day free Pro trial &mdash; no credit card required.
               </p>
             </div>
           </Reveal>
@@ -1356,12 +1361,12 @@ export default function LandingPageClient() {
             <div className="final-cta-text">
               <Reveal>
                 <h2 style={{ fontFamily: FONT.display, fontWeight: 700, fontSize: 'clamp(2rem, 5vw, 3.2rem)', color: '#fff', marginBottom: 20 }}>
-                  Ready to Build Your World?
+                  Ready to Run Your Permanent Jewelry Business in One App?
                 </h2>
               </Reveal>
               <Reveal delay={0.1}>
                 <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.9)', maxWidth: 560, margin: '0 0 32px', lineHeight: 1.6 }}>
-                  Start your 30-day free trial today. No credit card. No commitment. Just a better way to run your PJ business.
+                  Start your 30-day free trial today. No credit card. No commitment. Just a better way to run your permanent jewelry business.
                 </p>
               </Reveal>
               <Reveal delay={0.2}>
